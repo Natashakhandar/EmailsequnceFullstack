@@ -1,0 +1,152 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Contact {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  firstName   String?
+  lastName    String?
+  company     String?
+  timezone    String   @default("UTC")
+  status      ContactStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  enrollments Enrollment[]
+  events      Event[]
+
+  @@map("contacts")
+}
+
+model Template {
+  id          String   @id @default(uuid())
+  name        String
+  subject     String
+  body        String   // HTML or plain text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  sequenceSteps SequenceStep[]
+
+  @@map("templates")
+}
+
+model Sequence {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  steps       SequenceStep[]
+  enrollments Enrollment[]
+
+  @@map("sequences")
+}
+
+model SequenceStep {
+  id          String   @id @default(uuid())
+  sequenceId  String
+  templateId  String
+  stepOrder   Int      // 1, 2, 3, etc.
+  delayDays   Int      @default(0) // Days to wait before sending this step
+  delayHours  Int      @default(0) // Additional hours to wait
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  sequence    Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  template    Template @relation(fields: [templateId], references: [id])
+
+  @@unique([sequenceId, stepOrder])
+  @@map("sequence_steps")
+}
+
+model Enrollment {
+  id          String   @id @default(uuid())
+  contactId   String
+  sequenceId  String
+  currentStep Int      @default(1)
+  nextSendAt  DateTime?
+  status      EnrollmentStatus @default(ACTIVE)
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  sequence    Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  events      Event[]
+
+  @@unique([contactId, sequenceId])
+  @@map("enrollments")
+}
+
+model Event {
+  id           String    @id @default(uuid())
+  enrollmentId String
+  contactId    String
+  type         EventType
+  details      String?   // JSON string for additional data
+  timestamp    DateTime  @default(now())
+  emailId      String?   // Message-ID from sent email
+  
+  // Relations
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@map("events")
+}
+
+model UnsubscribeToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  contactId String
+  createdAt DateTime @default(now())
+  usedAt    DateTime?
+
+  @@map("unsubscribe_tokens")
+}
+
+// Enums
+enum ContactStatus {
+  ACTIVE
+  UNSUBSCRIBED
+  BOUNCED
+  INACTIVE
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  STOPPED
+  UNSUBSCRIBED
+}
+
+enum EventType {
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  REPLIED
+  BOUNCED
+  UNSUBSCRIBED
+  FAILED
+}

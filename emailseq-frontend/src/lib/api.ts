@@ -1,0 +1,287 @@
+// API configuration and utilities for the email sequencing backend
+
+const API_BASE_URL = 'http://localhost:3001/api';
+
+// API response types
+export interface Contact {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  company?: string;
+  timezone: string;
+  status: 'ACTIVE' | 'UNSUBSCRIBED' | 'BOUNCED' | 'INACTIVE';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Sequence {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  steps: SequenceStep[];
+}
+
+export interface SequenceStep {
+  id: string;
+  sequenceId: string;
+  templateId: string;
+  stepOrder: number;
+  delayDays: number;
+  delayHours: number;
+  isActive: boolean;
+  template?: Template;
+}
+
+export interface Enrollment {
+  id: string;
+  contactId: string;
+  sequenceId: string;
+  currentStep: number;
+  nextSendAt?: string;
+  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'STOPPED' | 'UNSUBSCRIBED';
+  startedAt: string;
+  completedAt?: string;
+  contact?: Contact;
+  sequence?: Sequence;
+}
+
+export interface Event {
+  id: string;
+  enrollmentId: string;
+  contactId: string;
+  type: 'SENT' | 'DELIVERED' | 'OPENED' | 'CLICKED' | 'REPLIED' | 'BOUNCED' | 'UNSUBSCRIBED' | 'FAILED';
+  details?: string;
+  timestamp: string;
+  emailId?: string;
+}
+
+// API utility class
+class ApiClient {
+  private baseUrl: string;
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    try {
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`API request failed: ${endpoint}`, error);
+      throw error;
+    }
+  }
+
+  // Contacts API
+  async getContacts(params?: { page?: number; limit?: number; status?: string; search?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.search) searchParams.append('search', params.search);
+
+    const query = searchParams.toString();
+    return this.request<{ contacts: Contact[]; pagination: any }>(`/contacts${query ? `?${query}` : ''}`);
+  }
+
+  async createContact(contact: Omit<Contact, 'id' | 'createdAt' | 'updatedAt'>) {
+    return this.request<Contact>('/contacts', {
+      method: 'POST',
+      body: JSON.stringify(contact),
+    });
+  }
+
+  async updateContact(id: string, updates: Partial<Contact>) {
+    return this.request<Contact>(`/contacts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteContact(id: string) {
+    return this.request<void>(`/contacts/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async bulkImportContacts(contacts: Array<Omit<Contact, 'id' | 'createdAt' | 'updatedAt'>>) {
+    return this.request<{ created: number; skipped: number; errors: any[] }>('/contacts/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ contacts }),
+    });
+  }
+
+  // Templates API
+  async getTemplates(params?: { page?: number; limit?: number; isActive?: boolean }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.isActive !== undefined) searchParams.append('isActive', params.isActive.toString());
+
+    const query = searchParams.toString();
+    return this.request<{ templates: Template[]; pagination: any }>(`/templates${query ? `?${query}` : ''}`);
+  }
+
+  async createTemplate(template: Omit<Template, 'id' | 'createdAt' | 'updatedAt'>) {
+    return this.request<Template>('/templates', {
+      method: 'POST',
+      body: JSON.stringify(template),
+    });
+  }
+
+  async updateTemplate(id: string, updates: Partial<Template>) {
+    return this.request<Template>(`/templates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteTemplate(id: string) {
+    return this.request<void>(`/templates/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Sequences API
+  async getSequences(params?: { page?: number; limit?: number; isActive?: boolean }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.isActive !== undefined) searchParams.append('isActive', params.isActive.toString());
+
+    const query = searchParams.toString();
+    return this.request<{ sequences: Sequence[]; pagination: any }>(`/sequences${query ? `?${query}` : ''}`);
+  }
+
+  async createSequence(sequence: { name: string; description?: string; steps?: Array<Omit<SequenceStep, 'id' | 'sequenceId'>> }) {
+    return this.request<Sequence>('/sequences', {
+      method: 'POST',
+      body: JSON.stringify(sequence),
+    });
+  }
+
+  async updateSequence(id: string, updates: Partial<Sequence>) {
+    return this.request<Sequence>(`/sequences/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteSequence(id: string) {
+    return this.request<void>(`/sequences/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async addSequenceStep(sequenceId: string, step: Omit<SequenceStep, 'id' | 'sequenceId'>) {
+    return this.request<SequenceStep>(`/sequences/${sequenceId}/steps`, {
+      method: 'POST',
+      body: JSON.stringify(step),
+    });
+  }
+
+  // Enrollments API
+  async getEnrollments(params?: { page?: number; limit?: number; status?: string; sequenceId?: string; contactId?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.sequenceId) searchParams.append('sequenceId', params.sequenceId);
+    if (params?.contactId) searchParams.append('contactId', params.contactId);
+
+    const query = searchParams.toString();
+    return this.request<{ enrollments: Enrollment[]; pagination: any }>(`/enrollments${query ? `?${query}` : ''}`);
+  }
+
+  async createEnrollment(enrollment: { contactId: string; sequenceId: string; startImmediately?: boolean }) {
+    return this.request<Enrollment>('/enrollments', {
+      method: 'POST',
+      body: JSON.stringify(enrollment),
+    });
+  }
+
+  async bulkEnrollContacts(data: { contactIds: string[]; sequenceId: string; startImmediately?: boolean }) {
+    return this.request<{ enrolled: number; skipped: number; errors: any[] }>('/enrollments/bulk', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Events API
+  async getEvents(params?: { page?: number; limit?: number; type?: string; enrollmentId?: string; contactId?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.type) searchParams.append('type', params.type);
+    if (params?.enrollmentId) searchParams.append('enrollmentId', params.enrollmentId);
+    if (params?.contactId) searchParams.append('contactId', params.contactId);
+
+    const query = searchParams.toString();
+    return this.request<{ events: Event[]; pagination: any }>(`/events${query ? `?${query}` : ''}`);
+  }
+
+  async getAnalyticsSummary(params?: { startDate?: string; endDate?: string; sequenceId?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.startDate) searchParams.append('startDate', params.startDate);
+    if (params?.endDate) searchParams.append('endDate', params.endDate);
+    if (params?.sequenceId) searchParams.append('sequenceId', params.sequenceId);
+
+    const query = searchParams.toString();
+    return this.request<any>(`/events/analytics/summary${query ? `?${query}` : ''}`);
+  }
+
+  // Scheduler API
+  async getSchedulerStatus() {
+    return this.request<any>('/scheduler/status');
+  }
+
+  async triggerEmailProcessing() {
+    return this.request<any>('/scheduler/trigger', {
+      method: 'POST',
+    });
+  }
+
+  async sendTestEmail(data: { to: string; subject?: string; body?: string }) {
+    return this.request<any>('/scheduler/test-email', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+}
+
+// Export singleton instance
+export const api = new ApiClient(API_BASE_URL);
+
+// Export types for use in components
+export type { Contact, Template, Sequence, SequenceStep, Enrollment, Event };
