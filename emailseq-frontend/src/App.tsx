@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
-import Sequences from "./pages/Sequences";
+import SimplifiedSequences from "./pages/SimplifiedSequences";
 import Leads from "./pages/Leads";
 import Profile from "./pages/Profile";
 import Reports from "./pages/Reports";
@@ -25,7 +25,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/sequences" element={<Sequences />} />
+          <Route path="/sequences" element={<SimplifiedSequences />} />
           <Route path="/leads" element={<Leads />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/reports" element={<Reports />} />

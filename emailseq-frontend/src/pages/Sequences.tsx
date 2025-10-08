@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Mail, Loader2, Save } from "lucide-react";
+import { Plus, Trash2, Mail, Loader2, Save, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { api, Template, Sequence } from "@/lib/api";
+import { ManageTemplatesPopup } from "@/components/popups";
+import { DefaultTemplate, defaultTemplates } from "@/data/defaultTemplates";
 
 interface EmailStep {
   id: string;
@@ -27,6 +29,8 @@ const Sequences = () => {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading] = useState(true);
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [isManageTemplatesOpen, setIsManageTemplatesOpen] = useState(false);
+  const [localDefaultTemplates, setLocalDefaultTemplates] = useState(defaultTemplates);
   const [sequenceName, setSequenceName] = useState("");
   const [sequenceDescription, setSequenceDescription] = useState("");
   const [newTemplate, setNewTemplate] = useState({
@@ -97,19 +101,42 @@ const Sequences = () => {
       steps.map((step) => {
         if (step.id === id) {
           if (field === 'templateId') {
-            // Update template data when template is selected
-            const template = templates.find(t => t.id === String(value));
+            // Find template in both custom templates and default templates
+            const customTemplate = templates.find(t => t.id === String(value));
+            const defaultTemplate = localDefaultTemplates.find(t => t.id === String(value));
+            const selectedTemplate = customTemplate || defaultTemplate;
+            
             return {
               ...step,
               [field]: String(value),
-              subject: template?.subject || step.subject,
-              body: template?.body || step.body
+              subject: selectedTemplate?.subject || step.subject,
+              body: selectedTemplate?.body || step.body
             };
           }
           return { ...step, [field]: value };
         }
         return step;
       })
+    );
+  };
+
+  // Template management handlers
+  const handleTemplateUpdate = (templateId: string, updates: { subject: string; body: string }) => {
+    setLocalDefaultTemplates(prev => 
+      prev.map(template => 
+        template.id === templateId 
+          ? { ...template, ...updates }
+          : template
+      )
+    );
+    
+    // Update any existing steps that use this template
+    setSteps(prev => 
+      prev.map(step => 
+        step.templateId === templateId 
+          ? { ...step, subject: updates.subject, body: updates.body }
+          : step
+      )
     );
   };
 
@@ -147,33 +174,54 @@ const Sequences = () => {
       return;
     }
 
-    // Validate that all steps have templates selected
-    const invalidSteps = steps.filter(step => !step.templateId);
+    // Validate that all steps have content
+    const invalidSteps = steps.filter(step => !step.subject.trim() || !step.body.trim());
     if (invalidSteps.length > 0) {
-      toast.error("Please select templates for all steps");
+      toast.error("Please add subject and body content for all steps");
       return;
     }
 
     try {
-      const sequenceSteps = steps.map(step => ({
-        templateId: step.templateId,
-        stepOrder: step.stepOrder,
-        delayDays: step.delayDays,
-        delayHours: step.delayHours,
-        isActive: true
-      }));
+      // For steps using default templates, create custom templates first
+      const processedSteps = [];
+      
+      for (const step of steps) {
+        let templateId = step.templateId;
+        
+        // If using a default template or no template, create a custom one
+        if (!templateId || localDefaultTemplates.find(t => t.id === templateId)) {
+          const customTemplate = await api.createTemplate({
+            name: `${sequenceName} - Step ${step.stepOrder}`,
+            subject: step.subject,
+            body: step.body,
+            isActive: true
+          });
+          templateId = customTemplate.id;
+        }
+        
+        processedSteps.push({
+          templateId,
+          stepOrder: step.stepOrder,
+          delayDays: step.delayDays,
+          delayHours: step.delayHours,
+          isActive: true
+        });
+      }
 
       const sequence = await api.createSequence({
         name: sequenceName,
         description: sequenceDescription || undefined,
-        steps: sequenceSteps
+        steps: processedSteps
       });
 
       setSequences([sequence, ...sequences]);
       setSteps([]);
       setSequenceName("");
       setSequenceDescription("");
-      toast.success("Sequence saved successfully");
+      toast.success("Sequence Saved Successfully ✅");
+      
+      // Reload templates to include newly created ones
+      loadData();
     } catch (error: any) {
       toast.error(error.message || "Failed to save sequence");
     }
@@ -198,7 +246,17 @@ const Sequences = () => {
               </p>
             </div>
             
-            <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => setIsManageTemplatesOpen(true)}
+                variant="outline"
+                className="rounded-xl border-primary/20 hover:border-primary"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Manage Templates
+              </Button>
+              
+              <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
               <DialogTrigger asChild>
                 <Button
                   variant="outline"
@@ -265,6 +323,7 @@ const Sequences = () => {
                 </div>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
         </motion.div>
 
@@ -302,15 +361,15 @@ const Sequences = () => {
         </motion.div>
 
         {/* Sequence Steps */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <span className="ml-2 text-muted-foreground">Loading templates...</span>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <AnimatePresence mode="popLayout">
-              {steps.map((step, index) => (
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <span className="ml-2 text-muted-foreground">Loading templates...</span>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <AnimatePresence mode="popLayout">
+                  {steps.map((step, index) => (
                 <motion.div
                   key={step.id}
                   initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -341,7 +400,7 @@ const Sequences = () => {
                   <div className="space-y-4">
                     {/* Template Selection */}
                     <div className="space-y-2">
-                      <Label htmlFor={`template-${step.id}`}>Email Template *</Label>
+                      <Label htmlFor={`template-${step.id}`}>Email Template</Label>
                       <Select
                         value={step.templateId}
                         onValueChange={(value) => updateStep(step.id, "templateId", value)}
@@ -350,32 +409,57 @@ const Sequences = () => {
                           <SelectValue placeholder="Select a template" />
                         </SelectTrigger>
                         <SelectContent>
-                          {templates.map((template) => (
-                            <SelectItem key={template.id} value={template.id}>
-                              {template.name}
-                            </SelectItem>
-                          ))}
+                          <optgroup label="Default Templates">
+                            {localDefaultTemplates.map((template) => (
+                              <SelectItem key={template.id} value={template.id}>
+                                {template.name}
+                              </SelectItem>
+                            ))}
+                          </optgroup>
+                          {templates.length > 0 && (
+                            <optgroup label="Custom Templates">
+                              {templates.map((template) => (
+                                <SelectItem key={template.id} value={template.id}>
+                                  {template.name}
+                                </SelectItem>
+                              ))}
+                            </optgroup>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
 
-                    {/* Preview Selected Template */}
-                    {step.templateId && (
-                      <div className="space-y-3 p-4 bg-muted/30 rounded-xl">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Subject Preview</Label>
-                          <div className="text-sm text-muted-foreground bg-background/50 p-2 rounded-lg">
-                            {step.subject || "No subject"}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Body Preview</Label>
-                          <div className="text-sm text-muted-foreground bg-background/50 p-2 rounded-lg max-h-24 overflow-y-auto">
-                            {step.body || "No content"}
-                          </div>
-                        </div>
+                    {/* Editable Template Content */}
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ 
+                        opacity: step.subject || step.body ? 1 : 0.7, 
+                        height: "auto" 
+                      }}
+                      className="space-y-4"
+                    >
+                      <div className="space-y-2">
+                        <Label htmlFor={`subject-${step.id}`}>Subject Line</Label>
+                        <Input
+                          id={`subject-${step.id}`}
+                          value={step.subject}
+                          onChange={(e) => updateStep(step.id, "subject", e.target.value)}
+                          placeholder="Enter email subject..."
+                          className="rounded-xl"
+                        />
                       </div>
-                    )}
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor={`body-${step.id}`}>Email Body</Label>
+                        <Textarea
+                          id={`body-${step.id}`}
+                          value={step.body}
+                          onChange={(e) => updateStep(step.id, "body", e.target.value)}
+                          placeholder="Enter email content..."
+                          className="rounded-xl min-h-[150px] resize-none"
+                        />
+                      </div>
+                    </motion.div>
 
                     {/* Delay Settings */}
                     {index > 0 && (
@@ -416,18 +500,18 @@ const Sequences = () => {
                   </div>
                 </motion.div>
               ))}
-            </AnimatePresence>
-          </div>
-        )}
+                </AnimatePresence>
+              </div>
+            )}
 
-        {/* Action Buttons */}
-        {!loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="mt-8 flex gap-4 flex-wrap"
-          >
+            {/* Action Buttons */}
+            {!loading && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="mt-8 flex gap-4 flex-wrap"
+              >
             <Button
               onClick={addStep}
               disabled={steps.length >= 5}
@@ -438,10 +522,11 @@ const Sequences = () => {
               Add Step {steps.length < 5 && `(${5 - steps.length} remaining)`}
             </Button>
 
+
             <Button
               onClick={saveSequence}
               disabled={!sequenceName.trim() || steps.length === 0}
-              className="gradient-primary text-white rounded-xl shadow-luxury"
+              className="gradient-primary text-white rounded-xl shadow-luxury hover:shadow-hover transition-all duration-300 hover:scale-105"
             >
               <Save className="w-5 h-5 mr-2" />
               Save Sequence
@@ -460,8 +545,8 @@ const Sequences = () => {
                 Clear All
               </Button>
             )}
-          </motion.div>
-        )}
+              </motion.div>
+            )}
 
         {/* Existing Sequences */}
         {!loading && sequences.length > 0 && (
@@ -502,6 +587,13 @@ const Sequences = () => {
             </div>
           </motion.div>
         )}
+
+        {/* Manage Templates Popup */}
+        <ManageTemplatesPopup
+          isOpen={isManageTemplatesOpen}
+          onClose={() => setIsManageTemplatesOpen(false)}
+          onTemplateUpdate={handleTemplateUpdate}
+        />
       </main>
     </div>
   );
