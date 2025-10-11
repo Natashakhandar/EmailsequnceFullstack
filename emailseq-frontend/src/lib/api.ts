@@ -1,6 +1,6 @@
 // API configuration and utilities for the email sequencing backend
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = 'http://localhost:3002/api';
 
 // API response types
 export interface Contact {
@@ -67,6 +67,8 @@ export interface Event {
   details?: string;
   timestamp: string;
   emailId?: string;
+  contact?: Contact;
+  enrollment?: Enrollment;
 }
 
 // API utility class
@@ -239,16 +241,30 @@ class ApiClient {
   }
 
   // Events API
-  async getEvents(params?: { page?: number; limit?: number; type?: string; enrollmentId?: string; contactId?: string }) {
+  async getEvents(params?: { 
+    page?: number; 
+    limit?: number; 
+    type?: string; 
+    enrollmentId?: string; 
+    contactId?: string;
+    startDate?: string;
+    endDate?: string;
+  }) {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.limit) searchParams.append('limit', params.limit.toString());
     if (params?.type) searchParams.append('type', params.type);
     if (params?.enrollmentId) searchParams.append('enrollmentId', params.enrollmentId);
     if (params?.contactId) searchParams.append('contactId', params.contactId);
+    if (params?.startDate) searchParams.append('startDate', params.startDate);
+    if (params?.endDate) searchParams.append('endDate', params.endDate);
 
     const query = searchParams.toString();
     return this.request<{ events: Event[]; pagination: any }>(`/events${query ? `?${query}` : ''}`);
+  }
+
+  async getEvent(id: string) {
+    return this.request<Event>(`/events/${id}`);
   }
 
   async getAnalyticsSummary(params?: { startDate?: string; endDate?: string; sequenceId?: string }) {
@@ -282,6 +298,3 @@ class ApiClient {
 
 // Export singleton instance
 export const api = new ApiClient(API_BASE_URL);
-
-// Export types for use in components
-export type { Contact, Template, Sequence, SequenceStep, Enrollment, Event };

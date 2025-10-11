@@ -20,7 +20,8 @@ const Navbar = () => {
     { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
     { to: "/leads", label: "Leads", icon: Users },
     { to: "/sequences", label: "Sequences", icon: Mail },
-    { to: "/reports", label: "Reports", icon: FileText },
+    { to: "/email-activity", label: "Email Activity", icon: FileText },
+    { to: "/reports", label: "Reports", icon: BarChart3 },
     { to: "/profile", label: "Profile", icon: User },
   ];
 

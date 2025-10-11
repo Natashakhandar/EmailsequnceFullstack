@@ -8,6 +8,7 @@ import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import SimplifiedSequences from "./pages/SimplifiedSequences";
 import Leads from "./pages/Leads";
+import EmailActivity from "./pages/EmailActivity";
 import Profile from "./pages/Profile";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/sequences" element={<SimplifiedSequences />} />
           <Route path="/leads" element={<Leads />} />
+          <Route path="/email-activity" element={<EmailActivity />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/reports" element={<Reports />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

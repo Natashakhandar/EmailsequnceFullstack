@@ -7,7 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Download, Plus, Search, Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Upload, Download, Plus, Search, Loader2, Mail, Users } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { api, Contact } from "@/lib/api";
@@ -21,6 +23,13 @@ const Leads = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEnrollDialogOpen, setIsEnrollDialogOpen] = useState(false);
+  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [sequences, setSequences] = useState<any[]>([]);
+  const [selectedSequence, setSelectedSequence] = useState("");
+  const [startImmediately, setStartImmediately] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
+  const [loadingSequences, setLoadingSequences] = useState(false);
   const [newLead, setNewLead] = useState({
     email: "",
     firstName: "",
@@ -29,9 +38,10 @@ const Leads = () => {
     timezone: "UTC"
   });
 
-  // Load contacts from API
+  // Load contacts and sequences from API
   useEffect(() => {
     loadContacts();
+    loadSequences();
   }, []);
 
   const loadContacts = async () => {
@@ -44,6 +54,98 @@ const Leads = () => {
       console.error("Error loading contacts:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSequences = async () => {
+    try {
+      setLoadingSequences(true);
+      console.log("Loading sequences from backend...");
+      
+      // Fetch active sequences from the correct backend endpoint
+      const response = await fetch('http://localhost:3001/api/sequences?isActive=true');
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Sequences loaded successfully:", data);
+        
+        const sequences = data.sequences || [];
+        console.log(`Found ${sequences.length} active sequences`);
+        
+        setSequences(sequences);
+        
+        if (sequences.length === 0) {
+          console.warn("No active sequences found");
+          toast.info("No active sequences available. Please create and activate sequences first.");
+        }
+      } else {
+        console.error("Failed to load sequences:", response.status);
+        toast.error("Failed to load sequences from server");
+      }
+    } catch (error) {
+      console.error("Error loading sequences:", error);
+      toast.error("Error connecting to backend server");
+    } finally {
+      setLoadingSequences(false);
+    }
+  };
+
+
+  const handleSelectContact = (contactId: string) => {
+    setSelectedContacts(prev => 
+      prev.includes(contactId) 
+        ? prev.filter(id => id !== contactId)
+        : [...prev, contactId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const activeLeads = filteredLeads.filter(lead => lead.status === 'ACTIVE');
+    if (selectedContacts.length === activeLeads.length) {
+      setSelectedContacts([]);
+    } else {
+      setSelectedContacts(activeLeads.map(lead => lead.id));
+    }
+  };
+
+  const handleEnrollContacts = async () => {
+    if (!selectedSequence || selectedContacts.length === 0) {
+      toast.error("Please select a sequence and at least one contact");
+      return;
+    }
+
+    try {
+      setEnrolling(true);
+      const response = await fetch('http://localhost:3001/api/enrollments/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contactIds: selectedContacts,
+          sequenceId: selectedSequence,
+          startImmediately
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast.success(`Successfully enrolled ${result.enrolled} contacts in sequence`);
+        if (result.skipped > 0) {
+          toast.info(`${result.skipped} contacts were skipped (already enrolled or inactive)`);
+        }
+        setSelectedContacts([]);
+        setIsEnrollDialogOpen(false);
+        setSelectedSequence("");
+      } else {
+        const error = await response.json();
+        toast.error(error.message || "Failed to enroll contacts");
+      }
+    } catch (error) {
+      toast.error("Failed to enroll contacts");
+      console.error("Error enrolling contacts:", error);
+    } finally {
+      setEnrolling(false);
     }
   };
 
@@ -168,6 +270,100 @@ const Leads = () => {
             </div>
 
             <div className="flex gap-3">
+              {selectedContacts.length > 0 && (
+                <Dialog open={isEnrollDialogOpen} onOpenChange={setIsEnrollDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      className="gradient-primary text-white rounded-xl shadow-luxury"
+                    >
+                      <Mail className="w-4 h-4 mr-2" />
+                      Enroll in Sequence ({selectedContacts.length})
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Enroll Contacts in Sequence</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="sequence">Select Sequence *</Label>
+                        <Select value={selectedSequence} onValueChange={setSelectedSequence} disabled={loadingSequences}>
+                          <SelectTrigger className="rounded-xl">
+                            <SelectValue placeholder={
+                              loadingSequences 
+                                ? "Loading sequences..." 
+                                : sequences.length === 0 
+                                ? "No active sequences available" 
+                                : "Choose a sequence..."
+                            } />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {sequences.map((sequence) => (
+                              <SelectItem key={sequence.id} value={sequence.id}>
+                                {sequence.name} ({sequence.steps?.length || 0} steps)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {sequences.length === 0 && (
+                          <div className="text-xs text-muted-foreground">
+                            No active sequences available. Please create sequences first.
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="startImmediately" 
+                            checked={startImmediately}
+                            onCheckedChange={(checked) => setStartImmediately(checked === true)}
+                          />
+                          <Label htmlFor="startImmediately" className="text-sm">
+                            Start sending immediately
+                          </Label>
+                        </div>
+                        <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded border">
+                          <strong>Timing Options:</strong>
+                          <br />
+                          ✅ <strong>Immediate:</strong> First email sends right away, then follows sequence delays
+                          <br />
+                          ⏰ <strong>Scheduled:</strong> Follows sequence timing from the start (respects all delays)
+                        </div>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {selectedContacts.length} contact(s) selected for enrollment
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsEnrollDialogOpen(false)}
+                        className="rounded-xl"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleEnrollContacts}
+                        disabled={enrolling || !selectedSequence}
+                        className="gradient-primary text-white rounded-xl"
+                      >
+                        {enrolling ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Enrolling...
+                          </>
+                        ) : (
+                          <>
+                            <Users className="w-4 h-4 mr-2" />
+                            Enroll Contacts
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
+
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button
@@ -283,6 +479,27 @@ const Leads = () => {
           </div>
         </motion.div>
 
+        {/* Instructions */}
+        {leads.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-xl"
+          >
+            <div className="flex items-start gap-3">
+              <Mail className="w-5 h-5 text-primary mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-primary mb-1">Start Email Sequences</h3>
+                <p className="text-sm text-muted-foreground">
+                  Select contacts below and click "Enroll in Sequence" to start sending automated email sequences. 
+                  Only active contacts can be enrolled.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Leads Table */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -300,6 +517,12 @@ const Leads = () => {
             <Table>
               <TableHeader>
                 <TableRow className="border-border/50 hover:bg-transparent">
+                  <TableHead className="w-12">
+                    <Checkbox 
+                      checked={selectedContacts.length === filteredLeads.filter(lead => lead.status === 'ACTIVE').length && filteredLeads.filter(lead => lead.status === 'ACTIVE').length > 0}
+                      onCheckedChange={() => handleSelectAll()}
+                    />
+                  </TableHead>
                   <TableHead className="font-semibold">Name</TableHead>
                   <TableHead className="font-semibold">Email</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
@@ -309,7 +532,7 @@ const Leads = () => {
               <TableBody>
                 {filteredLeads.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       {searchTerm ? "No contacts found matching your search." : "No contacts yet. Add your first contact!"}
                     </TableCell>
                   </TableRow>
@@ -322,6 +545,13 @@ const Leads = () => {
                       transition={{ delay: index * 0.05 }}
                       className="border-border/50 hover:bg-muted/50 transition-smooth"
                     >
+                      <TableCell>
+                        <Checkbox 
+                          checked={selectedContacts.includes(lead.id)}
+                          onCheckedChange={() => handleSelectContact(lead.id)}
+                          disabled={lead.status !== 'ACTIVE'}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">
                         {`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.email}
                       </TableCell>
