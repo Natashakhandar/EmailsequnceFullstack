@@ -61,17 +61,29 @@ async function sendEmail({
     
     // Replace tokens in subject and body
     const processedSubject = replaceTokens(subject, contactData);
-    const processedHtmlBody = replaceTokens(htmlBody, contactData);
+    let processedHtmlBody = replaceTokens(htmlBody, contactData);
     const processedTextBody = textBody ? replaceTokens(textBody, contactData) : null;
+
+    // Generate unique Message-ID for tracking
+    const messageId = `<${uuidv4()}@${emailConfig.from.address.split('@')[1]}>`;
+
+    // Add tracking pixel to HTML body if enrollmentId is provided
+    if (enrollmentId && processedHtmlBody) {
+      const trackingPixel = `<img src="${emailConfig.appUrl}/api/track/open?emailId=${encodeURIComponent(messageId)}" width="1" height="1" style="display:none;" alt="" />`;
+      
+      // Try to insert before closing body tag, otherwise append
+      if (processedHtmlBody.includes('</body>')) {
+        processedHtmlBody = processedHtmlBody.replace('</body>', `${trackingPixel}</body>`);
+      } else {
+        processedHtmlBody += trackingPixel;
+      }
+    }
 
     // Generate unsubscribe URL if contactId is provided
     let unsubscribeUrl = `${emailConfig.appUrl}/api/unsubscribe/email`;
     if (contactId) {
       unsubscribeUrl = await generateUnsubscribeToken(contactId);
     }
-
-    // Generate unique Message-ID
-    const messageId = `<${uuidv4()}@${emailConfig.from.address.split('@')[1]}>`;
 
     // Prepare email options
     const mailOptions = {
@@ -234,6 +246,25 @@ async function sendSequenceEmail(enrollment) {
     });
 
     if (result.success) {
+      // Update the sent event with step information
+      await prisma.event.updateMany({
+        where: {
+          enrollmentId: enrollment.id,
+          emailId: result.emailId,
+          type: 'SENT'
+        },
+        data: {
+          details: JSON.stringify({
+            to: contact.email,
+            subject: currentStep.template.subject,
+            messageId: result.messageId,
+            response: result.response,
+            stepOrder: enrollment.currentStep,
+            stepLabel: currentStep.template.name || `Step ${enrollment.currentStep}`
+          })
+        }
+      });
+
       // Calculate next step timing
       const nextStep = enrollment.currentStep + 1;
       const nextStepData = await prisma.sequenceStep.findFirst({
@@ -244,7 +275,9 @@ async function sendSequenceEmail(enrollment) {
         }
       });
 
-      let updateData = {};
+      let updateData = {
+        lastSentStep: enrollment.currentStep // Track the step that was just sent
+      };
 
       if (nextStepData) {
         // Schedule next step
@@ -253,12 +286,14 @@ async function sendSequenceEmail(enrollment) {
         nextSendAt.setHours(nextSendAt.getHours() + nextStepData.delayHours);
 
         updateData = {
+          ...updateData,
           currentStep: nextStep,
           nextSendAt
         };
       } else {
         // Sequence completed
         updateData = {
+          ...updateData,
           status: 'COMPLETED',
           completedAt: new Date(),
           nextSendAt: null

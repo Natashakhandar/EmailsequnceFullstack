@@ -61,17 +61,25 @@ model Sequence {
 model SequenceStep {
   id          String   @id @default(uuid())
   sequenceId  String
-  templateId  String
+  templateId  String?  // Made optional to support custom emails
   stepOrder   Int      // 1, 2, 3, etc.
   delayDays   Int      @default(0) // Days to wait before sending this step
   delayHours  Int      @default(0) // Additional hours to wait
+  
+  // NEW: Trigger conditions and delay logic
+  subject     String?  // Email subject (can override template)
+  body        String?  // Email body (can override template)
+  triggerType String   @default("delay") // "delay", "opened", "not_opened", "replied", "skip"
+  triggerStepId String? // Reference to step that triggers this one
+  delayMinutes Int     @default(0) // Additional minutes for precise timing
+  
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
   sequence    Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
-  template    Template @relation(fields: [templateId], references: [id])
+  template    Template? @relation(fields: [templateId], references: [id]) // Made optional
 
   @@unique([sequenceId, stepOrder])
   @@map("sequence_steps")
@@ -82,6 +90,7 @@ model Enrollment {
   contactId   String
   sequenceId  String
   currentStep Int      @default(1)
+  lastSentStep Int?    // Track the last step that was actually sent
   nextSendAt  DateTime?
   status      EnrollmentStatus @default(ACTIVE)
   startedAt   DateTime @default(now())

@@ -1,6 +1,6 @@
 // API configuration and utilities for the email sequencing backend
 
-const API_BASE_URL = 'http://localhost:3002/api';
+const API_BASE_URL = 'http://localhost:3001/api';
 
 // API response types
 export interface Contact {
@@ -38,10 +38,14 @@ export interface Sequence {
 export interface SequenceStep {
   id: string;
   sequenceId: string;
-  templateId: string;
+  templateId?: string | null;
   stepOrder: number;
+  subject?: string;
+  body?: string;
   delayDays: number;
   delayHours: number;
+  triggerType: 'delay' | 'opened' | 'not_opened' | 'replied' | 'skip';
+  triggerStepId?: string | null;
   isActive: boolean;
   template?: Template;
 }
@@ -186,14 +190,40 @@ class ApiClient {
     return this.request<{ sequences: Sequence[]; pagination: any }>(`/sequences${query ? `?${query}` : ''}`);
   }
 
-  async createSequence(sequence: { name: string; description?: string; steps?: Array<Omit<SequenceStep, 'id' | 'sequenceId'>> }) {
+  async createSequence(sequence: { 
+    name: string; 
+    description?: string; 
+    steps?: Array<{
+      stepOrder: number;
+      subject?: string;
+      body?: string;
+      triggerType: 'delay' | 'opened' | 'not_opened' | 'replied' | 'skip';
+      triggerStepId?: string | null;
+      delayDays: number;
+      delayHours: number;
+      templateId?: string | null;
+    }>
+  }) {
     return this.request<Sequence>('/sequences', {
       method: 'POST',
       body: JSON.stringify(sequence),
     });
   }
 
-  async updateSequence(id: string, updates: Partial<Sequence>) {
+  async updateSequence(id: string, updates: { 
+    name?: string; 
+    description?: string; 
+    steps?: Array<{
+      stepOrder: number;
+      subject?: string;
+      body?: string;
+      triggerType: 'delay' | 'opened' | 'not_opened' | 'replied' | 'skip';
+      triggerStepId?: string | null;
+      delayDays: number;
+      delayHours: number;
+      templateId?: string | null;
+    }>
+  }) {
     return this.request<Sequence>(`/sequences/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -265,6 +295,12 @@ class ApiClient {
 
   async getEvent(id: string) {
     return this.request<Event>(`/events/${id}`);
+  }
+
+  async deleteEmailActivity(id: string) {
+    return this.request<void>(`/email-activity/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   async getAnalyticsSummary(params?: { startDate?: string; endDate?: string; sequenceId?: string }) {

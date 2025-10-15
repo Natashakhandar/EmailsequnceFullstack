@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LogOut, User, BarChart3, Mail, Users, FileText } from "lucide-react";
+import { LogOut, User, BarChart3, Mail, Users, FileText, Layers } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +20,7 @@ const Navbar = () => {
     { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
     { to: "/leads", label: "Leads", icon: Users },
     { to: "/sequences", label: "Sequences", icon: Mail },
+   // { to: "/sequences-new", label: "Sequences Builder", icon: Layers },
     { to: "/email-activity", label: "Email Activity", icon: FileText },
     { to: "/reports", label: "Reports", icon: BarChart3 },
     { to: "/profile", label: "Profile", icon: User },

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, RefreshCw, Eye, Filter, Calendar, Mail, User, Activity } from "lucide-react";
+import { Loader2, RefreshCw, Eye, Filter, Calendar, Mail, User, Activity, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, Event, Contact, Sequence } from "@/lib/api";
 import EmailDetailsPopup from "@/components/popups/EmailDetailsPopup";
@@ -31,6 +31,7 @@ const EmailActivity = () => {
   const [filters, setFilters] = useState<EmailActivityFilters>({});
   const [showFilters, setShowFilters] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 50,
@@ -121,6 +122,36 @@ const EmailActivity = () => {
   const clearFilters = () => {
     setFilters({});
     setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handleDeleteActivity = async (eventId: string) => {
+    if (deletingIds.has(eventId)) return; // Prevent double-clicking
+    
+    try {
+      setDeletingIds(prev => new Set(prev).add(eventId));
+      
+      await api.deleteEmailActivity(eventId);
+      
+      // Remove the event from the frontend list
+      setEvents(prev => prev.filter(event => event.id !== eventId));
+      
+      // Update pagination total
+      setPagination(prev => ({
+        ...prev,
+        total: prev.total - 1
+      }));
+      
+      toast.success("Email activity deleted.");
+    } catch (error) {
+      console.error("Error deleting email activity:", error);
+      toast.error("Failed to delete email activity");
+    } finally {
+      setDeletingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(eventId);
+        return newSet;
+      });
+    }
   };
 
   const getStatusBadge = (type: string) => {
@@ -426,14 +457,31 @@ const EmailActivity = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            onClick={() => setSelectedEvent(event)}
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              onClick={() => setSelectedEvent(event)}
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              title="View Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              onClick={() => handleDeleteActivity(event.id)}
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              disabled={deletingIds.has(event.id)}
+                              title="Delete Activity"
+                            >
+                              {deletingIds.has(event.id) ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
