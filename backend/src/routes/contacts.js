@@ -151,17 +151,22 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/contacts/:id - Delete contact
 router.delete('/:id', async (req, res) => {
   try {
+    const deletedId = req.params.id;
+    
     await prisma.contact.delete({
-      where: { id: req.params.id }
+      where: { id: deletedId }
     });
 
-    res.status(204).send();
+    res.status(200).json({
+      message: "Lead deleted successfully",
+      deletedId: deletedId
+    });
   } catch (error) {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Contact not found' });
     }
     console.error('Error deleting contact:', error);
-    res.status(500).json({ error: 'Failed to delete contact' });
+    res.status(500).json({ message: 'Failed to delete lead' });
   }
 });
 
@@ -217,6 +222,35 @@ router.post('/bulk', async (req, res) => {
   } catch (error) {
     console.error('Error bulk importing contacts:', error);
     res.status(500).json({ error: 'Failed to import contacts' });
+  }
+});
+
+// POST /api/contacts/bulk-delete - Bulk delete contacts
+router.post('/bulk-delete', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    // Validate ids array
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'No contact IDs provided' });
+    }
+
+    // Delete contacts using deleteMany
+    const result = await prisma.contact.deleteMany({
+      where: {
+        id: {
+          in: ids
+        }
+      }
+    });
+
+    res.status(200).json({
+      message: 'Contacts deleted successfully',
+      deleted: result.count
+    });
+  } catch (error) {
+    console.error('Error bulk deleting contacts:', error);
+    res.status(500).json({ message: 'Failed to delete contacts' });
   }
 });
 

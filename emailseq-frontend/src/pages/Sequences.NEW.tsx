@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import Navbar from '@/components/Navbar';
 import { api, Template, Sequence, SequenceStep } from '@/lib/api';
-import SimpleEditTemplatesPopup from '@/components/popups/SimpleEditTemplatesPopup';
 import { defaultTemplates } from '@/data/defaultTemplates';
 
 // TypeScript interfaces for local state
@@ -83,7 +82,6 @@ const SequencesNew: React.FC = () => {
   const [isLoadingSequences, setIsLoadingSequences] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  const [isManageTemplatesOpen, setIsManageTemplatesOpen] = useState<boolean>(false);
   const [backendStepIdMap, setBackendStepIdMap] = useState<Map<string, string>>(new Map()); // frontend ID -> backend ID
 
   // Fetch templates and sequences from API
@@ -485,35 +483,6 @@ const SequencesNew: React.FC = () => {
     }
   };
 
-  // Handle template updates from SimpleEditTemplatesPopup
-  const handleTemplateUpdate = (templateId: string, updates: { subject: string; body: string }) => {
-    // Check if this is a default template update
-    const isDefaultTemplate = defaultTemplates.some(t => t.id === templateId);
-    
-    if (isDefaultTemplate) {
-      // For default templates, update any steps currently using this template
-      setSteps(prevSteps => 
-        prevSteps.map(step => {
-          // If step is using this template (either by templateId or by matching content)
-          if (step.templateId === templateId) {
-            return {
-              ...step,
-              subject: updates.subject,
-              body: removeEmailTracking(updates.body),
-              templateId: null // Convert to custom content since default template was modified
-            };
-          }
-          return step;
-        })
-      );
-      
-      toast.success('Default template updated and applied to current steps!');
-    } else {
-      // For API templates, refresh from backend
-      fetchTemplates();
-      toast.success('Template updated successfully!');
-    }
-  };
 
 
   // Shuffle steps function
@@ -595,14 +564,6 @@ const SequencesNew: React.FC = () => {
                 </div>
               </div>
                             <div className="flex items-center space-x-3">
-                <Button
-                  onClick={() => setIsManageTemplatesOpen(true)}
-                  variant="outline"
-                  className="border-blue-200 text-blue-700 hover:bg-blue-50"
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  Manage Templates
-                </Button>
                 {editingSequenceId && (
                   <Button
                     onClick={clearAllSteps}
@@ -1468,12 +1429,6 @@ You can use personalization variables:
         </motion.div>
       </div>
 
-        {/* Manage Templates Popup */}
-        <SimpleEditTemplatesPopup
-          isOpen={isManageTemplatesOpen}
-          onClose={() => setIsManageTemplatesOpen(false)}
-          onTemplateUpdate={handleTemplateUpdate}
-        />
     </div>
   );
 };

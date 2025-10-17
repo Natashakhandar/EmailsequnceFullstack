@@ -4,6 +4,94 @@ const { smtpConfig, emailConfig } = require('../config/smtp');
 const { replaceTokens } = require('../utils/tokenReplace');
 const prisma = require('../db/prismaClient');
 
+// Enhanced HTML formatting function
+function enhanceHtmlFormatting(htmlContent) {
+  if (!htmlContent || typeof htmlContent !== 'string') {
+    return htmlContent;
+  }
+
+  let enhanced = htmlContent;
+
+  // If content doesn't have basic HTML structure, wrap it
+  if (!enhanced.includes('<html') && !enhanced.includes('<body')) {
+    enhanced = `
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Email</title>
+        </head>
+        <body style="font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          ${enhanced}
+        </body>
+      </html>
+    `;
+  }
+
+  // Ensure proper paragraph spacing
+  enhanced = enhanced.replace(/\n\n/g, '</p><p>');
+  
+  // Convert single line breaks to <br> tags if not already HTML
+  if (!enhanced.includes('<br') && !enhanced.includes('<p>')) {
+    enhanced = enhanced.replace(/\n/g, '<br>');
+  }
+
+  // Ensure paragraphs are properly wrapped
+  if (!enhanced.includes('<p>') && enhanced.includes('<br>')) {
+    // Wrap content in paragraphs, splitting on double breaks
+    const paragraphs = enhanced.split('<br><br>');
+    enhanced = paragraphs.map(p => p.trim() ? `<p>${p.replace(/<br>/g, '<br>')}</p>` : '').join('');
+  }
+
+  // Add basic styling for common elements if not present
+  if (!enhanced.includes('style=') && !enhanced.includes('<style>')) {
+    enhanced = enhanced.replace(/<h1>/g, '<h1 style="color: #2c3e50; margin-bottom: 20px;">');
+    enhanced = enhanced.replace(/<h2>/g, '<h2 style="color: #34495e; margin-bottom: 15px;">');
+    enhanced = enhanced.replace(/<h3>/g, '<h3 style="color: #34495e; margin-bottom: 10px;">');
+    enhanced = enhanced.replace(/<p>/g, '<p style="margin-bottom: 15px;">');
+    enhanced = enhanced.replace(/<ul>/g, '<ul style="margin-bottom: 15px; padding-left: 20px;">');
+    enhanced = enhanced.replace(/<ol>/g, '<ol style="margin-bottom: 15px; padding-left: 20px;">');
+    enhanced = enhanced.replace(/<li>/g, '<li style="margin-bottom: 5px;">');
+  }
+
+  return enhanced;
+}
+
+// Generate plain text version from HTML content
+function generateTextFromHtml(htmlContent) {
+  if (!htmlContent || typeof htmlContent !== 'string') {
+    return '';
+  }
+
+  let text = htmlContent;
+
+  // Remove HTML tags and convert to plain text
+  text = text
+    // Convert headings to uppercase with line breaks
+    .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n\n$1\n' + '='.repeat(50) + '\n')
+    // Convert paragraphs to line breaks
+    .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
+    // Convert line breaks
+    .replace(/<br[^>]*>/gi, '\n')
+    // Convert list items
+    .replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n')
+    // Remove all other HTML tags
+    .replace(/<[^>]*>/g, '')
+    // Decode HTML entities
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    // Clean up multiple line breaks
+    .replace(/\n{3,}/g, '\n\n')
+    // Trim whitespace
+    .trim();
+
+  return text;
+}
+
 // Create reusable transporter object using SMTP transport
 let transporter = null;
 
@@ -61,8 +149,15 @@ async function sendEmail({
     
     // Replace tokens in subject and body
     const processedSubject = replaceTokens(subject, contactData);
+    
+    // Process HTML body with enhanced formatting and token replacement
     let processedHtmlBody = replaceTokens(htmlBody, contactData);
-    const processedTextBody = textBody ? replaceTokens(textBody, contactData) : null;
+    processedHtmlBody = enhanceHtmlFormatting(processedHtmlBody);
+    
+    // Generate text version from HTML if not provided
+    const processedTextBody = textBody ? 
+      replaceTokens(textBody, contactData) : 
+      generateTextFromHtml(processedHtmlBody);
 
     // Generate unique Message-ID for tracking
     const messageId = `<${uuidv4()}@${emailConfig.from.address.split('@')[1]}>`;
@@ -205,8 +300,13 @@ async function sendSequenceEmail(enrollment) {
     const { contact, sequence } = fullEnrollment;
     const currentStep = sequence.steps[0]; // Should be the current step
 
-    if (!currentStep || !currentStep.template) {
-      throw new Error('No template found for current step');
+    if (!currentStep) {
+      throw new Error('No step configuration found for current step');
+    }
+
+    // Check if step has template or custom content
+    if (!currentStep.template && (!currentStep.subject || !currentStep.body)) {
+      throw new Error('Step must have either a template or custom subject and body');
     }
 
     // Check if contact is still active
@@ -232,14 +332,34 @@ async function sendSequenceEmail(enrollment) {
       lastName: contact.lastName || '',
       email: contact.email,
       company: contact.company || '',
-      fullName: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email
+      companyName: contact.company || '', // Alias for company
+      fullName: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email,
+      // Additional computed fields
+      firstNameCapitalized: contact.firstName ? contact.firstName.charAt(0).toUpperCase() + contact.firstName.slice(1).toLowerCase() : '',
+      lastNameCapitalized: contact.lastName ? contact.lastName.charAt(0).toUpperCase() + contact.lastName.slice(1).toLowerCase() : '',
+      fullNameCapitalized: [
+        contact.firstName ? contact.firstName.charAt(0).toUpperCase() + contact.firstName.slice(1).toLowerCase() : '',
+        contact.lastName ? contact.lastName.charAt(0).toUpperCase() + contact.lastName.slice(1).toLowerCase() : ''
+      ].filter(Boolean).join(' ') || contact.email,
+      // Date/time tokens
+      currentDate: new Date().toLocaleDateString(),
+      currentTime: new Date().toLocaleTimeString(),
+      currentYear: new Date().getFullYear().toString()
     };
+
+    // Determine email content (template or custom)
+    const emailSubject = currentStep.subject || currentStep.template?.subject;
+    const emailBody = currentStep.body || currentStep.template?.body;
+
+    if (!emailSubject || !emailBody) {
+      throw new Error('Email subject and body are required');
+    }
 
     // Send the email
     const result = await sendEmail({
       to: contact.email,
-      subject: currentStep.template.subject,
-      htmlBody: currentStep.template.body,
+      subject: emailSubject,
+      htmlBody: emailBody,
       contactData,
       enrollmentId: enrollment.id,
       contactId: contact.id
@@ -256,11 +376,12 @@ async function sendSequenceEmail(enrollment) {
         data: {
           details: JSON.stringify({
             to: contact.email,
-            subject: currentStep.template.subject,
+            subject: emailSubject,
             messageId: result.messageId,
             response: result.response,
             stepOrder: enrollment.currentStep,
-            stepLabel: currentStep.template.name || `Step ${enrollment.currentStep}`
+            stepLabel: currentStep.template?.name || `Step ${enrollment.currentStep}`,
+            isCustomEmail: !currentStep.template
           })
         }
       });

@@ -20,8 +20,8 @@ const Navbar = () => {
     { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
     { to: "/leads", label: "Leads", icon: Users },
     { to: "/sequences", label: "Sequences", icon: Mail },
-   // { to: "/sequences-new", label: "Sequences Builder", icon: Layers },
-    { to: "/email-activity", label: "Email Activity", icon: FileText },
+    { to: "/templates", label: "Templates", icon: FileText },
+    { to: "/email-activity", label: "Email Activity", icon: Layers },
     { to: "/reports", label: "Reports", icon: BarChart3 },
     { to: "/profile", label: "Profile", icon: User },
   ];

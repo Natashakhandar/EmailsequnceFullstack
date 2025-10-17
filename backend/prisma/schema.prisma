@@ -54,6 +54,7 @@ model Sequence {
   // Relations
   steps       SequenceStep[]
   enrollments Enrollment[]
+  trigger     SequenceTrigger?
 
   @@map("sequences")
 }
@@ -80,6 +81,7 @@ model SequenceStep {
   // Relations
   sequence    Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
   template    Template? @relation(fields: [templateId], references: [id]) // Made optional
+  triggeredBy SequenceTrigger[]
 
   @@unique([sequenceId, stepOrder])
   @@map("sequence_steps")
@@ -131,6 +133,20 @@ model UnsubscribeToken {
   usedAt    DateTime?
 
   @@map("unsubscribe_tokens")
+}
+
+model SequenceTrigger {
+  id            String   @id @default(uuid())
+  sequenceId    String   @unique
+  triggerStepId String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  sequence    Sequence     @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  triggerStep SequenceStep @relation(fields: [triggerStepId], references: [id], onDelete: Cascade)
+
+  @@map("sequence_triggers")
 }
 
 // Enums

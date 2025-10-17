@@ -148,6 +148,14 @@ class ApiClient {
     });
   }
 
+  async bulkDeleteContacts(ids: string[]) {
+  return this.request<{ message: string; deleted: number }>('/contacts/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}
+
+
   // Templates API
   async getTemplates(params?: { page?: number; limit?: number; isActive?: boolean }) {
     const searchParams = new URLSearchParams();

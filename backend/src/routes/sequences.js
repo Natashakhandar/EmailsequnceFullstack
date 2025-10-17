@@ -52,6 +52,15 @@ router.get('/', async (req, res) => {
               template: true
             }
           },
+          trigger: {
+            include: {
+              triggerStep: {
+                include: {
+                  template: true
+                }
+              }
+            }
+          },
           _count: {
             select: { 
               enrollments: true,
@@ -91,6 +100,15 @@ router.get('/:id', async (req, res) => {
           orderBy: { stepOrder: 'asc' },
           include: {
             template: true
+          }
+        },
+        trigger: {
+          include: {
+            triggerStep: {
+              include: {
+                template: true
+              }
+            }
           }
         },
         enrollments: {
@@ -182,33 +200,14 @@ router.post('/', async (req, res) => {
           });
         }
 
-        // Validate trigger conditions only if triggerType is provided
-        if (step.triggerType && ['opened', 'not_opened', 'replied'].includes(step.triggerType)) {
-          if (!step.triggerStepId) {
-            return res.status(400).json({ 
-              success: false,
-              message: `Step ${i + 1} with triggerType "${step.triggerType}" must have a valid triggerStepId` 
-            });
-          }
-          
-          // Validate that triggerStepId refers to a previous step
-          // Check both by ID and by stepOrder for flexibility
-          const triggerStepExists = steps.some(s => {
-            // Match by step ID or step order
-            const isMatchingStep = s.id === step.triggerStepId || s.stepOrder.toString() === step.triggerStepId;
-            // Must be a previous step (lower step order)
-            const isPreviousStep = s.stepOrder < step.stepOrder;
-            return isMatchingStep && isPreviousStep;
+        // Note: triggerStepId validation is removed during creation since step IDs don't exist yet
+        // The trigger step system is handled separately via the /trigger endpoint after creation
+        // We only validate that triggerType is a valid value if provided
+        if (step.triggerType && !['delay', 'opened', 'not_opened', 'replied', 'skip'].includes(step.triggerType)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} triggerType must be one of: delay, opened, not_opened, replied, skip` 
           });
-          
-          // If not found in current steps array, it might be an existing step ID from database
-          // In that case, we'll let the database handle the validation (UUID pattern check)
-          if (!triggerStepExists && !step.triggerStepId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-            return res.status(400).json({ 
-              success: false,
-              message: `Step ${i + 1} triggerStepId must reference a previous step in the sequence` 
-            });
-          }
         }
 
         // Validate delay formatting
@@ -386,33 +385,14 @@ router.put('/:id', async (req, res) => {
           });
         }
 
-        // Validate trigger conditions only if triggerType is provided
-        if (step.triggerType && ['opened', 'not_opened', 'replied'].includes(step.triggerType)) {
-          if (!step.triggerStepId) {
-            return res.status(400).json({ 
-              success: false,
-              message: `Step ${i + 1} with triggerType "${step.triggerType}" must have a valid triggerStepId` 
-            });
-          }
-          
-          // Validate that triggerStepId refers to a previous step
-          // Check both by ID and by stepOrder for flexibility
-          const triggerStepExists = steps.some(s => {
-            // Match by step ID or step order
-            const isMatchingStep = s.id === step.triggerStepId || s.stepOrder.toString() === step.triggerStepId;
-            // Must be a previous step (lower step order)
-            const isPreviousStep = s.stepOrder < step.stepOrder;
-            return isMatchingStep && isPreviousStep;
+        // Note: triggerStepId validation is removed during update since step IDs may not exist yet
+        // The trigger step system is handled separately via the /trigger endpoint
+        // We only validate that triggerType is a valid value if provided
+        if (step.triggerType && !['delay', 'opened', 'not_opened', 'replied', 'skip'].includes(step.triggerType)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} triggerType must be one of: delay, opened, not_opened, replied, skip` 
           });
-          
-          // If not found in current steps array, it might be an existing step ID from database
-          // In that case, we'll let the database handle the validation (UUID pattern check)
-          if (!triggerStepExists && !step.triggerStepId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-            return res.status(400).json({ 
-              success: false,
-              message: `Step ${i + 1} triggerStepId must reference a previous step in the sequence` 
-            });
-          }
         }
 
         // Validate delay formatting
@@ -732,6 +712,155 @@ router.delete('/:id/steps/:stepId', async (req, res) => {
     }
     console.error('Error deleting sequence step:', error);
     res.status(500).json({ error: 'Failed to delete sequence step' });
+  }
+});
+
+// PUT /api/sequences/:id/trigger - Set trigger step for sequence
+router.put('/:id/trigger', async (req, res) => {
+  try {
+    const { triggerStepId } = req.body;
+    const sequenceId = req.params.id;
+
+    console.log('🎯 Setting trigger step:', { sequenceId, triggerStepId });
+
+    if (!triggerStepId) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'triggerStepId is required' 
+      });
+    }
+
+    // Verify sequence exists
+    const sequence = await prisma.sequence.findUnique({
+      where: { id: sequenceId },
+      include: {
+        steps: {
+          orderBy: { stepOrder: 'asc' }
+        }
+      }
+    });
+
+    if (!sequence) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Sequence not found' 
+      });
+    }
+
+    // Verify the trigger step exists in this sequence
+    const triggerStep = sequence.steps.find(step => step.id === triggerStepId);
+    if (!triggerStep) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Trigger step not found in this sequence' 
+      });
+    }
+
+    // Update sequence to store trigger step reference
+    // We'll add a triggerStepId field to the sequence table
+    const updatedSequence = await prisma.sequence.update({
+      where: { id: sequenceId },
+      data: { 
+        updatedAt: new Date() // Update timestamp to track changes
+      },
+      include: {
+        steps: {
+          orderBy: { stepOrder: 'asc' },
+          include: {
+            template: true
+          }
+        }
+      }
+    });
+
+    // Store trigger step info using Prisma
+    await prisma.sequenceTrigger.upsert({
+      where: { sequenceId },
+      update: { triggerStepId },
+      create: { 
+        sequenceId, 
+        triggerStepId 
+      }
+    });
+
+    console.log('✅ Trigger step set successfully:', { sequenceId, triggerStepId, stepOrder: triggerStep.stepOrder });
+
+    res.json({
+      success: true,
+      message: 'Trigger step set successfully',
+      data: {
+        sequenceId,
+        triggerStepId,
+        triggerStepOrder: triggerStep.stepOrder,
+        sequence: updatedSequence
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error setting trigger step:', error);
+    
+    if (error.code === 'P2025') {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Sequence not found' 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to set trigger step' 
+    });
+  }
+});
+
+// GET /api/sequences/:id/trigger - Get trigger step for sequence
+router.get('/:id/trigger', async (req, res) => {
+  try {
+    const sequenceId = req.params.id;
+
+    console.log('🔍 Getting trigger step for sequence:', sequenceId);
+
+    // Get trigger step info using Prisma
+    const triggerInfo = await prisma.sequenceTrigger.findUnique({
+      where: { sequenceId },
+      include: {
+        triggerStep: {
+          include: {
+            template: true
+          }
+        }
+      }
+    });
+
+    if (!triggerInfo) {
+      return res.json({
+        success: true,
+        data: {
+          hasTrigger: false,
+          triggerStepId: null,
+          triggerStepOrder: null
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        hasTrigger: true,
+        triggerStepId: triggerInfo.triggerStepId,
+        triggerStepOrder: triggerInfo.triggerStep.stepOrder,
+        stepId: triggerInfo.triggerStep.id,
+        templateName: triggerInfo.triggerStep.template?.name,
+        subject: triggerInfo.triggerStep.template?.subject
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting trigger step:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to get trigger step' 
+    });
   }
 });
 
