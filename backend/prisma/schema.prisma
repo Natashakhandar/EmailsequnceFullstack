@@ -6,12 +6,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
 model Contact {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   email       String   @unique
   firstName   String?
   lastName    String?
@@ -29,7 +29,7 @@ model Contact {
 }
 
 model Template {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String
   subject     String
   body        String   // HTML or plain text
@@ -44,7 +44,7 @@ model Template {
 }
 
 model Sequence {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String
   description String?
   isActive    Boolean  @default(true)
@@ -59,7 +59,7 @@ model Sequence {
 }
 
 model SequenceStep {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   sequenceId  String
   templateId  String
   stepOrder   Int      // 1, 2, 3, etc.
@@ -78,7 +78,7 @@ model SequenceStep {
 }
 
 model Enrollment {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   contactId   String
   sequenceId  String
   currentStep Int      @default(1)
@@ -99,7 +99,7 @@ model Enrollment {
 }
 
 model Event {
-  id           String    @id @default(uuid())
+  id           String    @id @default(cuid())
   enrollmentId String
   contactId    String
   type         EventType
@@ -115,7 +115,7 @@ model Event {
 }
 
 model UnsubscribeToken {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   token     String   @unique
   contactId String
   createdAt DateTime @default(now())

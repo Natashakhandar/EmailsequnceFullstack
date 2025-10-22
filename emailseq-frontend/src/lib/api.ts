@@ -1,6 +1,6 @@
 // API configuration and utilities for the email sequencing backend
 
-const API_BASE_URL = 'http://localhost:3002/api';
+const API_BASE_URL = 'http://localhost:3001/api';
 
 // API response types
 export interface Contact {
