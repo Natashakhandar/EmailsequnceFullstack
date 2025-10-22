@@ -54,6 +54,7 @@ const Navbar = () => {
     { to: "/leads", label: "Leads", icon: Users },
     { to: "/sequences", label: "Sequences", icon: Mail },
     { to: "/templates", label: "Templates", icon: FileText },
+    { to: "/smtp-settings", label: "SMTP Settings", icon: Mail },
     { to: "/email-activity", label: "Email Activity", icon: Layers },
     { to: "/reports", label: "Reports", icon: BarChart3 },
     { to: "/profile", label: "Profile", icon: User },

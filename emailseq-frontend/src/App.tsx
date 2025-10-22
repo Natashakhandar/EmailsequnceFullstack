@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import SequencesNEW from "./pages/Sequences.NEW";
 import TemplatesPage from "./pages/TemplatesPage";
 import AdminManagement from "./pages/AdminManagement";
+import SmtpSettings from "./pages/SmtpSettings";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
           <Route path="/leads" element={<Leads />} />
           <Route path="/email-activity" element={<EmailActivity />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/smtp-settings" element={<SmtpSettings />} />
           <Route path="/sequences-simplified" element={<SimplifiedSequences />} />
           <Route path="/admin-management" element={<AdminManagement />} />
           <Route path="/reports" element={<Reports />} />
