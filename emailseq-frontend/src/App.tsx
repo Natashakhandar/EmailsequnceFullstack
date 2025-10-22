@@ -14,6 +14,7 @@ import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import SequencesNEW from "./pages/Sequences.NEW";
 import TemplatesPage from "./pages/TemplatesPage";
+import AdminManagement from "./pages/AdminManagement";
 
 const queryClient = new QueryClient();
 
@@ -34,7 +35,7 @@ const App = () => (
           <Route path="/email-activity" element={<EmailActivity />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/sequences-simplified" element={<SimplifiedSequences />} />
-
+          <Route path="/admin-management" element={<AdminManagement />} />
           <Route path="/reports" element={<Reports />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

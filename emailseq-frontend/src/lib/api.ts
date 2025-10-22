@@ -75,6 +75,23 @@ export interface Event {
   enrollment?: Enrollment;
 }
 
+export interface User {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  role: 'USER' | 'ADMIN' | 'SUPERADMIN';
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LoginResponse {
+  message: string;
+  user: User;
+  token: string;
+}
+
 // API utility class
 class ApiClient {
   private baseUrl: string;
@@ -83,12 +100,18 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  private getAuthToken(): string | null {
+    return localStorage.getItem('auth_token');
+  }
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    const token = this.getAuthToken();
     
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
       ...options,
@@ -107,6 +130,75 @@ class ApiClient {
       console.error(`API request failed: ${endpoint}`, error);
       throw error;
     }
+  }
+
+  // Authentication API
+  async login(email: string, password: string): Promise<LoginResponse> {
+    const response = await this.request<LoginResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    
+    // Store token in localStorage
+    localStorage.setItem('auth_token', response.token);
+    
+    return response;
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.request<void>('/auth/logout', {
+        method: 'POST',
+      });
+    } finally {
+      // Always remove token from localStorage
+      localStorage.removeItem('auth_token');
+    }
+  }
+
+  async getCurrentUser(): Promise<{ user: User }> {
+    return this.request<{ user: User }>('/auth/me');
+  }
+
+  async getUsers(): Promise<{ users: User[] }> {
+    return this.request<{ users: User[] }>('/auth/users');
+  }
+
+  async createUser(userData: {
+    email: string;
+    password: string;
+    firstName?: string;
+    lastName?: string;
+    role?: 'USER' | 'ADMIN' | 'SUPERADMIN';
+  }): Promise<{ message: string; user: User }> {
+    return this.request<{ message: string; user: User }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  async updateUser(id: string, updates: {
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    role?: 'USER' | 'ADMIN' | 'SUPERADMIN';
+    isActive?: boolean;
+  }): Promise<{ message: string; user: User }> {
+    return this.request<{ message: string; user: User }>(`/auth/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteUser(id: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/auth/users/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Helper method to check if user is authenticated
+  isAuthenticated(): boolean {
+    return !!this.getAuthToken();
   }
 
   // Contacts API

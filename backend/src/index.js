@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 // Import routes
+const authRouter = require('./routes/auth');
 const contactsRouter = require('./routes/contacts');
 const templatesRouter = require('./routes/templates');
 const sequencesRouter = require('./routes/sequences');
@@ -56,6 +57,7 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/auth', authRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/templates', templatesRouter);
 app.use('/api/sequences', sequencesRouter);
@@ -73,6 +75,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
+      auth: '/api/auth',
       contacts: '/api/contacts',
       templates: '/api/templates',
       sequences: '/api/sequences',

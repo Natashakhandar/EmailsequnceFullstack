@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LogOut, User, BarChart3, Mail, Users, FileText, Layers } from "lucide-react";
+import { LogOut, User, BarChart3, Mail, Users, FileText, Layers, Shield } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,15 +8,48 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useState, useEffect } from "react";
+import { api, User as UserType } from "@/lib/api";
 
 const Navbar = () => {
   const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState<UserType | null>(null);
 
-  const handleLogout = () => {
-    navigate("/login");
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await api.getCurrentUser();
+        setCurrentUser(response.user);
+      } catch (error) {
+        console.error('Failed to fetch current user:', error);
+      }
+    };
+
+    fetchCurrentUser();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      navigate("/login");
+    }
   };
 
-  const navLinks = [
+  const getUserInitials = () => {
+    if (!currentUser) return 'U';
+    const firstName = currentUser.firstName || '';
+    const lastName = currentUser.lastName || '';
+    if (firstName && lastName) {
+      return `${firstName[0]}${lastName[0]}`.toUpperCase();
+    }
+    if (firstName) return firstName[0].toUpperCase();
+    return currentUser.email[0].toUpperCase();
+  };
+
+  const baseNavLinks = [
     { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
     { to: "/leads", label: "Leads", icon: Users },
     { to: "/sequences", label: "Sequences", icon: Mail },
@@ -25,6 +58,15 @@ const Navbar = () => {
     { to: "/reports", label: "Reports", icon: BarChart3 },
     { to: "/profile", label: "Profile", icon: User },
   ];
+
+  // Add Admin Management link for superadmins
+  const navLinks = currentUser?.role === 'SUPERADMIN' 
+    ? [
+        ...baseNavLinks.slice(0, -1), // All links except Profile
+        { to: "/admin-management", label: "Admin Management", icon: Shield },
+        baseNavLinks[baseNavLinks.length - 1] // Profile link at the end
+      ]
+    : baseNavLinks;
 
   return (
     <motion.nav
@@ -85,7 +127,7 @@ const Navbar = () => {
               >
                 <Avatar className="h-10 w-10 border-2 border-primary/20 cursor-pointer">
                   <AvatarFallback className="gradient-primary text-white font-semibold">
-                    AS
+                    {getUserInitials()}
                   </AvatarFallback>
                 </Avatar>
               </motion.button>
@@ -95,6 +137,12 @@ const Navbar = () => {
                 <User className="mr-2 h-4 w-4" />
                 Profile
               </DropdownMenuItem>
+              {/* {currentUser?.role === 'SUPERADMIN' && (
+                <DropdownMenuItem onClick={() => navigate("/admin-management")} className="cursor-pointer">
+                  <Shield className="mr-2 h-4 w-4" />
+                  Admin Management
+                </DropdownMenuItem>
+              )} */}
               <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
                 Logout
