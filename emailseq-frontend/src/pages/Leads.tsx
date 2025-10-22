@@ -4,12 +4,13 @@ import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, Download, Plus, Search, Loader2, Mail, Users } from "lucide-react";
+import { Upload, Download, Plus, Search, Loader2, Mail, Users, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { api, Contact } from "@/lib/api";
@@ -37,6 +38,13 @@ const Leads = () => {
     company: "",
     timezone: "UTC"
   });
+
+  // Delete functionality state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [contactToDelete, setContactToDelete] = useState<Lead | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Load contacts and sequences from API
   useEffect(() => {
@@ -228,6 +236,71 @@ const Leads = () => {
     toast.success("Report downloaded successfully");
   };
 
+  // Delete functionality
+  const handleDeleteContact = (contact: Lead) => {
+    setContactToDelete(contact);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteContact = async () => {
+    if (!contactToDelete) return;
+
+    try {
+      setDeleting(true);
+      await api.deleteContact(contactToDelete.id);
+      
+      // Remove from UI immediately
+      setLeads(leads.filter(lead => lead.id !== contactToDelete.id));
+      
+      // Clear selection if deleted contact was selected
+      setSelectedContacts(prev => prev.filter(id => id !== contactToDelete.id));
+      
+      toast.success(`Contact ${contactToDelete.email} deleted successfully`);
+      setIsDeleteDialogOpen(false);
+      setContactToDelete(null);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete contact");
+      console.error("Error deleting contact:", error);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedContacts.length === 0) {
+      toast.error("Please select contacts to delete");
+      return;
+    }
+    setIsBulkDeleteDialogOpen(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    if (selectedContacts.length === 0) return;
+
+    try {
+      setBulkDeleting(true);
+      const result = await api.bulkDeleteContacts(selectedContacts);
+      
+      // Remove deleted contacts from UI immediately
+      setLeads(leads.filter(lead => !selectedContacts.includes(lead.id)));
+      
+      // Clear selections
+      setSelectedContacts([]);
+      
+      toast.success(`Successfully deleted ${result.deleted} contact(s)`);
+      if (result.errors && result.errors.length > 0) {
+        toast.error(`Failed to delete ${result.errors.length} contact(s)`);
+      }
+      
+      setIsBulkDeleteDialogOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete contacts");
+      console.error("Error deleting contacts:", error);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const getStatusBadge = (status: Contact["status"]) => {
     const variants = {
       ACTIVE: "bg-green-100 text-green-700 hover:bg-green-100",
@@ -271,15 +344,34 @@ const Leads = () => {
 
             <div className="flex gap-3">
               {selectedContacts.length > 0 && (
-                <Dialog open={isEnrollDialogOpen} onOpenChange={setIsEnrollDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button
-                      className="gradient-primary text-white rounded-xl shadow-luxury"
-                    >
-                      <Mail className="w-4 h-4 mr-2" />
-                      Enroll in Sequence ({selectedContacts.length})
-                    </Button>
-                  </DialogTrigger>
+                <>
+                  <Button
+                    onClick={handleBulkDelete}
+                    variant="destructive"
+                    className="rounded-xl shadow-luxury"
+                    disabled={bulkDeleting}
+                  >
+                    {bulkDeleting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete Selected ({selectedContacts.length})
+                      </>
+                    )}
+                  </Button>
+                  <Dialog open={isEnrollDialogOpen} onOpenChange={setIsEnrollDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button
+                        className="gradient-primary text-white rounded-xl shadow-luxury"
+                      >
+                        <Mail className="w-4 h-4 mr-2" />
+                        Enroll in Sequence ({selectedContacts.length})
+                      </Button>
+                    </DialogTrigger>
                   <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                       <DialogTitle>Enroll Contacts in Sequence</DialogTitle>
@@ -362,6 +454,7 @@ const Leads = () => {
                     </div>
                   </DialogContent>
                 </Dialog>
+                </>
               )}
 
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -527,12 +620,13 @@ const Leads = () => {
                   <TableHead className="font-semibold">Email</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
                   <TableHead className="font-semibold">Last Contacted</TableHead>
+                  <TableHead className="font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredLeads.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       {searchTerm ? "No contacts found matching your search." : "No contacts yet. Add your first contact!"}
                     </TableCell>
                   </TableRow>
@@ -559,6 +653,17 @@ const Leads = () => {
                       <TableCell>{getStatusBadge(lead.status)}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(lead.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          onClick={() => handleDeleteContact(lead)}
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          disabled={deleting}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </TableCell>
                     </motion.tr>
                   ))
@@ -612,6 +717,66 @@ const Leads = () => {
             </div>
           )}
         </motion.div>
+
+        {/* Individual Delete Confirmation Dialog */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{contactToDelete?.email}</strong>? 
+                This action cannot be undone and will remove all associated data.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteContact}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete Contact'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Bulk Delete Confirmation Dialog */}
+        <AlertDialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Multiple Contacts</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{selectedContacts.length} contact(s)</strong>? 
+                This action cannot be undone and will remove all associated data for these contacts.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmBulkDelete}
+                disabled={bulkDeleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {bulkDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  `Delete ${selectedContacts.length} Contact(s)`
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );

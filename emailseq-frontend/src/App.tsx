@@ -12,6 +12,8 @@ import EmailActivity from "./pages/EmailActivity";
 import Profile from "./pages/Profile";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
+import SequencesNEW from "./pages/Sequences.NEW";
+import TemplatesPage from "./pages/TemplatesPage";
 
 const queryClient = new QueryClient();
 
@@ -26,10 +28,13 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/sequences" element={<SimplifiedSequences />} />
+          <Route path="/sequences" element={<SequencesNEW />} />
+          <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/leads" element={<Leads />} />
           <Route path="/email-activity" element={<EmailActivity />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/sequences-simplified" element={<SimplifiedSequences />} />
+
           <Route path="/reports" element={<Reports />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

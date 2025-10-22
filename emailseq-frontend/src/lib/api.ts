@@ -38,10 +38,14 @@ export interface Sequence {
 export interface SequenceStep {
   id: string;
   sequenceId: string;
-  templateId: string;
+  templateId?: string | null;
   stepOrder: number;
+  subject?: string;
+  body?: string;
   delayDays: number;
   delayHours: number;
+  triggerType: 'delay' | 'opened' | 'not_opened' | 'replied' | 'skip';
+  triggerStepId?: string | null;
   isActive: boolean;
   template?: Template;
 }
@@ -144,6 +148,14 @@ class ApiClient {
     });
   }
 
+  async bulkDeleteContacts(ids: string[]) {
+  return this.request<{ message: string; deleted: number }>('/contacts/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}
+
+
   // Templates API
   async getTemplates(params?: { page?: number; limit?: number; isActive?: boolean }) {
     const searchParams = new URLSearchParams();
@@ -186,14 +198,40 @@ class ApiClient {
     return this.request<{ sequences: Sequence[]; pagination: any }>(`/sequences${query ? `?${query}` : ''}`);
   }
 
-  async createSequence(sequence: { name: string; description?: string; steps?: Array<Omit<SequenceStep, 'id' | 'sequenceId'>> }) {
+  async createSequence(sequence: { 
+    name: string; 
+    description?: string; 
+    steps?: Array<{
+      stepOrder: number;
+      subject?: string;
+      body?: string;
+      triggerType: 'delay' | 'opened' | 'not_opened' | 'replied' | 'skip';
+      triggerStepId?: string | null;
+      delayDays: number;
+      delayHours: number;
+      templateId?: string | null;
+    }>
+  }) {
     return this.request<Sequence>('/sequences', {
       method: 'POST',
       body: JSON.stringify(sequence),
     });
   }
 
-  async updateSequence(id: string, updates: Partial<Sequence>) {
+  async updateSequence(id: string, updates: { 
+    name?: string; 
+    description?: string; 
+    steps?: Array<{
+      stepOrder: number;
+      subject?: string;
+      body?: string;
+      triggerType: 'delay' | 'opened' | 'not_opened' | 'replied' | 'skip';
+      triggerStepId?: string | null;
+      delayDays: number;
+      delayHours: number;
+      templateId?: string | null;
+    }>
+  }) {
     return this.request<Sequence>(`/sequences/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -265,6 +303,12 @@ class ApiClient {
 
   async getEvent(id: string) {
     return this.request<Event>(`/events/${id}`);
+  }
+
+  async deleteEmailActivity(id: string) {
+    return this.request<void>(`/email-activity/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   async getAnalyticsSummary(params?: { startDate?: string; endDate?: string; sequenceId?: string }) {

@@ -67,11 +67,11 @@ const Dashboard = () => {
             delay={0.3}
           />
           <MetricCard
-            title="Conversion"
+            title="Bounce Rate"
             value="15.2%"
             icon={TrendingUp}
             percentage="15.2%"
-            total="175 of 1,150 converted"
+            total="175 of 1,150 bounced"
             trend="+2.4% from last week"
             delay={0.4}
           />

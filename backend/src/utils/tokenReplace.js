@@ -9,7 +9,11 @@ const DEFAULT_VALUES = {
   lastName: '',
   email: '',
   company: '',
-  fullName: ''
+  companyName: '', // Alias for company
+  fullName: '',
+  firstNameCapitalized: '',
+  lastNameCapitalized: '',
+  fullNameCapitalized: ''
 };
 
 /**
@@ -169,11 +173,18 @@ function generateSampleData() {
     lastName: 'Doe',
     email: 'john.doe@example.com',
     company: 'Example Corp',
+    companyName: 'Example Corp', // Alias for company
     fullName: 'John Doe',
+    firstNameCapitalized: 'John',
+    lastNameCapitalized: 'Doe',
+    fullNameCapitalized: 'John Doe',
     // Add more sample fields as needed
     phone: '+1-555-0123',
     title: 'Marketing Manager',
-    website: 'https://example.com'
+    website: 'https://example.com',
+    currentDate: new Date().toLocaleDateString(),
+    currentTime: new Date().toLocaleTimeString(),
+    currentYear: new Date().getFullYear().toString()
   };
 }
 

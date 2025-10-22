@@ -5,6 +5,199 @@ const { sendSequenceEmail, verifyConnection } = require('../mailer/sendEmail');
 let isSchedulerRunning = false;
 let schedulerTask = null;
 
+// Check if the next email in sequence should be sent based on trigger conditions
+async function shouldSendNextEmail(enrollment) {
+  try {
+    const { currentStep, lastSentStep, sequence, events } = enrollment;
+    
+    console.log(`🔍 Checking send conditions for enrollment ${enrollment.id}, step ${currentStep}`);
+    
+    // Prevent duplicate sends - check if current step was already sent
+    if (lastSentStep && lastSentStep >= currentStep) {
+      return {
+        send: false,
+        reason: `Step ${currentStep} already sent (lastSentStep: ${lastSentStep})`,
+        action: 'wait'
+      };
+    }
+
+    // Get current step configuration
+    const currentStepConfig = sequence.steps.find(step => step.stepOrder === currentStep);
+    if (!currentStepConfig) {
+      return {
+        send: false,
+        reason: `No configuration found for step ${currentStep}`,
+        action: 'complete'
+      };
+    }
+
+    // Get sequence trigger configuration
+    const sequenceTrigger = await prisma.sequenceTrigger.findUnique({
+      where: { sequenceId: sequence.id },
+      include: {
+        triggerStep: true
+      }
+    });
+
+    // For step 1 (intro email), always send if not already sent
+    if (currentStep === 1) {
+      return { send: true, reason: 'First step - ready to send' };
+    }
+
+    // If no trigger is configured, use delay-based logic (backward compatibility)
+    if (!sequenceTrigger) {
+      console.log('⚠️ No trigger configured, using delay-based logic');
+      return await shouldSendNextEmailDelayBased(enrollment);
+    }
+
+    // Check if we've reached the trigger step
+    if (currentStep === sequenceTrigger.triggerStep.stepOrder) {
+      console.log(`🎯 Current step ${currentStep} is the trigger step`);
+      
+      // Find the previous step's sent event
+      const previousStep = currentStep - 1;
+      const previousStepSentEvent = events.find(event => 
+        event.type === 'SENT' && 
+        event.details && 
+        JSON.parse(event.details).stepOrder === previousStep
+      );
+
+      if (!previousStepSentEvent) {
+        return {
+          send: false,
+          reason: `Previous step ${previousStep} not sent yet`,
+          action: 'wait'
+        };
+      }
+
+      // Check if previous email was opened or replied
+      const previousEmailId = previousStepSentEvent.emailId;
+      const hasOpened = events.some(event => 
+        event.type === 'OPENED' && event.emailId === previousEmailId
+      );
+      const hasReplied = events.some(event => 
+        event.type === 'REPLIED' && event.emailId === previousEmailId
+      );
+
+      // If they replied, complete the sequence (don't send more emails)
+      if (hasReplied) {
+        return {
+          send: false,
+          reason: 'Contact replied - completing sequence',
+          action: 'complete'
+        };
+      }
+
+      // Check delay period for trigger step
+      const sentTime = new Date(previousStepSentEvent.timestamp);
+      const delayMs = (currentStepConfig.delayDays * 24 * 60 * 60 * 1000) + 
+                     (currentStepConfig.delayHours * 60 * 60 * 1000) +
+                     (currentStepConfig.delayMinutes * 60 * 1000);
+      const shouldSendAfter = new Date(sentTime.getTime() + delayMs);
+
+      if (new Date() < shouldSendAfter) {
+        return {
+          send: false,
+          reason: `Still within delay period. Will send after ${shouldSendAfter.toISOString()}`,
+          action: 'wait'
+        };
+      }
+
+      // Trigger step logic: send if previous email was opened
+      if (hasOpened) {
+        return { 
+          send: true, 
+          reason: `Trigger step ${currentStep}: Previous email was opened - sending trigger email` 
+        };
+      } else {
+        return {
+          send: false,
+          reason: `Trigger step ${currentStep}: Waiting for previous email to be opened`,
+          action: 'wait'
+        };
+      }
+    }
+
+    // For steps after the trigger step, use delay-based logic
+    if (currentStep > sequenceTrigger.triggerStep.stepOrder) {
+      console.log(`📅 Step ${currentStep} is after trigger step, using delay-based logic`);
+      return await shouldSendNextEmailDelayBased(enrollment);
+    }
+
+    // For steps before the trigger step, use delay-based logic
+    console.log(`📅 Step ${currentStep} is before trigger step, using delay-based logic`);
+    return await shouldSendNextEmailDelayBased(enrollment);
+
+  } catch (error) {
+    console.error('Error in shouldSendNextEmail:', error);
+    return {
+      send: false,
+      reason: `Error checking conditions: ${error.message}`,
+      action: 'wait'
+    };
+  }
+}
+
+// Fallback delay-based logic for backward compatibility
+async function shouldSendNextEmailDelayBased(enrollment) {
+  try {
+    const { currentStep, sequence, events } = enrollment;
+    
+    // For subsequent steps, check conditions based on previous step
+    const previousStep = currentStep - 1;
+    
+    // Find the last sent event for the previous step
+    const previousStepSentEvent = events.find(event => 
+      event.type === 'SENT' && 
+      event.details && 
+      JSON.parse(event.details).stepOrder === previousStep
+    );
+
+    if (!previousStepSentEvent) {
+      return {
+        send: false,
+        reason: `Previous step ${previousStep} not sent yet`,
+        action: 'wait'
+      };
+    }
+
+    // Get current step configuration
+    const currentStepConfig = sequence.steps.find(step => step.stepOrder === currentStep);
+    if (!currentStepConfig) {
+      return {
+        send: false,
+        reason: `No configuration found for step ${currentStep}`,
+        action: 'complete'
+      };
+    }
+
+    // Check delay period
+    const sentTime = new Date(previousStepSentEvent.timestamp);
+    const delayMs = (currentStepConfig.delayDays * 24 * 60 * 60 * 1000) + 
+                   (currentStepConfig.delayHours * 60 * 60 * 1000) +
+                   (currentStepConfig.delayMinutes * 60 * 1000);
+    const shouldSendAfter = new Date(sentTime.getTime() + delayMs);
+
+    if (new Date() >= shouldSendAfter) {
+      return { send: true, reason: `Delay period passed - sending step ${currentStep}` };
+    } else {
+      return {
+        send: false,
+        reason: `Still within delay period. Will send after ${shouldSendAfter.toISOString()}`,
+        action: 'wait'
+      };
+    }
+
+  } catch (error) {
+    console.error('Error in shouldSendNextEmailDelayBased:', error);
+    return {
+      send: false,
+      reason: `Error checking delay conditions: ${error.message}`,
+      action: 'wait'
+    };
+  }
+}
+
 // Process due emails
 async function processDueEmails() {
   if (isSchedulerRunning) {
@@ -32,6 +225,9 @@ async function processDueEmails() {
               orderBy: { stepOrder: 'asc' }
             }
           }
+        },
+        events: {
+          orderBy: { timestamp: 'desc' }
         }
       },
       orderBy: {
@@ -55,6 +251,34 @@ async function processDueEmails() {
         // Add a small delay between emails to avoid overwhelming SMTP server
         if (successCount > 0) {
           await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+        }
+
+        // Check if this step should be sent based on sequence logic
+        const shouldSend = await shouldSendNextEmail(enrollment);
+        
+        if (!shouldSend.send) {
+          console.log(`⏭️ Skipping enrollment ${enrollment.id}: ${shouldSend.reason}`);
+          
+          // Update enrollment based on the reason
+          if (shouldSend.action === 'complete') {
+            await prisma.enrollment.update({
+              where: { id: enrollment.id },
+              data: { 
+                status: 'COMPLETED',
+                completedAt: new Date(),
+                nextSendAt: null
+              }
+            });
+          } else if (shouldSend.action === 'wait') {
+            // Update nextSendAt to check again later
+            const nextCheck = new Date();
+            nextCheck.setHours(nextCheck.getHours() + 1); // Check again in 1 hour
+            await prisma.enrollment.update({
+              where: { id: enrollment.id },
+              data: { nextSendAt: nextCheck }
+            });
+          }
+          continue;
         }
 
         const result = await sendSequenceEmail(enrollment);
@@ -223,9 +447,10 @@ function stopScheduler() {
 // Get scheduler status
 function getSchedulerStatus() {
   return {
-    isRunning: schedulerTask ? schedulerTask.getStatus() !== 'stopped' : false,
+    isRunning: schedulerTask ? true : false,
     isProcessing: isSchedulerRunning,
-    nextRun: schedulerTask ? 'Every minute' : null
+    nextRun: schedulerTask ? 'Every minute' : null,
+    lastRun: new Date().toISOString()
   };
 }
 

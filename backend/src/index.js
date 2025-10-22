@@ -12,6 +12,8 @@ const enrollmentsRouter = require('./routes/enrollments');
 const eventsRouter = require('./routes/events');
 const unsubscribeRouter = require('./routes/unsubscribe');
 const schedulerRouter = require('./routes/scheduler');
+const emailRouter = require('./routes/email');
+const emailActivityRouter = require('./routes/emailActivity');
 
 // Import scheduler
 const { startScheduler } = require('./jobs/scheduler');
@@ -61,6 +63,8 @@ app.use('/api/enrollments', enrollmentsRouter);
 app.use('/api/events', eventsRouter);
 app.use('/api/unsubscribe', unsubscribeRouter);
 app.use('/api/scheduler', schedulerRouter);
+app.use('/api', emailRouter);
+app.use('/api/email-activity', emailActivityRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -75,7 +79,9 @@ app.get('/', (req, res) => {
       enrollments: '/api/enrollments',
       events: '/api/events',
       unsubscribe: '/api/unsubscribe',
-      scheduler: '/api/scheduler'
+      scheduler: '/api/scheduler',
+      tracking: '/api/track',
+      emailActivity: '/api/email-activity'
     }
   });
 });

@@ -2,6 +2,34 @@ const express = require('express');
 const prisma = require('../db/prismaClient');
 const router = express.Router();
 
+// Helper function to ensure backward compatibility for sequence steps
+const normalizeSequenceStep = (step) => {
+  return {
+    ...step,
+    // Ensure all new fields have default values for backward compatibility
+    subject: step.subject || null,
+    body: step.body || null,
+    triggerType: step.triggerType || 'delay',
+    triggerStepId: step.triggerStepId || null,
+    delayMinutes: step.delayMinutes || 0,
+    
+    // Legacy support: if no trigger type is set, default to 'delay'
+    // This ensures old sequences without trigger logic still work
+    ...((!step.triggerType || step.triggerType === 'delay') && {
+      triggerType: 'delay',
+      triggerStepId: null
+    })
+  };
+};
+
+// Helper function to normalize sequence data
+const normalizeSequence = (sequence) => {
+  return {
+    ...sequence,
+    steps: sequence.steps ? sequence.steps.map(normalizeSequenceStep) : []
+  };
+};
+
 // GET /api/sequences - Get all sequences
 router.get('/', async (req, res) => {
   try {
@@ -24,6 +52,15 @@ router.get('/', async (req, res) => {
               template: true
             }
           },
+          trigger: {
+            include: {
+              triggerStep: {
+                include: {
+                  template: true
+                }
+              }
+            }
+          },
           _count: {
             select: { 
               enrollments: true,
@@ -35,8 +72,11 @@ router.get('/', async (req, res) => {
       prisma.sequence.count({ where })
     ]);
 
+    // Normalize sequences for backward compatibility
+    const normalizedSequences = sequences.map(normalizeSequence);
+
     res.json({
-      sequences,
+      sequences: normalizedSequences,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -62,6 +102,15 @@ router.get('/:id', async (req, res) => {
             template: true
           }
         },
+        trigger: {
+          include: {
+            triggerStep: {
+              include: {
+                template: true
+              }
+            }
+          }
+        },
         enrollments: {
           include: {
             contact: true
@@ -79,7 +128,10 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Sequence not found' });
     }
 
-    res.json(sequence);
+    // Normalize sequence for backward compatibility
+    const normalizedSequence = normalizeSequence(sequence);
+
+    res.json(normalizedSequence);
   } catch (error) {
     console.error('Error fetching sequence:', error);
     res.status(500).json({ error: 'Failed to fetch sequence' });
@@ -91,20 +143,98 @@ router.post('/', async (req, res) => {
   try {
     const { name, description, steps = [], isActive = true } = req.body;
 
+    console.log('🚀 Creating new sequence:', { name, description, stepCount: steps.length });
+
     if (!name) {
       return res.status(400).json({ error: 'Name is required' });
     }
 
-    // Validate steps if provided
+    // Enhanced validation for steps with trigger logic
     if (steps.length > 0) {
-      for (const step of steps) {
-        if (!step.templateId || step.stepOrder === undefined) {
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        console.log(`📧 Validating step ${i + 1}:`, {
+          templateId: step.templateId,
+          stepOrder: step.stepOrder,
+          triggerType: step.triggerType || 'delay',
+          triggerStepId: step.triggerStepId,
+          delayHours: step.delayHours,
+          subject: step.subject?.substring(0, 50) + '...',
+          body: step.body?.substring(0, 50) + '...'
+        });
+
+        // Basic validation
+        if (step.stepOrder === undefined) {
           return res.status(400).json({ 
-            error: 'Each step must have templateId and stepOrder' 
+            success: false,
+            message: `Step ${i + 1} must have stepOrder` 
+          });
+        }
+
+        // Validate template exists if templateId is provided
+        if (step.templateId) {
+          try {
+            const template = await prisma.template.findUnique({
+              where: { id: step.templateId }
+            });
+            if (!template) {
+              return res.status(400).json({ 
+                success: false,
+                message: `Template with ID "${step.templateId}" not found for step ${i + 1}` 
+              });
+            }
+          } catch (error) {
+            console.error(`❌ Error validating template for step ${i + 1}:`, error);
+            return res.status(400).json({ 
+              success: false,
+              message: `Invalid template ID for step ${i + 1}` 
+            });
+          }
+        }
+
+        // For custom emails (no templateId), ensure subject and body are provided
+        if (!step.templateId && (!step.subject || !step.body)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} must have either a templateId or both subject and body for custom email` 
+          });
+        }
+
+        // Note: triggerStepId validation is removed during creation since step IDs don't exist yet
+        // The trigger step system is handled separately via the /trigger endpoint after creation
+        // We only validate that triggerType is a valid value if provided
+        if (step.triggerType && !['delay', 'opened', 'not_opened', 'replied', 'skip'].includes(step.triggerType)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} triggerType must be one of: delay, opened, not_opened, replied, skip` 
+          });
+        }
+
+        // Validate delay formatting
+        if (step.delayHours !== undefined && (isNaN(step.delayHours) || step.delayHours < 0)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} delayHours must be a non-negative number` 
+          });
+        }
+
+        if (step.delayDays !== undefined && (isNaN(step.delayDays) || step.delayDays < 0)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} delayDays must be a non-negative number` 
+          });
+        }
+
+        if (step.delayMinutes !== undefined && (isNaN(step.delayMinutes) || step.delayMinutes < 0)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} delayMinutes must be a non-negative number` 
           });
         }
       }
     }
+
+    console.log('✅ All step validations passed, creating sequence...');
 
     const sequence = await prisma.sequence.create({
       data: {
@@ -113,10 +243,18 @@ router.post('/', async (req, res) => {
         isActive,
         steps: {
           create: steps.map(step => ({
-            templateId: step.templateId,
+            templateId: step.templateId || null,
             stepOrder: step.stepOrder,
             delayDays: step.delayDays || 0,
             delayHours: step.delayHours || 0,
+            delayMinutes: step.delayMinutes || 0,
+            
+            // NEW: Trigger and content fields
+            subject: step.subject || null,
+            body: step.body || null,
+            triggerType: step.triggerType || 'delay',
+            triggerStepId: step.triggerStepId || null,
+            
             isActive: step.isActive !== false
           }))
         }
@@ -131,22 +269,180 @@ router.post('/', async (req, res) => {
       }
     });
 
-    res.status(201).json(sequence);
+    console.log('🎉 Sequence created successfully:', { 
+      id: sequence.id, 
+      name: sequence.name, 
+      stepCount: sequence.steps.length 
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Sequence saved successfully",
+      data: sequence
+    });
   } catch (error) {
-    console.error('Error creating sequence:', error);
-    res.status(500).json({ error: 'Failed to create sequence' });
+    console.error('❌ Error creating sequence:', error);
+    
+    // Provide more specific error messages based on error type
+    if (error.code === 'P2002') {
+      return res.status(409).json({ 
+        success: false,
+        message: 'A sequence with this name already exists or duplicate step order detected' 
+      });
+    }
+    
+    if (error.code === 'P2003') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid template reference in one of the steps' 
+      });
+    }
+    
+    if (error.code === 'P2025') {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Referenced template not found' 
+      });
+    }
+    
+    // Generic error with more helpful message
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to save sequence. Please check your data and try again.' 
+    });
   }
 });
 
 // PUT /api/sequences/:id - Update sequence
 router.put('/:id', async (req, res) => {
   try {
-    const { name, description, isActive } = req.body;
+    const { name, description, isActive, steps } = req.body;
+
+    console.log('🔄 Updating sequence:', { 
+      id: req.params.id, 
+      name, 
+      description, 
+      isActive, 
+      stepCount: steps?.length 
+    });
 
     const updateData = {};
     if (name !== undefined) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description?.trim();
     if (isActive !== undefined) updateData.isActive = isActive;
+
+    // If steps are provided, validate and update them
+    if (steps && Array.isArray(steps)) {
+      console.log('📝 Updating sequence steps...');
+      
+      // Enhanced validation for steps with trigger logic
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        console.log(`📧 Validating step ${i + 1}:`, {
+          templateId: step.templateId,
+          stepOrder: step.stepOrder,
+          triggerType: step.triggerType,
+          triggerStepId: step.triggerStepId,
+          delayHours: step.delayHours,
+          subject: step.subject?.substring(0, 50) + '...',
+          body: step.body?.substring(0, 50) + '...'
+        });
+
+        // Basic validation
+        if (step.stepOrder === undefined) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} must have stepOrder` 
+          });
+        }
+
+        // Validate template exists if templateId is provided
+        if (step.templateId) {
+          try {
+            const template = await prisma.template.findUnique({
+              where: { id: step.templateId }
+            });
+            if (!template) {
+              return res.status(400).json({ 
+                success: false,
+                message: `Template with ID "${step.templateId}" not found for step ${i + 1}` 
+              });
+            }
+          } catch (error) {
+            console.error(`❌ Error validating template for step ${i + 1}:`, error);
+            return res.status(400).json({ 
+              success: false,
+              message: `Invalid template ID for step ${i + 1}` 
+            });
+          }
+        }
+
+        // For custom emails (no templateId), ensure subject and body are provided
+        if (!step.templateId && (!step.subject || !step.body)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} must have either a templateId or both subject and body for custom email` 
+          });
+        }
+
+        // Note: triggerStepId validation is removed during update since step IDs may not exist yet
+        // The trigger step system is handled separately via the /trigger endpoint
+        // We only validate that triggerType is a valid value if provided
+        if (step.triggerType && !['delay', 'opened', 'not_opened', 'replied', 'skip'].includes(step.triggerType)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} triggerType must be one of: delay, opened, not_opened, replied, skip` 
+          });
+        }
+
+        // Validate delay formatting
+        if (step.delayHours !== undefined && (isNaN(step.delayHours) || step.delayHours < 0)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} delayHours must be a non-negative number` 
+          });
+        }
+
+        if (step.delayDays !== undefined && (isNaN(step.delayDays) || step.delayDays < 0)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} delayDays must be a non-negative number` 
+          });
+        }
+
+        if (step.delayMinutes !== undefined && (isNaN(step.delayMinutes) || step.delayMinutes < 0)) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Step ${i + 1} delayMinutes must be a non-negative number` 
+          });
+        }
+      }
+
+      // Delete existing steps and create new ones
+      await prisma.sequenceStep.deleteMany({
+        where: { sequenceId: req.params.id }
+      });
+
+      updateData.steps = {
+        create: steps.map(step => ({
+          templateId: step.templateId || null,
+          stepOrder: step.stepOrder,
+          delayDays: step.delayDays || 0,
+          delayHours: step.delayHours || 0,
+          delayMinutes: step.delayMinutes || 0,
+          
+          // NEW: Trigger and content fields
+          subject: step.subject || null,
+          body: step.body || null,
+          triggerType: step.triggerType || 'delay',
+          triggerStepId: step.triggerStepId || null,
+          
+          isActive: step.isActive !== false
+        }))
+      };
+    }
+
+    console.log('✅ All validations passed, updating sequence...');
 
     const sequence = await prisma.sequence.update({
       where: { id: req.params.id },
@@ -161,13 +457,47 @@ router.put('/:id', async (req, res) => {
       }
     });
 
-    res.json(sequence);
+    console.log('🎉 Sequence updated successfully:', { 
+      id: sequence.id, 
+      name: sequence.name, 
+      stepCount: sequence.steps.length 
+    });
+
+    res.json({
+      success: true,
+      message: "Sequence saved successfully",
+      data: sequence
+    });
   } catch (error) {
+    console.error('❌ Error updating sequence:', error);
+    
+    // Provide more specific error messages based on error type
     if (error.code === 'P2025') {
-      return res.status(404).json({ error: 'Sequence not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Sequence not found' 
+      });
     }
-    console.error('Error updating sequence:', error);
-    res.status(500).json({ error: 'Failed to update sequence' });
+    
+    if (error.code === 'P2002') {
+      return res.status(409).json({ 
+        success: false,
+        message: 'Duplicate step order detected or sequence name already exists' 
+      });
+    }
+    
+    if (error.code === 'P2003') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid template reference in one of the steps' 
+      });
+    }
+    
+    // Generic error with more helpful message
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to update sequence. Please check your data and try again.' 
+    });
   }
 });
 
@@ -205,12 +535,39 @@ router.delete('/:id', async (req, res) => {
 // POST /api/sequences/:id/steps - Add step to sequence
 router.post('/:id/steps', async (req, res) => {
   try {
-    const { templateId, stepOrder, delayDays = 0, delayHours = 0, isActive = true } = req.body;
+    const { 
+      templateId, 
+      stepOrder, 
+      delayDays = 0, 
+      delayHours = 0, 
+      delayMinutes = 0,
+      subject,
+      body,
+      triggerType = 'delay',
+      triggerStepId,
+      isActive = true 
+    } = req.body;
 
-    if (!templateId || stepOrder === undefined) {
+    console.log('➕ Adding step to sequence:', { 
+      sequenceId: req.params.id, 
+      stepOrder, 
+      triggerType, 
+      triggerStepId 
+    });
+
+    if (stepOrder === undefined) {
       return res.status(400).json({ 
-        error: 'templateId and stepOrder are required' 
+        error: 'stepOrder is required' 
       });
+    }
+
+    // Validate trigger conditions
+    if (triggerType && ['opened', 'not_opened', 'replied'].includes(triggerType)) {
+      if (!triggerStepId) {
+        return res.status(400).json({ 
+          error: `Step with triggerType "${triggerType}" must have a valid triggerStepId` 
+        });
+      }
     }
 
     // Check if sequence exists
@@ -222,28 +579,37 @@ router.post('/:id/steps', async (req, res) => {
       return res.status(404).json({ error: 'Sequence not found' });
     }
 
-    // Check if template exists
-    const template = await prisma.template.findUnique({
-      where: { id: templateId }
-    });
+    // Check if template exists (if provided)
+    if (templateId) {
+      const template = await prisma.template.findUnique({
+        where: { id: templateId }
+      });
 
-    if (!template) {
-      return res.status(404).json({ error: 'Template not found' });
+      if (!template) {
+        return res.status(404).json({ error: 'Template not found' });
+      }
     }
 
     const step = await prisma.sequenceStep.create({
       data: {
         sequenceId: req.params.id,
-        templateId,
+        templateId: templateId || null,
         stepOrder,
         delayDays,
         delayHours,
+        delayMinutes,
+        subject: subject || null,
+        body: body || null,
+        triggerType,
+        triggerStepId: triggerStepId || null,
         isActive
       },
       include: {
         template: true
       }
     });
+
+    console.log('✅ Step added successfully:', { stepId: step.id, stepOrder: step.stepOrder });
 
     res.status(201).json(step);
   } catch (error) {
@@ -252,7 +618,7 @@ router.post('/:id/steps', async (req, res) => {
         error: 'Step order already exists in this sequence' 
       });
     }
-    console.error('Error adding step to sequence:', error);
+    console.error('❌ Error adding step to sequence:', error);
     res.status(500).json({ error: 'Failed to add step to sequence' });
   }
 });
@@ -260,13 +626,45 @@ router.post('/:id/steps', async (req, res) => {
 // PUT /api/sequences/:id/steps/:stepId - Update sequence step
 router.put('/:id/steps/:stepId', async (req, res) => {
   try {
-    const { templateId, stepOrder, delayDays, delayHours, isActive } = req.body;
+    const { 
+      templateId, 
+      stepOrder, 
+      delayDays, 
+      delayHours, 
+      delayMinutes,
+      subject,
+      body,
+      triggerType,
+      triggerStepId,
+      isActive 
+    } = req.body;
+
+    console.log('🔄 Updating sequence step:', { 
+      stepId: req.params.stepId, 
+      stepOrder, 
+      triggerType, 
+      triggerStepId 
+    });
+
+    // Validate trigger conditions
+    if (triggerType && ['opened', 'not_opened', 'replied'].includes(triggerType)) {
+      if (!triggerStepId) {
+        return res.status(400).json({ 
+          error: `Step with triggerType "${triggerType}" must have a valid triggerStepId` 
+        });
+      }
+    }
 
     const updateData = {};
-    if (templateId) updateData.templateId = templateId;
+    if (templateId !== undefined) updateData.templateId = templateId;
     if (stepOrder !== undefined) updateData.stepOrder = stepOrder;
     if (delayDays !== undefined) updateData.delayDays = delayDays;
     if (delayHours !== undefined) updateData.delayHours = delayHours;
+    if (delayMinutes !== undefined) updateData.delayMinutes = delayMinutes;
+    if (subject !== undefined) updateData.subject = subject;
+    if (body !== undefined) updateData.body = body;
+    if (triggerType !== undefined) updateData.triggerType = triggerType;
+    if (triggerStepId !== undefined) updateData.triggerStepId = triggerStepId;
     if (isActive !== undefined) updateData.isActive = isActive;
 
     const step = await prisma.sequenceStep.update({
@@ -280,6 +678,8 @@ router.put('/:id/steps/:stepId', async (req, res) => {
       }
     });
 
+    console.log('✅ Step updated successfully:', { stepId: step.id, stepOrder: step.stepOrder });
+
     res.json(step);
   } catch (error) {
     if (error.code === 'P2025') {
@@ -290,7 +690,7 @@ router.put('/:id/steps/:stepId', async (req, res) => {
         error: 'Step order already exists in this sequence' 
       });
     }
-    console.error('Error updating sequence step:', error);
+    console.error('❌ Error updating sequence step:', error);
     res.status(500).json({ error: 'Failed to update sequence step' });
   }
 });
@@ -312,6 +712,155 @@ router.delete('/:id/steps/:stepId', async (req, res) => {
     }
     console.error('Error deleting sequence step:', error);
     res.status(500).json({ error: 'Failed to delete sequence step' });
+  }
+});
+
+// PUT /api/sequences/:id/trigger - Set trigger step for sequence
+router.put('/:id/trigger', async (req, res) => {
+  try {
+    const { triggerStepId } = req.body;
+    const sequenceId = req.params.id;
+
+    console.log('🎯 Setting trigger step:', { sequenceId, triggerStepId });
+
+    if (!triggerStepId) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'triggerStepId is required' 
+      });
+    }
+
+    // Verify sequence exists
+    const sequence = await prisma.sequence.findUnique({
+      where: { id: sequenceId },
+      include: {
+        steps: {
+          orderBy: { stepOrder: 'asc' }
+        }
+      }
+    });
+
+    if (!sequence) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Sequence not found' 
+      });
+    }
+
+    // Verify the trigger step exists in this sequence
+    const triggerStep = sequence.steps.find(step => step.id === triggerStepId);
+    if (!triggerStep) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Trigger step not found in this sequence' 
+      });
+    }
+
+    // Update sequence to store trigger step reference
+    // We'll add a triggerStepId field to the sequence table
+    const updatedSequence = await prisma.sequence.update({
+      where: { id: sequenceId },
+      data: { 
+        updatedAt: new Date() // Update timestamp to track changes
+      },
+      include: {
+        steps: {
+          orderBy: { stepOrder: 'asc' },
+          include: {
+            template: true
+          }
+        }
+      }
+    });
+
+    // Store trigger step info using Prisma
+    await prisma.sequenceTrigger.upsert({
+      where: { sequenceId },
+      update: { triggerStepId },
+      create: { 
+        sequenceId, 
+        triggerStepId 
+      }
+    });
+
+    console.log('✅ Trigger step set successfully:', { sequenceId, triggerStepId, stepOrder: triggerStep.stepOrder });
+
+    res.json({
+      success: true,
+      message: 'Trigger step set successfully',
+      data: {
+        sequenceId,
+        triggerStepId,
+        triggerStepOrder: triggerStep.stepOrder,
+        sequence: updatedSequence
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error setting trigger step:', error);
+    
+    if (error.code === 'P2025') {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Sequence not found' 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to set trigger step' 
+    });
+  }
+});
+
+// GET /api/sequences/:id/trigger - Get trigger step for sequence
+router.get('/:id/trigger', async (req, res) => {
+  try {
+    const sequenceId = req.params.id;
+
+    console.log('🔍 Getting trigger step for sequence:', sequenceId);
+
+    // Get trigger step info using Prisma
+    const triggerInfo = await prisma.sequenceTrigger.findUnique({
+      where: { sequenceId },
+      include: {
+        triggerStep: {
+          include: {
+            template: true
+          }
+        }
+      }
+    });
+
+    if (!triggerInfo) {
+      return res.json({
+        success: true,
+        data: {
+          hasTrigger: false,
+          triggerStepId: null,
+          triggerStepOrder: null
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        hasTrigger: true,
+        triggerStepId: triggerInfo.triggerStepId,
+        triggerStepOrder: triggerInfo.triggerStep.stepOrder,
+        stepId: triggerInfo.triggerStep.id,
+        templateName: triggerInfo.triggerStep.template?.name,
+        subject: triggerInfo.triggerStep.template?.subject
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting trigger step:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to get trigger step' 
+    });
   }
 });
 

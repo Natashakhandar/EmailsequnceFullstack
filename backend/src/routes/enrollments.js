@@ -89,6 +89,32 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// GET /api/enrollments/:id/events - Get events for enrollment
+router.get('/:id/events', async (req, res) => {
+  try {
+    const events = await prisma.event.findMany({
+      where: { 
+        enrollmentId: req.params.id 
+      },
+      orderBy: { timestamp: 'desc' },
+      include: {
+        contact: {
+          select: {
+            email: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.json(events);
+  } catch (error) {
+    console.error('Error fetching enrollment events:', error);
+    res.status(500).json({ error: 'Failed to fetch enrollment events' });
+  }
+});
+
 // POST /api/enrollments - Create new enrollment
 router.post('/', async (req, res) => {
   try {
@@ -164,7 +190,16 @@ router.post('/', async (req, res) => {
       nextSendAt = new Date();
       nextSendAt.setDate(nextSendAt.getDate() + firstStep.delayDays);
       nextSendAt.setHours(nextSendAt.getHours() + firstStep.delayHours);
+      nextSendAt.setMinutes(nextSendAt.getMinutes() + (firstStep.delayMinutes || 0));
     }
+
+    console.log('📅 Enrollment timing:', {
+      contactEmail: contact.email,
+      sequenceName: sequence.name,
+      firstStepDelay: `${firstStep.delayDays}d ${firstStep.delayHours}h ${firstStep.delayMinutes || 0}m`,
+      nextSendAt: nextSendAt.toISOString(),
+      startImmediately
+    });
 
     const enrollment = await prisma.enrollment.create({
       data: {
@@ -189,10 +224,35 @@ router.post('/', async (req, res) => {
       }
     });
 
+    console.log('✅ Enrollment created successfully:', {
+      enrollmentId: enrollment.id,
+      contactEmail: contact.email,
+      sequenceName: sequence.name,
+      currentStep: enrollment.currentStep,
+      nextSendAt: enrollment.nextSendAt
+    });
+
     res.status(201).json(enrollment);
   } catch (error) {
-    console.error('Error creating enrollment:', error);
-    res.status(500).json({ error: 'Failed to create enrollment' });
+    console.error('❌ Error creating enrollment:', error);
+    
+    // Provide more specific error messages
+    if (error.code === 'P2002') {
+      return res.status(409).json({ 
+        error: 'Contact is already enrolled in this sequence' 
+      });
+    }
+    
+    if (error.code === 'P2003') {
+      return res.status(400).json({ 
+        error: 'Invalid contact or sequence reference' 
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to create enrollment',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
