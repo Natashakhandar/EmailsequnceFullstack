@@ -52,15 +52,6 @@ router.get('/', async (req, res) => {
               template: true
             }
           },
-          trigger: {
-            include: {
-              triggerStep: {
-                include: {
-                  template: true
-                }
-              }
-            }
-          },
           _count: {
             select: { 
               enrollments: true,
