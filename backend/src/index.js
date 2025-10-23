@@ -15,6 +15,7 @@ const unsubscribeRouter = require('./routes/unsubscribe');
 const schedulerRouter = require('./routes/scheduler');
 const emailRouter = require('./routes/email');
 const emailActivityRouter = require('./routes/emailActivity');
+const emailMonitoringRouter = require('./routes/emailMonitoring');
 const profileRouter = require('./routes/profile');
 
 // Import scheduler
@@ -77,6 +78,7 @@ app.use('/api/unsubscribe', unsubscribeRouter);
 app.use('/api/scheduler', schedulerRouter);
 app.use('/api', emailRouter);
 app.use('/api/email-activity', emailActivityRouter);
+app.use('/api/email-monitoring', emailMonitoringRouter);
 app.use('/api/profile', profileRouter);
 
 // Root endpoint
@@ -95,6 +97,8 @@ app.get('/', (req, res) => {
       unsubscribe: '/api/unsubscribe',
       scheduler: '/api/scheduler',
       tracking: '/api/track',
+      emailActivity: '/api/email-activity',
+      emailMonitoring: '/api/email-monitoring'
       emailActivity: '/api/email-activity',
       profile: '/api/profile'
     }

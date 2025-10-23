@@ -266,7 +266,9 @@ async function sendEmail({
             to,
             subject: processedSubject,
             messageId: info.messageId,
-            response: info.response
+            response: info.response,
+            replyTo: emailConfig.replyTo || emailConfig.from.address,
+            sentFrom: emailConfig.from.address
           })
         }
       });

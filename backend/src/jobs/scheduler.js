@@ -1,6 +1,7 @@
 const cron = require('node-cron');
-const prisma = require('../db/prismaClient');
-const { sendSequenceEmail, verifyConnection } = require('../mailer/sendEmail');
+const { PrismaClient } = require('@prisma/client');
+const sendEmail = require('../mailer/sendEmail');
+const { startEmailMonitoring } = require('./emailMonitorJob');
 
 let isSchedulerRunning = false;
 let schedulerTask = null;
@@ -426,10 +427,14 @@ function startScheduler() {
   // Start the main scheduler
   schedulerTask.start();
   
+  // Start email monitoring for automatic reply detection
+  startEmailMonitoring();
+  
   console.log('✅ Email scheduler started successfully');
   console.log('📅 Schedule: Every minute for email processing');
   console.log('🧹 Daily cleanup at 2:00 AM');
   console.log('🔍 SMTP health check every 30 minutes');
+  console.log('📧 Email monitoring for replies enabled');
 
   // Run initial health check
   setTimeout(healthCheck, 5000); // Wait 5 seconds after startup

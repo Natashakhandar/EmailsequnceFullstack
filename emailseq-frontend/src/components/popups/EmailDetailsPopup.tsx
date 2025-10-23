@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Mail, User, Calendar, Activity, Copy, CheckCircle } from "lucide-react";
+import { X, Mail, User, Calendar, Activity, Copy, CheckCircle, Reply } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,7 +70,12 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
           body: details.body || details.content || 'Email content not available'
         };
       } catch (e) {
-        // Ignore parsing errors
+        console.warn('Failed to parse event details JSON:', e);
+        // Return fallback content on parsing error
+        return {
+          subject: 'Email Subject',
+          body: 'Email content not available (JSON parse error)'
+        };
       }
     }
     
@@ -94,6 +99,46 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
     };
   };
 
+  const getReplyToEmail = () => {
+    // Get reply-to email from event details
+    if (event.details) {
+      try {
+        const details = JSON.parse(event.details);
+        return details.replyTo || details.sentFrom || null;
+      } catch (e) {
+        console.warn('Failed to parse event details for reply-to email:', e);
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const getReplyContent = () => {
+    // Only show reply content for REPLIED events
+    if (event.type !== 'REPLIED' || !event.details) {
+      return null;
+    }
+
+    try {
+      const details = JSON.parse(event.details);
+      return {
+        replySubject: details.replySubject || details.subject || 'Reply Subject',
+        replyBody: details.replyBody || details.replyContent || details.content || 'Reply content not available',
+        repliedAt: details.repliedAt || event.timestamp,
+        replyFrom: details.replyFrom || event.contact?.email || 'Unknown sender'
+      };
+    } catch (e) {
+      console.warn('Failed to parse reply details JSON:', e);
+      // Return fallback reply content on parsing error
+      return {
+        replySubject: 'Reply Subject (JSON parse error)',
+        replyBody: 'Reply content not available due to data format error',
+        repliedAt: event.timestamp,
+        replyFrom: event.contact?.email || 'Unknown sender'
+      };
+    }
+  };
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -106,6 +151,8 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
   };
 
   const emailContent = getEmailContent();
+  const replyContent = getReplyContent();
+  const replyToEmail = getReplyToEmail();
 
   return (
     <AnimatePresence>
@@ -234,7 +281,9 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
                   {/* Email Content */}
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-medium text-gray-900">Email Content</h3>
+                      <h3 className="text-lg font-medium text-gray-900">
+                        {event.type === 'REPLIED' ? 'Original Email Content' : 'Email Content'}
+                      </h3>
                       <Button
                         onClick={() => copyToClipboard(`Subject: ${emailContent.subject}\n\n${emailContent.body}`)}
                         variant="outline"
@@ -269,6 +318,107 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
                     </div>
                   </div>
 
+                  {/* Reply-To Email Information */}
+                  {replyToEmail && (
+                    <>
+                      <Separator />
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+                          <Reply className="w-5 h-5 text-blue-600" />
+                          Reply-To Email Address
+                        </h3>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Mail className="w-5 h-5 text-blue-600" />
+                              <div>
+                                <p className="text-sm font-medium text-blue-800">
+                                  Clients should reply to:
+                                </p>
+                                <p className="text-lg font-mono text-blue-900 bg-white px-3 py-2 rounded border border-blue-200 mt-1">
+                                  {replyToEmail}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() => copyToClipboard(replyToEmail)}
+                              variant="outline"
+                              size="sm"
+                              className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                            >
+                              {copied ? (
+                                <CheckCircle className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                              {copied ? 'Copied!' : 'Copy Email'}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Reply Content - Only show for REPLIED events */}
+                  {replyContent && (
+                    <>
+                      <Separator />
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                            <Mail className="w-5 h-5 text-emerald-600" />
+                            Client Reply
+                          </h3>
+                          <Button
+                            onClick={() => copyToClipboard(`Reply Subject: ${replyContent.replySubject}\n\nReply Content:\n${replyContent.replyBody}\n\nReplied At: ${formatDate(replyContent.repliedAt)}`)}
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-2"
+                          >
+                            {copied ? (
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                            {copied ? 'Copied!' : 'Copy Reply'}
+                          </Button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <User className="w-4 h-4 text-emerald-600" />
+                              <span className="text-sm font-medium text-emerald-800">
+                                Reply from: {replyContent.replyFrom}
+                              </span>
+                              <span className="text-sm text-emerald-600">
+                                • {formatDate(replyContent.repliedAt)}
+                              </span>
+                            </div>
+                            
+                            <div className="space-y-3">
+                              <div>
+                                <Label className="text-sm font-medium text-emerald-700">Reply Subject:</Label>
+                                <div className="mt-1 p-3 bg-white rounded-lg border border-emerald-200">
+                                  <p className="text-gray-900 font-medium">{replyContent.replySubject}</p>
+                                </div>
+                              </div>
+
+                              <div>
+                                <Label className="text-sm font-medium text-emerald-700">Reply Content:</Label>
+                                <div className="mt-1 p-4 bg-white rounded-lg border border-emerald-200 max-h-64 overflow-y-auto">
+                                  <div className="whitespace-pre-wrap text-gray-900">
+                                    {replyContent.replyBody}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
                   {/* Additional Details */}
                   {event.details && (
                     <>
@@ -277,7 +427,13 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
                         <h3 className="text-lg font-medium text-gray-900 mb-4">Additional Details</h3>
                         <div className="bg-gray-50 rounded-lg p-4">
                           <pre className="text-sm text-gray-600 whitespace-pre-wrap overflow-x-auto">
-                            {JSON.stringify(JSON.parse(event.details), null, 2)}
+                            {(() => {
+                              try {
+                                return JSON.stringify(JSON.parse(event.details), null, 2);
+                              } catch (error) {
+                                return `Raw details (JSON parse error): ${event.details}`;
+                              }
+                            })()}
                           </pre>
                         </div>
                       </div>

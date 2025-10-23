@@ -1,6 +1,14 @@
 // API configuration and utilities for the email sequencing backend
 
-const API_BASE_URL = 'http://localhost:3001/api';
+// Prefer VITE_API_URL, fallback to VITE_API_BASE_URL, then localhost
+const RAW_BASE = (import.meta as any).env?.VITE_API_URL
+  || (import.meta as any).env?.VITE_API_BASE_URL
+  || 'http://localhost:3001';
+
+// Ensure exactly one '/api' suffix
+const API_BASE_URL = RAW_BASE.endsWith('/api')
+  ? RAW_BASE
+  : `${RAW_BASE.replace(/\/$/, '')}/api`;
 
 // API response types
 export interface Contact {
@@ -425,6 +433,11 @@ class ApiClient {
     });
   }
 
+  // SMTP utilities
+  async getSmtpStatus() {
+    return this.request<any>('/scheduler/smtp-status');
+  }
+
   async sendTestEmail(data: { to: string; subject?: string; body?: string }) {
     return this.request<any>('/scheduler/test-email', {
       method: 'POST',
@@ -432,6 +445,7 @@ class ApiClient {
     });
   }
 
+<<<<<<< HEAD
   // Profile Signature API
   async getProfileSignature(): Promise<{ signature: string }> {
     return this.request<{ signature: string }>('/profile/signature');
@@ -443,6 +457,27 @@ class ApiClient {
       body: JSON.stringify({ signature }),
     });
   }
+=======
+  // Email Monitoring API
+  async testImapConnection() {
+    return this.request<any>('/email-monitoring/test');
+  }
+
+  async checkForReplies() {
+    return this.request<any>('/email-monitoring/check-replies', {
+      method: 'POST',
+    });
+  }
+
+  async getEmailMonitoringStatus() {
+    return this.request<any>('/email-monitoring/status');
+  }
+
+  async getRecentEmails(days?: number) {
+    const query = days ? `?days=${days}` : '';
+    return this.request<any>(`/email-monitoring/recent-emails${query}`);
+  }
+>>>>>>> 032fc5b2794f9c4bad54c53f65ec8c0185d11707
 }
 
 // Export singleton instance
