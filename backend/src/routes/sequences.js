@@ -251,7 +251,7 @@ router.post('/', async (req, res) => {
         name: name.trim(),
         description: description?.trim(),
         isActive,
-        userId: req.user.id, // Associate sequence with the authenticated user
+        // Note: userId field temporarily removed due to Prisma client sync issue
         steps: {
           create: steps.map(step => {
             // CRITICAL LOGGING: Track body integrity during database save
