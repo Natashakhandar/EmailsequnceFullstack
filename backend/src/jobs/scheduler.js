@@ -1,7 +1,8 @@
 const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
-const sendEmail = require('../mailer/sendEmail');
+const { sendEmail, sendSequenceEmail, verifyConnection } = require('../mailer/sendEmail');
 const { startEmailMonitoring } = require('./emailMonitorJob');
+const prisma = new PrismaClient();
 
 let isSchedulerRunning = false;
 let schedulerTask = null;

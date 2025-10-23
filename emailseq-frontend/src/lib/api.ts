@@ -445,7 +445,6 @@ class ApiClient {
     });
   }
 
-<<<<<<< HEAD
   // Profile Signature API
   async getProfileSignature(): Promise<{ signature: string }> {
     return this.request<{ signature: string }>('/profile/signature');
@@ -457,7 +456,7 @@ class ApiClient {
       body: JSON.stringify({ signature }),
     });
   }
-=======
+
   // Email Monitoring API
   async testImapConnection() {
     return this.request<any>('/email-monitoring/test');
@@ -477,7 +476,6 @@ class ApiClient {
     const query = days ? `?days=${days}` : '';
     return this.request<any>(`/email-monitoring/recent-emails${query}`);
   }
->>>>>>> 032fc5b2794f9c4bad54c53f65ec8c0185d11707
 }
 
 // Export singleton instance

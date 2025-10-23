@@ -98,8 +98,7 @@ app.get('/', (req, res) => {
       scheduler: '/api/scheduler',
       tracking: '/api/track',
       emailActivity: '/api/email-activity',
-      emailMonitoring: '/api/email-monitoring'
-      emailActivity: '/api/email-activity',
+      emailMonitoring: '/api/email-monitoring',
       profile: '/api/profile'
     }
   });
