@@ -83,11 +83,15 @@ const SequencesNew: React.FC = () => {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [backendStepIdMap, setBackendStepIdMap] = useState<Map<string, string>>(new Map()); // frontend ID -> backend ID
+  
+  // Signature state
+  const [userSignature, setUserSignature] = useState<string>("");
+  const [isLoadingSignature, setIsLoadingSignature] = useState<boolean>(true);
 
-  // Fetch templates and sequences from API
+  // Fetch templates, sequences, and signature from API
   useEffect(() => {
     const fetchData = async () => {
-      await Promise.all([fetchTemplates(), fetchSequences()]);
+      await Promise.all([fetchTemplates(), fetchSequences(), fetchSignature()]);
     };
     fetchData();
   }, []);
@@ -120,22 +124,52 @@ const SequencesNew: React.FC = () => {
     }
   };
 
+  const fetchSignature = async () => {
+    try {
+      setIsLoadingSignature(true);
+      const response = await api.getProfileSignature();
+      setUserSignature(response.signature || "");
+    } catch (error) {
+      console.error('Error fetching signature:', error);
+      // Don't show error toast for signature as it might not exist yet
+      setUserSignature("");
+    } finally {
+      setIsLoadingSignature(false);
+    }
+  };
+
   // Add email tracking pixel to email body
   const addEmailTracking = (body: string, emailId: string): string => {
+    console.log('📊 TRACKING PROCESSING:', {
+      inputBodyLength: body.length,
+      inputBodyType: typeof body,
+      emailId: emailId
+    });
+    
     const trackingPixel = `<img src="/api/track-open?emailId=${emailId}" width="1" height="1" style="display:none;" />`;
     
     // Check if tracking pixel already exists
     if (body.includes('/api/track-open')) {
+      console.log('✅ Tracking pixel already exists, returning original body');
       return body;
     }
     
     // Add tracking pixel at the end of the email
-    return body + '\n\n' + trackingPixel;
+    const result = body + '\n\n' + trackingPixel;
+    console.log('✅ Tracking pixel added:', {
+      originalLength: body.length,
+      pixelLength: trackingPixel.length,
+      resultLength: result.length,
+      resultType: typeof result
+    });
+    
+    return result;
   };
 
   // Remove tracking pixel from email body (for editing)
   const removeEmailTracking = (body: string): string => {
-    return body.replace(/<img[^>]*\/api\/track-open[^>]*>/gi, '').trim();
+    // Remove tracking pixel but preserve all content including whitespace
+    return body.replace(/<img[^>]*\/api\/track-open[^>]*>/gi, '');
   };
 
   // Logic functions
@@ -176,35 +210,38 @@ const SequencesNew: React.FC = () => {
   };
 
   const updateStep = (stepId: string, field: keyof EmailStep, value: string | number | boolean) => {
+    console.log('updateStep called:', { stepId, field, valueType: typeof value, valueLength: typeof value === 'string' ? value.length : 'N/A' });
     setSteps(prevSteps => 
       prevSteps.map(step => {
         if (step.id === stepId) {
-          // Prevent empty subjects
-          if (field === 'subject' && typeof value === 'string' && value.trim() === '') {
-            return step; // Don't update if subject would be empty
+          // Only prevent completely empty subjects, but allow empty body for clearing
+          if (field === 'subject' && typeof value === 'string' && value.length === 0) {
+            return step; // Don't update if subject would be completely empty
           }
           
-          return {
+          const updatedStep = {
             ...step,
             [field]: value
           };
+          
+          if (field === 'body' && typeof value === 'string') {
+            console.log('Body updated for step:', {
+              stepId,
+              newBodyLength: value.length,
+              bodyPreview: value.substring(0, 100)
+            });
+          }
+          
+          return updatedStep;
         }
         return step;
       })
     );
   };
 
-  // Add signature/footer to email body if not present
-  const addSignatureToBody = (body: string): string => {
-    const defaultSignature = `\n\n--\nBest regards,\nArnav Sales Company\nEmpowering Businesses with ERP, SaaS & App Solutions`;
-    
-    // Check if signature already exists
-    if (body.includes('--\nBest regards,')) {
-      return body;
-    }
-    
-    return body + defaultSignature;
-  };
+  // REMOVED: addSignatureToBody function
+  // Signatures are now handled by the backend/email service to prevent duplicates
+  // The non-editable signature UI component below shows users that signatures will be added automatically
 
   // Action bar functions
   const saveSequence = async () => {
@@ -233,8 +270,8 @@ const SequencesNew: React.FC = () => {
         }
         
         // Either subject/body or templateId must be provided
-        const hasContent = (step.subject && step.subject.trim()) || (step.body && step.body.trim());
-        const hasTemplate = step.templateId && step.templateId.trim();
+        const hasContent = (step.subject && step.subject.length > 0) || (step.body && step.body.length > 0);
+        const hasTemplate = step.templateId && step.templateId.length > 0;
         
         if (!hasContent && !hasTemplate) {
           toast.error(`Step ${step.stepOrder} must have either content (subject/body) or a template selected`);
@@ -301,13 +338,35 @@ const SequencesNew: React.FC = () => {
           
           // Add subject and body if not using a template or if content exists
           if (!step.templateId || step.subject || step.body) {
-            if (step.subject && step.subject.trim()) {
-              stepData.subject = step.subject.trim();
+            if (step.subject && step.subject.length > 0) {
+              stepData.subject = step.subject;
             }
-            if (step.body && step.body.trim()) {
-              // Add signature and tracking pixel to body
-              let finalBody = addSignatureToBody(step.body.trim());
-              stepData.body = addEmailTracking(finalBody, `${Date.now()}-${step.stepOrder}`);
+            if (step.body && step.body.length > 0) {
+              // Ensure full body content is preserved - no truncation
+              const fullBody = step.body; // Remove .trim() to preserve all content
+              
+              console.log('🔍 STEP BODY PROCESSING - Step', step.stepOrder, ':', {
+                originalBodyLength: fullBody.length,
+                originalBodyType: typeof fullBody,
+                bodyIsString: typeof fullBody === 'string',
+                bodyPreview: fullBody.substring(0, 150) + (fullBody.length > 150 ? '...' : ''),
+                containsHtmlTags: fullBody.includes('<br>') || fullBody.includes('<p>'),
+                containsLineBreaks: fullBody.includes('\n')
+              });
+              
+              // Add tracking pixel to body (signature will be added by backend/email service)
+              let finalBody = addEmailTracking(fullBody, `${Date.now()}-${step.stepOrder}`);
+              console.log('📊 FINAL BODY - Step', step.stepOrder, ':', {
+                originalBodyLength: fullBody.length,
+                finalBodyLength: finalBody.length,
+                trackingAdded: finalBody.length > fullBody.length,
+                finalBodyType: typeof finalBody,
+                isCompleteString: typeof finalBody === 'string' && finalBody.length > 0,
+                finalBodyPreview: finalBody.substring(0, 200) + '...',
+                signatureHandling: 'REMOVED - Signature will be added by backend/email service'
+              });
+              
+              stepData.body = finalBody;
             }
           }
           
@@ -320,7 +379,26 @@ const SequencesNew: React.FC = () => {
         payloadSteps: sequenceData.steps.map(s => ({ stepOrder: s.stepOrder, triggerStepId: s.triggerStepId, triggerType: s.triggerType }))
       });
 
-      console.log('Sending sequence data to backend:', JSON.stringify(sequenceData, null, 2));
+      // Enhanced logging for API payload
+      console.log('🚀 SENDING SEQUENCE TO BACKEND:');
+      console.log('Sequence Name:', sequenceData.name);
+      console.log('Total Steps:', sequenceData.steps.length);
+      
+      sequenceData.steps.forEach((step, index) => {
+        console.log(`📧 STEP ${step.stepOrder} API PAYLOAD:`, {
+          stepOrder: step.stepOrder,
+          hasSubject: !!step.subject,
+          subjectLength: step.subject ? step.subject.length : 0,
+          hasBody: !!step.body,
+          bodyLength: step.body ? step.body.length : 0,
+          bodyType: typeof step.body,
+          bodyIsString: typeof step.body === 'string',
+          bodyPreview: step.body ? step.body.substring(0, 200) + '...' : 'NO BODY',
+          templateId: step.templateId || 'CUSTOM CONTENT'
+        });
+      });
+      
+      console.log('Complete API Payload:', JSON.stringify(sequenceData, null, 2));
 
       let savedSequence: Sequence;
       
@@ -334,7 +412,23 @@ const SequencesNew: React.FC = () => {
         toast.success(`✅ Sequence "${sequenceName}" created successfully!`);
       }
       
-      console.log('Backend response:', savedSequence);
+      console.log('✅ BACKEND RESPONSE:', savedSequence);
+      
+      // Verify saved sequence integrity
+      if (savedSequence && savedSequence.steps) {
+        console.log('🔍 VERIFYING SAVED SEQUENCE:');
+        savedSequence.steps.forEach((step, index) => {
+          console.log(`📧 SAVED STEP ${step.stepOrder}:`, {
+            stepOrder: step.stepOrder,
+            hasSubject: !!step.subject,
+            subjectLength: step.subject ? step.subject.length : 0,
+            hasBody: !!step.body,
+            bodyLength: step.body ? step.body.length : 0,
+            bodyType: typeof step.body,
+            bodyPreview: step.body ? step.body.substring(0, 200) + '...' : 'NO BODY'
+          });
+        });
+      }
       
       // Refresh sequences list
       await fetchSequences();
@@ -387,12 +481,34 @@ const SequencesNew: React.FC = () => {
 
   const loadSequence = async (sequence: Sequence) => {
     try {
+      console.log('📥 LOADING SEQUENCE:', {
+        sequenceName: sequence.name,
+        sequenceId: sequence.id,
+        totalSteps: sequence.steps.length
+      });
+      
       setSequenceName(sequence.name);
       setSequenceDescription(sequence.description || '');
       setEditingSequenceId(sequence.id);
       
       // Sort steps by stepOrder to ensure correct mapping
       const sortedSteps = [...sequence.steps].sort((a, b) => a.stepOrder - b.stepOrder);
+      
+      // Log each step from backend before processing
+      sortedSteps.forEach((step, index) => {
+        console.log(`📧 BACKEND STEP ${step.stepOrder} RAW DATA:`, {
+          stepId: step.id,
+          stepOrder: step.stepOrder,
+          hasSubject: !!step.subject,
+          subjectLength: step.subject ? step.subject.length : 0,
+          hasBody: !!step.body,
+          bodyLength: step.body ? step.body.length : 0,
+          bodyType: typeof step.body,
+          bodyPreview: step.body ? step.body.substring(0, 200) + '...' : 'NO BODY',
+          hasTemplate: !!step.template,
+          templateId: step.templateId
+        });
+      });
       
       // Create mappings between backend and frontend step IDs
       const backendToFrontendIdMap = new Map<string, string>();
@@ -404,10 +520,23 @@ const SequencesNew: React.FC = () => {
         backendToFrontendIdMap.set(step.id, frontendId);
         frontendToBackendIdMap.set(frontendId, step.id);
         
+        // Process body content carefully
+        const originalBody = step.body || step.template?.body || '';
+        const cleanedBody = removeEmailTracking(originalBody);
+        
+        console.log(`🔄 PROCESSING STEP ${step.stepOrder} FOR FRONTEND:`, {
+          frontendId,
+          originalBodyLength: originalBody.length,
+          cleanedBodyLength: cleanedBody.length,
+          bodyType: typeof cleanedBody,
+          bodyPreview: cleanedBody.substring(0, 200) + '...',
+          trackingRemoved: originalBody.length !== cleanedBody.length
+        });
+        
         return {
           id: frontendId,
           subject: step.subject || step.template?.subject || `Step ${index + 1}`,
-          body: removeEmailTracking(step.body || step.template?.body || ''),
+          body: cleanedBody,
           templateId: step.templateId,
           delayDays: step.delayDays,
           delayHours: step.delayHours,
@@ -433,13 +562,26 @@ const SequencesNew: React.FC = () => {
         idMapping: Object.fromEntries(backendToFrontendIdMap)
       });
       
+      console.log('✅ SEQUENCE LOADED SUCCESSFULLY:');
+      emailSteps.forEach((step, index) => {
+        console.log(`📧 FRONTEND STEP ${step.stepOrder} FINAL:`, {
+          frontendId: step.id,
+          hasSubject: !!step.subject,
+          subjectLength: step.subject ? step.subject.length : 0,
+          hasBody: !!step.body,
+          bodyLength: step.body ? step.body.length : 0,
+          bodyType: typeof step.body,
+          bodyPreview: step.body ? step.body.substring(0, 200) + '...' : 'NO BODY'
+        });
+      });
+      
       setSteps(emailSteps);
       setBackendStepIdMap(frontendToBackendIdMap); // Store the mapping for save operations
       setSelectedStep(emailSteps[0]?.id || '');
       setSidebarOpen(false);
       toast.success(`Loaded "${sequence.name}" for editing`);
     } catch (error) {
-      console.error('Error loading sequence:', error);
+      console.error('❌ ERROR LOADING SEQUENCE:', error);
       toast.error('Failed to load sequence');
     }
   };
@@ -476,8 +618,30 @@ const SequencesNew: React.FC = () => {
         updateStep(stepId, 'templateId', templateId);
       }
       
-      updateStep(stepId, 'subject', template.subject);
-      updateStep(stepId, 'body', removeEmailTracking(template.body));
+      // Ensure full template content is preserved - convert \n to <br> for HTML display
+      const fullSubject = template.subject || '';
+      const fullBody = template.body || '';
+      
+      // Convert line breaks to HTML for proper display and storage
+      const htmlBody = fullBody.replace(/\n/g, '<br>');
+      
+      updateStep(stepId, 'subject', fullSubject);
+      const cleanBody = removeEmailTracking(htmlBody);
+      console.log('Applying template - body processing:', {
+        originalBodyLength: fullBody.length,
+        htmlBodyLength: htmlBody.length,
+        cleanBodyLength: cleanBody.length,
+        bodyPreview: cleanBody.substring(0, 150)
+      });
+      updateStep(stepId, 'body', cleanBody);
+      
+      console.log('Applied template with full content:', {
+        templateId,
+        subject: fullSubject,
+        bodyLength: fullBody.length,
+        originalBody: fullBody,
+        htmlBody: htmlBody
+      });
       
       toast.success(`Template "${template.name}" applied successfully!`);
     }
@@ -1039,27 +1203,148 @@ const SequencesNew: React.FC = () => {
                       <Label htmlFor="body" className="text-base font-semibold text-gray-800 mb-3 block">
                         Email Content
                       </Label>
-                      <Textarea
-                        id="body"
-                        value={steps.find(s => s.id === selectedStep)?.body || ''}
-                        onChange={(e) => selectedStep && updateStep(selectedStep, 'body', e.target.value)}
-                        className="min-h-[250px] sm:min-h-[300px] text-sm sm:text-base p-3 sm:p-4 border-2 border-slate-200 focus:border-blue-500 focus:ring-blue-500/20 transition-all duration-200 resize-none bg-white/80 backdrop-blur-sm rounded-lg shadow-sm"
-                        placeholder="Write your email content here...
+                      <div className="relative">
+                        <Textarea
+                          id="body"
+                          value={(steps.find(s => s.id === selectedStep)?.body || '').replace(/<br\s*\/?>/gi, '\n')}
+                          onChange={(e) => {
+                            if (selectedStep) {
+                              // Convert line breaks to HTML <br> tags for storage
+                              const htmlContent = e.target.value.replace(/\n/g, '<br>');
+                              console.log('📝 TEXTAREA CHANGE - Full Content Preserved:', {
+                                originalLength: e.target.value.length,
+                                htmlLength: htmlContent.length,
+                                contentType: typeof htmlContent,
+                                isString: typeof htmlContent === 'string',
+                                preview: e.target.value.substring(0, 150),
+                                containsLineBreaks: e.target.value.includes('\n'),
+                                containsHtmlBr: htmlContent.includes('<br>')
+                              });
+                              updateStep(selectedStep, 'body', htmlContent);
+                            }
+                          }}
+                          className="min-h-[250px] sm:min-h-[300px] text-sm sm:text-base p-3 sm:p-4 border-2 border-slate-200 focus:border-blue-500 focus:ring-blue-500/20 transition-all duration-200 resize-none bg-white/80 backdrop-blur-sm rounded-lg shadow-sm"
+                          style={{
+                            fontFamily: 'Arial, sans-serif',
+                            lineHeight: '1.6',
+                            whiteSpace: 'pre-wrap'
+                          }}
+                          maxLength={50000}
+                          placeholder="Write your email content here...
 
 You can use personalization variables:
 • [firstName] - Contact's first name
 • [lastName] - Contact's last name  
 • [email] - Contact's email address
-• [company] - Contact's company name"
-                      />
+• [company] - Contact's company name
+
+Line breaks will be preserved in the final email."
+                        />
+                        
+                        {/* Email Signature Preview */}
+                        {userSignature && (
+                          <div className="mt-4 p-4 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <Label className="text-sm font-medium text-gray-600">
+                                Email Signature (Auto-added)
+                              </Label>
+                              <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded-full">
+                                Non-editable
+                              </span>
+                            </div>
+                            <div 
+                              className="text-sm text-gray-600 border-l-4 border-gray-400 pl-3"
+                              style={{
+                                textAlign: 'left',
+                                whiteSpace: 'pre-line',
+                                lineHeight: '1.6',
+                                fontFamily: 'Arial, sans-serif'
+                              }}
+                              dangerouslySetInnerHTML={{ __html: userSignature }}
+                            />
+                            <p className="text-xs text-gray-500 mt-2 italic">
+                              This signature will be automatically appended to all emails by the email service. 
+                              Edit it in your Profile settings.
+                            </p>
+                          </div>
+                        )}
+                        
+                        {!userSignature && !isLoadingSignature && (
+                          <div className="mt-4 p-4 bg-yellow-50 border-2 border-dashed border-yellow-300 rounded-lg">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                              <Label className="text-sm font-medium text-yellow-700">
+                                No Email Signature Set
+                              </Label>
+                            </div>
+                            <p className="text-xs text-yellow-600">
+                              Add an email signature in your Profile settings to automatically include it in all emails.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      
                       <div className="flex justify-between items-center mt-2">
                         <p className="text-sm text-gray-500">
                           Use personalization variables to make emails more engaging
                         </p>
                         <span className="text-xs text-gray-400">
-                          {(steps.find(s => s.id === selectedStep)?.body || '').length} characters
+                          {(steps.find(s => s.id === selectedStep)?.body || '').replace(/<br\s*\/?>/gi, '\n').length} characters
                         </span>
                       </div>
+                      
+                      {/* Email Preview Section */}
+                      {steps.find(s => s.id === selectedStep)?.body && (
+                        <div className="mt-6 p-4 bg-white border-2 border-gray-200 rounded-lg shadow-sm">
+                          <div className="flex items-center justify-between mb-3">
+                            <Label className="text-sm font-medium text-gray-700">
+                              Email Preview
+                            </Label>
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                              Live Preview
+                            </span>
+                          </div>
+                          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                            {/* Email Header */}
+                            <div className="border-b border-gray-200 pb-3 mb-4">
+                              <div className="text-sm text-gray-600 mb-1">
+                                <strong>Subject:</strong> {steps.find(s => s.id === selectedStep)?.subject || 'No subject'}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                From: your-email@company.com | To: contact@example.com
+                              </div>
+                            </div>
+                            
+                            {/* Email Body */}
+                            <div 
+                              className="text-sm text-gray-800 mb-4"
+                              style={{
+                                textAlign: 'left',
+                                whiteSpace: 'pre-line',
+                                lineHeight: '1.6',
+                                fontFamily: 'Arial, sans-serif'
+                              }}
+                              dangerouslySetInnerHTML={{ 
+                                __html: (steps.find(s => s.id === selectedStep)?.body || '').replace(/\[([^\]]+)\]/g, '<span style="background-color: #e3f2fd; padding: 2px 4px; border-radius: 3px; font-weight: 500;">[$1]</span>') 
+                              }}
+                            />
+                            
+                            {/* Email Signature in Preview */}
+                            {userSignature && (
+                              <div 
+                                className="text-sm text-gray-600 border-t border-gray-200 pt-3 mt-4"
+                                style={{
+                                  textAlign: 'left',
+                                  whiteSpace: 'pre-line',
+                                  lineHeight: '1.6',
+                                  fontFamily: 'Arial, sans-serif'
+                                }}
+                                dangerouslySetInnerHTML={{ __html: userSignature }}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </motion.div>
 
                     {/* Trigger Condition Settings */}

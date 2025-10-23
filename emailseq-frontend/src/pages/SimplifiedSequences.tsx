@@ -25,6 +25,7 @@ const SimplifiedSequences = () => {
   const [localDefaultTemplates, setLocalDefaultTemplates] = useState(defaultTemplates);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [userSignature, setUserSignature] = useState<string>("");
 
   // Fixed 4-step sequence structure
   const [steps, setSteps] = useState<SequenceStep[]>([
@@ -69,16 +70,26 @@ const SimplifiedSequences = () => {
       
       // Try to load from backend first
       try {
-        const [templatesResponse, sequencesResponse] = await Promise.all([
+        const [templatesResponse, sequencesResponse, signatureResponse] = await Promise.allSettled([
           api.getTemplates({ limit: 100 }),
-          api.getSequences({ limit: 50 })
+          api.getSequences({ limit: 50 }),
+          api.getProfileSignature()
         ]);
-        setTemplates(templatesResponse.templates);
         
-        // Combine backend sequences with localStorage sequences
-        const localSequences = JSON.parse(localStorage.getItem('emailSequences') || '[]');
-        const allSequences = [...sequencesResponse.sequences, ...localSequences.filter((seq: any) => !seq.backendSaved)];
-        setSequences(allSequences);
+        if (templatesResponse.status === 'fulfilled') {
+          setTemplates(templatesResponse.value.templates);
+        }
+        
+        if (sequencesResponse.status === 'fulfilled') {
+          // Combine backend sequences with localStorage sequences
+          const localSequences = JSON.parse(localStorage.getItem('emailSequences') || '[]');
+          const allSequences = [...sequencesResponse.value.sequences, ...localSequences.filter((seq: any) => !seq.backendSaved)];
+          setSequences(allSequences);
+        }
+        
+        if (signatureResponse.status === 'fulfilled') {
+          setUserSignature(signatureResponse.value.signature || "");
+        }
         
       } catch (backendError) {
         console.error("Backend loading failed, using localStorage:", backendError);
@@ -109,6 +120,18 @@ const SimplifiedSequences = () => {
         ? { ...step, templateId, selectedTemplate }
         : step
     ));
+  };
+
+  // Add signature to template body
+  const addSignatureToBody = (body: string): string => {
+    if (!userSignature) return body;
+    
+    // Check if signature already exists (avoid duplicates)
+    if (body.includes(userSignature)) {
+      return body;
+    }
+    
+    return body + `\n\n${userSignature}`;
   };
 
   const handleTemplateUpdate = (templateId: string, updates: { subject: string; body: string }) => {
@@ -174,7 +197,7 @@ const SimplifiedSequences = () => {
           const customTemplate = await api.createTemplate({
             name: `${sequenceName} - ${step.label}`,
             subject: step.selectedTemplate.subject,
-            body: step.selectedTemplate.body,
+            body: addSignatureToBody(step.selectedTemplate.body),
             isActive: true
           });
           

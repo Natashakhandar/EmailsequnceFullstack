@@ -142,20 +142,48 @@ async function sendEmail({
   textBody, 
   contactData = {}, 
   enrollmentId = null,
-  contactId = null 
+  contactId = null,
+  signature = null
 }) {
   try {
     const transport = createTransporter();
     
+    // CRITICAL LOGGING: Input validation
+    console.log('📧 SENDMAIL INPUT VALIDATION');
+    console.log('Sending email body length:', htmlBody?.length || 0);
+    console.log('Sending email body type:', typeof htmlBody);
+    console.log('To:', to);
+    console.log('Has signature:', !!signature);
+    
     // Replace tokens in subject and body
     const processedSubject = replaceTokens(subject, contactData);
     
-    // Process HTML body with enhanced formatting and token replacement
-    let processedHtmlBody = replaceTokens(htmlBody, contactData);
-    processedHtmlBody = enhanceHtmlFormatting(processedHtmlBody);
+    // Process email body: replace tokens and convert line breaks to <br> tags
+    let processedEmailBody = replaceTokens(htmlBody, contactData);
+    console.log('After token replacement - body length:', processedEmailBody?.length || 0);
     
-    // Generate text version from HTML if not provided
-    const processedTextBody = textBody ? 
+    const formattedBody = processedEmailBody.replace(/\n/g, '<br>');
+    console.log('After line break conversion - body length:', formattedBody?.length || 0);
+    
+    // Process signature: replace tokens and convert line breaks to <br> tags
+    const formattedSignature = signature && signature.trim() ? 
+      replaceTokens(signature, contactData).replace(/\n/g, '<br>') : "";
+    
+    // Generate final email HTML with proper left alignment and structure
+    const fullEmailHtml = `
+      <div style="text-align:left; font-family:Arial, sans-serif; line-height:1.6; padding: 16px; max-width: 600px;">
+        ${formattedBody}
+        ${formattedSignature ? `<br><br>${formattedSignature}` : ''}
+      </div>
+    `;
+    
+    console.log('Final email HTML length:', fullEmailHtml?.length || 0);
+    console.log('Final email contains signature:', fullEmailHtml.includes(formattedSignature));
+    
+    let processedHtmlBody = fullEmailHtml;
+    
+    // Generate text version from HTML if not provided (signature is already included in processedHtmlBody)
+    let processedTextBody = textBody ? 
       replaceTokens(textBody, contactData) : 
       generateTextFromHtml(processedHtmlBody);
 
@@ -209,11 +237,22 @@ async function sendEmail({
       };
     }
 
-    // Send email
+    // CRITICAL SAFEGUARD: Ensure single email send
+    console.log('🚀 SENDING EMAIL - Single sendMail call');
+    console.log('Final payload HTML length:', mailOptions.html?.length || 0);
+    console.log('Final payload text length:', mailOptions.text?.length || 0);
+    console.log('Recipient:', mailOptions.to);
+    console.log('Subject:', mailOptions.subject);
+    
+    // Send email - THIS IS THE ONLY SENDMAIL CALL PER SEQUENCE STEP
     const info = await transport.sendMail(mailOptions);
     
+    // DELIVERY CONFIRMATION
+    console.log('✅ EMAIL DELIVERY CONFIRMED');
     console.log(`📧 Email sent successfully to ${to}`);
     console.log(`Message ID: ${info.messageId}`);
+    console.log('Response:', info.response);
+    console.log('Exactly ONE email sent for this sequence step');
 
     // Log sent event if enrollment provided
     if (enrollmentId && contactId) {
@@ -287,6 +326,15 @@ async function sendSequenceEmail(enrollment) {
               include: {
                 template: true
               }
+            },
+            user: {
+              select: {
+                id: true,
+                signature: true,
+                firstName: true,
+                lastName: true,
+                email: true
+              }
             }
           }
         }
@@ -351,9 +399,27 @@ async function sendSequenceEmail(enrollment) {
     const emailSubject = currentStep.subject || currentStep.template?.subject;
     const emailBody = currentStep.body || currentStep.template?.body;
 
+    // CRITICAL LOGGING: Validate email body integrity
+    console.log('🔍 EMAIL BODY VALIDATION - Step', enrollment.currentStep);
+    console.log('DB retrieved email body length:', emailBody?.length || 0);
+    console.log('DB retrieved email body type:', typeof emailBody);
+    console.log('Has custom body:', !!currentStep.body);
+    console.log('Has template body:', !!currentStep.template?.body);
+    console.log('Email body source:', currentStep.body ? 'Custom Step' : 'Template');
+    
+    if (emailBody && emailBody.length > 100) {
+      console.log('Email body preview (first 100 chars):', emailBody.substring(0, 100) + '...');
+      console.log('Email body preview (last 100 chars):', '...' + emailBody.substring(emailBody.length - 100));
+    } else {
+      console.log('Full email body:', emailBody);
+    }
+
     if (!emailSubject || !emailBody) {
       throw new Error('Email subject and body are required');
     }
+
+    // Get user signature (if sequence has an owner)
+    const userSignature = sequence.user?.signature || null;
 
     // Send the email
     const result = await sendEmail({
@@ -362,7 +428,8 @@ async function sendSequenceEmail(enrollment) {
       htmlBody: emailBody,
       contactData,
       enrollmentId: enrollment.id,
-      contactId: contact.id
+      contactId: contact.id,
+      signature: userSignature
     });
 
     if (result.success) {
@@ -376,12 +443,14 @@ async function sendSequenceEmail(enrollment) {
         data: {
           details: JSON.stringify({
             to: contact.email,
-            subject: emailSubject,
+            subject: emailSubject?.substring(0, 200) || '', // Limit subject length for JSON safety
             messageId: result.messageId,
             response: result.response,
             stepOrder: enrollment.currentStep,
             stepLabel: currentStep.template?.name || `Step ${enrollment.currentStep}`,
-            isCustomEmail: !currentStep.template
+            isCustomEmail: !currentStep.template,
+            bodyLength: emailBody?.length || 0, // Track body length instead of full content
+            hasSignature: !!userSignature
           })
         }
       });

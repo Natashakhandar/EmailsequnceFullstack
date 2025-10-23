@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Upload, Download, Plus, Search, Loader2, Mail, Users, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
-import { api, Contact } from "@/lib/api";
+import { api, Contact, Sequence } from "@/lib/api";
 
 interface Lead extends Contact {
   lastContacted?: string;
@@ -26,7 +26,7 @@ const Leads = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEnrollDialogOpen, setIsEnrollDialogOpen] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
-  const [sequences, setSequences] = useState<any[]>([]);
+  const [sequences, setSequences] = useState<Sequence[]>([]);
   const [selectedSequence, setSelectedSequence] = useState("");
   const [startImmediately, setStartImmediately] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
@@ -65,34 +65,39 @@ const Leads = () => {
     }
   };
 
+  /**
+   * Load sequences from backend API
+   * Uses the proper API client with JWT authorization
+   * Filters for active sequences only
+   */
   const loadSequences = async () => {
     try {
       setLoadingSequences(true);
-      console.log("Loading sequences from backend...");
+      console.log("Loading sequences from backend using API client...");
       
-      // Fetch active sequences from the correct backend endpoint
-      const response = await fetch('http://localhost:3001/api/sequences?isActive=true');
+      // Use the proper API client which includes JWT authorization
+      const response = await api.getSequences({ isActive: true });
+      console.log("API response received:", response);
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Sequences loaded successfully:", data);
-        
-        const sequences = data.sequences || [];
-        console.log(`Found ${sequences.length} active sequences`);
-        
-        setSequences(sequences);
-        
-        if (sequences.length === 0) {
-          console.warn("No active sequences found");
-          toast.info("No active sequences available. Please create and activate sequences first.");
-        }
+      const allSequences = response.sequences || [];
+      console.log(`Total sequences from API: ${allSequences.length}`);
+      
+      // Filter for active sequences (double-check in case backend doesn't filter properly)
+      const activeSequences = allSequences.filter(seq => seq.isActive === true);
+      console.log(`Active sequences after filtering: ${activeSequences.length}`);
+      
+      setSequences(activeSequences);
+      
+      if (activeSequences.length === 0) {
+        console.warn("No active sequences found");
+        toast.info("No active sequences available. Please create and activate sequences first.");
       } else {
-        console.error("Failed to load sequences:", response.status);
-        toast.error("Failed to load sequences from server");
+        console.log("Active sequences loaded:", activeSequences.map(s => ({ id: s.id, name: s.name, isActive: s.isActive })));
       }
     } catch (error) {
       console.error("Error loading sequences:", error);
-      toast.error("Error connecting to backend server");
+      toast.error("Failed to load sequences. Please check your connection and try again.");
+      setSequences([]); // Clear sequences on error
     } finally {
       setLoadingSequences(false);
     }
@@ -116,6 +121,10 @@ const Leads = () => {
     }
   };
 
+  /**
+   * Enroll selected contacts in the chosen sequence
+   * Uses the proper API client with JWT authorization
+   */
   const handleEnrollContacts = async () => {
     if (!selectedSequence || selectedContacts.length === 0) {
       toast.error("Please select a sequence and at least one contact");
@@ -124,34 +133,29 @@ const Leads = () => {
 
     try {
       setEnrolling(true);
-      const response = await fetch('http://localhost:3001/api/enrollments/bulk', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contactIds: selectedContacts,
-          sequenceId: selectedSequence,
-          startImmediately
-        }),
+      console.log(`Enrolling ${selectedContacts.length} contacts in sequence ${selectedSequence}`);
+      
+      // Use the proper API client which includes JWT authorization
+      const result = await api.bulkEnrollContacts({
+        contactIds: selectedContacts,
+        sequenceId: selectedSequence,
+        startImmediately
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        toast.success(`Successfully enrolled ${result.enrolled} contacts in sequence`);
-        if (result.skipped > 0) {
-          toast.info(`${result.skipped} contacts were skipped (already enrolled or inactive)`);
-        }
-        setSelectedContacts([]);
-        setIsEnrollDialogOpen(false);
-        setSelectedSequence("");
-      } else {
-        const error = await response.json();
-        toast.error(error.message || "Failed to enroll contacts");
+      
+      console.log("Enrollment result:", result);
+      toast.success(`Successfully enrolled ${result.enrolled} contacts in sequence`);
+      
+      if (result.skipped > 0) {
+        toast.info(`${result.skipped} contacts were skipped (already enrolled or inactive)`);
       }
-    } catch (error) {
-      toast.error("Failed to enroll contacts");
+      
+      // Reset form state
+      setSelectedContacts([]);
+      setIsEnrollDialogOpen(false);
+      setSelectedSequence("");
+    } catch (error: any) {
       console.error("Error enrolling contacts:", error);
+      toast.error(error.message || "Failed to enroll contacts");
     } finally {
       setEnrolling(false);
     }
@@ -288,9 +292,6 @@ const Leads = () => {
       setSelectedContacts([]);
       
       toast.success(`Successfully deleted ${result.deleted} contact(s)`);
-      if (result.errors && result.errors.length > 0) {
-        toast.error(`Failed to delete ${result.errors.length} contact(s)`);
-      }
       
       setIsBulkDeleteDialogOpen(false);
     } catch (error: any) {
@@ -363,7 +364,13 @@ const Leads = () => {
                       </>
                     )}
                   </Button>
-                  <Dialog open={isEnrollDialogOpen} onOpenChange={setIsEnrollDialogOpen}>
+                  <Dialog open={isEnrollDialogOpen} onOpenChange={(open) => {
+                    setIsEnrollDialogOpen(open);
+                    // Refresh sequences when dialog opens to ensure latest data
+                    if (open) {
+                      loadSequences();
+                    }
+                  }}>
                     <DialogTrigger asChild>
                       <Button
                         className="gradient-primary text-white rounded-xl shadow-luxury"
@@ -379,7 +386,7 @@ const Leads = () => {
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
                         <Label htmlFor="sequence">Select Sequence *</Label>
-                        <Select value={selectedSequence} onValueChange={setSelectedSequence} disabled={loadingSequences}>
+                        <Select value={selectedSequence} onValueChange={setSelectedSequence} disabled={loadingSequences || sequences.length === 0}>
                           <SelectTrigger className="rounded-xl">
                             <SelectValue placeholder={
                               loadingSequences 
@@ -390,16 +397,29 @@ const Leads = () => {
                             } />
                           </SelectTrigger>
                           <SelectContent>
-                            {sequences.map((sequence) => (
-                              <SelectItem key={sequence.id} value={sequence.id}>
-                                {sequence.name} ({sequence.steps?.length || 0} steps)
+                            {sequences.length > 0 ? (
+                              sequences.map((sequence) => (
+                                <SelectItem key={sequence.id} value={sequence.id}>
+                                  {sequence.name} ({sequence.steps?.length || 0} steps)
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="" disabled>
+                                {loadingSequences ? "Loading..." : "No sequences available"}
                               </SelectItem>
-                            ))}
+                            )}
                           </SelectContent>
                         </Select>
-                        {sequences.length === 0 && (
-                          <div className="text-xs text-muted-foreground">
-                            No active sequences available. Please create sequences first.
+                        {!loadingSequences && sequences.length === 0 && (
+                          <div className="text-xs text-muted-foreground bg-yellow-50 p-2 rounded border">
+                            <strong>No active sequences found.</strong><br />
+                            Please create and activate sequences in the Sequences page first.
+                          </div>
+                        )}
+                        {loadingSequences && (
+                          <div className="text-xs text-muted-foreground flex items-center gap-2">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Loading sequences...
                           </div>
                         )}
                       </div>
@@ -436,7 +456,7 @@ const Leads = () => {
                       </Button>
                       <Button
                         onClick={handleEnrollContacts}
-                        disabled={enrolling || !selectedSequence}
+                        disabled={enrolling || !selectedSequence || sequences.length === 0 || loadingSequences}
                         className="gradient-primary text-white rounded-xl"
                       >
                         {enrolling ? (

@@ -86,6 +86,7 @@ export interface User {
   updatedAt: string;
 }
 
+
 export interface LoginResponse {
   message: string;
   user: User;
@@ -428,6 +429,18 @@ class ApiClient {
     return this.request<any>('/scheduler/test-email', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  // Profile Signature API
+  async getProfileSignature(): Promise<{ signature: string }> {
+    return this.request<{ signature: string }>('/profile/signature');
+  }
+
+  async updateProfileSignature(signature: string): Promise<{ signature: string }> {
+    return this.request<{ signature: string }>('/profile/signature', {
+      method: 'POST',
+      body: JSON.stringify({ signature }),
     });
   }
 }

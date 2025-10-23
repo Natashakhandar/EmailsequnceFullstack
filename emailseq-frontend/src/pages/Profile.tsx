@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { Edit, Save, Mail, User as UserIcon, Briefcase, Shield, Crown, AlertCircle } from "lucide-react";
+import { Edit, Save, Mail, User as UserIcon, Briefcase, Shield, Crown, AlertCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { api, User } from "@/lib/api";
+import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Profile = () => {
@@ -31,18 +32,41 @@ const Profile = () => {
   const [editTargets, setEditTargets] = useState({ ...targets });
   const [isEditingTargets, setIsEditingTargets] = useState(false);
 
-  // Fetch current user data
+  // Signature state
+  const [signature, setSignature] = useState("");
+  const [signatureDisplay, setSignatureDisplay] = useState(""); // For editing display
+  const [isEditingSignature, setIsEditingSignature] = useState(false);
+  const [signatureLoading, setSignatureLoading] = useState(false);
+
+  // Fetch current user data and signature
   useEffect(() => {
     const fetchUserData = async () => {
       try {
         setLoading(true);
-        const response = await api.getCurrentUser();
-        setUser(response.user);
-        setProfileData({
-          firstName: response.user.firstName || "",
-          lastName: response.user.lastName || "",
-          email: response.user.email,
-        });
+        const [userResponse, signatureResponse] = await Promise.allSettled([
+          api.getCurrentUser(),
+          api.getProfileSignature()
+        ]);
+
+        if (userResponse.status === 'fulfilled') {
+          setUser(userResponse.value.user);
+          setProfileData({
+            firstName: userResponse.value.user.firstName || "",
+            lastName: userResponse.value.user.lastName || "",
+            email: userResponse.value.user.email,
+          });
+        }
+
+        if (signatureResponse.status === 'fulfilled') {
+          const htmlSignature = signatureResponse.value.signature || "";
+          setSignature(htmlSignature);
+          // Convert HTML to plain text for editing (replace <br> tags with line breaks)
+          setSignatureDisplay(htmlSignature.replace(/<br\s*\/?>/gi, '\n'));
+        } else {
+          // Signature might not exist yet, that's okay
+          console.log('No signature found or failed to fetch signature');
+        }
+
         setError("");
       } catch (error) {
         console.error('Failed to fetch user data:', error);
@@ -64,6 +88,29 @@ const Profile = () => {
     setTargets(editTargets);
     setIsEditingTargets(false);
     toast.success("Targets updated successfully");
+  };
+
+  const handleSaveSignature = async () => {
+    try {
+      setSignatureLoading(true);
+      // Convert line breaks to HTML <br> tags for storage
+      const htmlSignature = signatureDisplay.replace(/\n/g, '<br>');
+      await api.updateProfileSignature(htmlSignature);
+      setSignature(htmlSignature);
+      setIsEditingSignature(false);
+      toast.success("Email signature updated successfully");
+    } catch (error) {
+      console.error('Failed to save signature:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to save signature');
+    } finally {
+      setSignatureLoading(false);
+    }
+  };
+
+  const handleEditSignature = () => {
+    setIsEditingSignature(true);
+    // Convert HTML back to plain text for editing
+    setSignatureDisplay(signature.replace(/<br\s*\/?>/gi, '\n'));
   };
 
   const progressPercentage = (targets.emailsSentToday / targets.dailyTarget) * 100;
@@ -140,7 +187,7 @@ const Profile = () => {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Profile Information */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -404,6 +451,93 @@ const Profile = () => {
             </div>
           </motion.div>
         </div>
+
+        {/* Email Signature Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="glass rounded-2xl p-8 shadow-card hover-lift"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-semibold text-foreground">Email Signature</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => isEditingSignature ? setIsEditingSignature(false) : handleEditSignature()}
+              className="rounded-xl"
+            >
+              <Edit className="w-5 h-5" />
+            </Button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="signature" className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Email Signature
+              </Label>
+              <Textarea
+                id="signature"
+                value={signatureDisplay}
+                onChange={(e) => setSignatureDisplay(e.target.value)}
+                disabled={!isEditingSignature}
+                className="min-h-[120px] rounded-xl resize-none"
+                placeholder="Enter your email signature here...
+
+Example:
+Best regards,
+John Doe
+Sales Manager
+Company Name
+Phone: (555) 123-4567
+Email: john@company.com
+
+You can also use HTML formatting like:
+<b>Bold text</b>
+<i>Italic text</i>
+<a href='https://example.com'>Links</a>"
+              />
+              <p className="text-sm text-muted-foreground">
+                This signature will be automatically added to all emails in your sequences. 
+                Line breaks will be preserved. You can also use HTML formatting like &lt;b&gt;bold&lt;/b&gt;, &lt;i&gt;italic&lt;/i&gt;, and &lt;a href="url"&gt;links&lt;/a&gt;.
+              </p>
+            </div>
+
+            {isEditingSignature && (
+              <Button
+                onClick={handleSaveSignature}
+                disabled={signatureLoading}
+                className="w-full gradient-primary text-white rounded-xl shadow-luxury"
+              >
+                {signatureLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Signature
+                  </>
+                )}
+              </Button>
+            )}
+
+            {/* Preview Section */}
+            {signature && !isEditingSignature && (
+              <div className="mt-6 p-4 bg-muted/50 rounded-xl border border-border">
+                <Label className="text-sm font-medium text-muted-foreground mb-2 block">
+                  Preview:
+                </Label>
+                <div 
+                  className="text-sm text-foreground whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={{ __html: signature }}
+                />
+              </div>
+            )}
+          </div>
+        </motion.div>
       </main>
     </div>
   );

@@ -15,6 +15,7 @@ const unsubscribeRouter = require('./routes/unsubscribe');
 const schedulerRouter = require('./routes/scheduler');
 const emailRouter = require('./routes/email');
 const emailActivityRouter = require('./routes/emailActivity');
+const profileRouter = require('./routes/profile');
 
 // Import scheduler
 const { startScheduler } = require('./jobs/scheduler');
@@ -27,7 +28,16 @@ app.use(helmet());
 
 // CORS configuration
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://127.0.0.1:8080'],
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:8080', 
+    'http://localhost:5173',
+    'http://localhost:8081',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:8081'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -67,6 +77,7 @@ app.use('/api/unsubscribe', unsubscribeRouter);
 app.use('/api/scheduler', schedulerRouter);
 app.use('/api', emailRouter);
 app.use('/api/email-activity', emailActivityRouter);
+app.use('/api/profile', profileRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -84,7 +95,8 @@ app.get('/', (req, res) => {
       unsubscribe: '/api/unsubscribe',
       scheduler: '/api/scheduler',
       tracking: '/api/track',
-      emailActivity: '/api/email-activity'
+      emailActivity: '/api/email-activity',
+      profile: '/api/profile'
     }
   });
 });

@@ -1,6 +1,10 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
+
+// Apply authentication middleware to all sequence routes
+router.use(authenticateToken);
 
 // Helper function to ensure backward compatibility for sequence steps
 const normalizeSequenceStep = (step) => {
@@ -119,6 +123,19 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Sequence not found' });
     }
 
+    // CRITICAL LOGGING: Verify database retrieval integrity
+    console.log('📖 SEQUENCE RETRIEVAL VALIDATION');
+    console.log('Sequence ID:', sequence.id);
+    console.log('Step count:', sequence.steps?.length || 0);
+    
+    sequence.steps?.forEach((step, index) => {
+      if (step.body) {
+        console.log(`Step ${step.stepOrder} body length:`, step.body?.length || 0);
+        console.log(`Step ${step.stepOrder} body type:`, typeof step.body);
+        console.log(`Step ${step.stepOrder} body preview:`, step.body?.substring(0, 50) + '...');
+      }
+    });
+
     // Normalize sequence for backward compatibility
     const normalizedSequence = normalizeSequence(sequence);
 
@@ -150,8 +167,10 @@ router.post('/', async (req, res) => {
           triggerType: step.triggerType || 'delay',
           triggerStepId: step.triggerStepId,
           delayHours: step.delayHours,
-          subject: step.subject?.substring(0, 50) + '...',
-          body: step.body?.substring(0, 50) + '...'
+          hasSubject: !!step.subject,
+          hasBody: !!step.body,
+          subjectLength: step.subject?.length || 0,
+          bodyLength: step.body?.length || 0
         });
 
         // Basic validation
@@ -232,22 +251,33 @@ router.post('/', async (req, res) => {
         name: name.trim(),
         description: description?.trim(),
         isActive,
+        userId: req.user.id, // Associate sequence with the authenticated user
         steps: {
-          create: steps.map(step => ({
-            templateId: step.templateId || null,
-            stepOrder: step.stepOrder,
-            delayDays: step.delayDays || 0,
-            delayHours: step.delayHours || 0,
-            delayMinutes: step.delayMinutes || 0,
+          create: steps.map(step => {
+            // CRITICAL LOGGING: Track body integrity during database save
+            if (step.body) {
+              console.log(`💾 SAVING STEP ${step.stepOrder} BODY TO DB`);
+              console.log('Frontend body length:', step.body?.length || 0);
+              console.log('Frontend body type:', typeof step.body);
+              console.log('Body preview (first 50 chars):', step.body?.substring(0, 50) + '...');
+            }
             
-            // NEW: Trigger and content fields
-            subject: step.subject || null,
-            body: step.body || null,
-            triggerType: step.triggerType || 'delay',
-            triggerStepId: step.triggerStepId || null,
-            
-            isActive: step.isActive !== false
-          }))
+            return {
+              templateId: step.templateId || null,
+              stepOrder: step.stepOrder,
+              delayDays: step.delayDays || 0,
+              delayHours: step.delayHours || 0,
+              delayMinutes: step.delayMinutes || 0,
+              
+              // NEW: Trigger and content fields
+              subject: step.subject || null,
+              body: step.body || null,
+              triggerType: step.triggerType || 'delay',
+              triggerStepId: step.triggerStepId || null,
+              
+              isActive: step.isActive !== false
+            };
+          })
         }
       },
       include: {
@@ -335,8 +365,10 @@ router.put('/:id', async (req, res) => {
           triggerType: step.triggerType,
           triggerStepId: step.triggerStepId,
           delayHours: step.delayHours,
-          subject: step.subject?.substring(0, 50) + '...',
-          body: step.body?.substring(0, 50) + '...'
+          hasSubject: !!step.subject,
+          hasBody: !!step.body,
+          subjectLength: step.subject?.length || 0,
+          bodyLength: step.body?.length || 0
         });
 
         // Basic validation
@@ -415,21 +447,31 @@ router.put('/:id', async (req, res) => {
       });
 
       updateData.steps = {
-        create: steps.map(step => ({
-          templateId: step.templateId || null,
-          stepOrder: step.stepOrder,
-          delayDays: step.delayDays || 0,
-          delayHours: step.delayHours || 0,
-          delayMinutes: step.delayMinutes || 0,
+        create: steps.map(step => {
+          // CRITICAL LOGGING: Track body integrity during database update
+          if (step.body) {
+            console.log(`🔄 UPDATING STEP ${step.stepOrder} BODY IN DB`);
+            console.log('Frontend body length:', step.body?.length || 0);
+            console.log('Frontend body type:', typeof step.body);
+            console.log('Body preview (first 50 chars):', step.body?.substring(0, 50) + '...');
+          }
           
-          // NEW: Trigger and content fields
-          subject: step.subject || null,
-          body: step.body || null,
-          triggerType: step.triggerType || 'delay',
-          triggerStepId: step.triggerStepId || null,
-          
-          isActive: step.isActive !== false
-        }))
+          return {
+            templateId: step.templateId || null,
+            stepOrder: step.stepOrder,
+            delayDays: step.delayDays || 0,
+            delayHours: step.delayHours || 0,
+            delayMinutes: step.delayMinutes || 0,
+            
+            // NEW: Trigger and content fields
+            subject: step.subject || null,
+            body: step.body || null,
+            triggerType: step.triggerType || 'delay',
+            triggerStepId: step.triggerStepId || null,
+            
+            isActive: step.isActive !== false
+          };
+        })
       };
     }
 

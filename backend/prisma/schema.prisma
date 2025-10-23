@@ -18,8 +18,12 @@ model User {
   lastName  String?
   role      UserRole @default(USER)
   isActive  Boolean  @default(true)
+  signature String?  @db.Text // Email signature (supports HTML)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relations
+  sequences Sequence[]
 
   @@map("users")
 }
@@ -46,7 +50,7 @@ model Template {
   id          String   @id @default(cuid())
   name        String
   subject     String
-  body        String   // HTML or plain text
+  body        String   @db.LongText // HTML or plain text - supports very long content
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -62,6 +66,7 @@ model Sequence {
   name        String
   description String?
   isActive    Boolean  @default(true)
+  userId      String?  // Owner of the sequence (for signature purposes)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -69,6 +74,7 @@ model Sequence {
   steps       SequenceStep[]
   enrollments Enrollment[]
   trigger     SequenceTrigger?
+  user        User?    @relation(fields: [userId], references: [id])
 
   @@map("sequences")
 }
@@ -83,7 +89,7 @@ model SequenceStep {
   
   // NEW: Trigger conditions and delay logic
   subject     String?  // Email subject (can override template)
-  body        String?  // Email body (can override template)
+  body        String?  @db.LongText // Email body (can override template) - supports very long content
   triggerType String   @default("delay") // "delay", "opened", "not_opened", "replied", "skip"
   triggerStepId String? // Reference to step that triggers this one
   delayMinutes Int     @default(0) // Additional minutes for precise timing
