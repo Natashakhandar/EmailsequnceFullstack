@@ -116,7 +116,72 @@ router.get('/track/open', async (req, res) => {
 });
 
 /**
- * GET /api/track/reply
+ * POST /api/track/reply
+ * Track email replies with content
+ */
+router.post('/track/reply', async (req, res) => {
+  try {
+    const { emailId, replySubject, replyBody, replyFrom } = req.body;
+
+    if (!emailId) {
+      return res.status(400).json({ error: 'Missing emailId parameter' });
+    }
+
+    // Find the event with this emailId
+    const existingEvent = await prisma.event.findFirst({
+      where: {
+        emailId: emailId,
+        type: 'SENT'
+      }
+    });
+
+    if (!existingEvent) {
+      return res.status(404).json({ error: 'Email not found' });
+    }
+
+    // Check if this email was already marked as replied
+    const alreadyReplied = await prisma.event.findFirst({
+      where: {
+        emailId: emailId,
+        type: 'REPLIED'
+      }
+    });
+
+    if (!alreadyReplied) {
+      // Create REPLIED event with content
+      await prisma.event.create({
+        data: {
+          enrollmentId: existingEvent.enrollmentId,
+          contactId: existingEvent.contactId,
+          type: 'REPLIED',
+          emailId: emailId,
+          details: JSON.stringify({
+            repliedAt: new Date().toISOString(),
+            replySubject: replySubject || 'Re: Your Email',
+            replyBody: replyBody || 'Thank you for your email. I am interested in learning more.',
+            replyFrom: replyFrom || existingEvent.contact?.email || 'client@example.com',
+            source: 'manual_tracking'
+          })
+        }
+      });
+
+      console.log(`✅ Reply tracking: Marked email as replied with content for emailId: ${emailId}`);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Reply tracked successfully with content',
+      emailId: emailId
+    });
+
+  } catch (error) {
+    console.error('❌ Reply tracking error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/track/reply (Legacy endpoint for backward compatibility)
  * Placeholder for future Gmail/IMAP integration
  */
 router.get('/track/reply', async (req, res) => {

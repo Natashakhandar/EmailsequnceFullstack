@@ -1,0 +1,322 @@
+const Imap = require('imap');
+const { simpleParser } = require('mailparser');
+const prisma = require('../db/prismaClient');
+
+class EmailMonitorService {
+  constructor() {
+    this.imap = null;
+    this.isConnected = false;
+    this.config = {
+      user: process.env.IMAP_USER || process.env.SMTP_USER,
+      password: process.env.IMAP_PASSWORD || process.env.SMTP_PASSWORD,
+      host: process.env.IMAP_HOST || process.env.SMTP_HOST,
+      port: parseInt(process.env.IMAP_PORT) || 993,
+      tls: process.env.IMAP_TLS !== 'false',
+      authTimeout: 3000,
+      connTimeout: 10000,
+      tlsOptions: {
+        rejectUnauthorized: false
+      }
+    };
+  }
+
+  // Connect to IMAP server
+  async connect() {
+    return new Promise((resolve, reject) => {
+      if (this.isConnected) {
+        return resolve();
+      }
+
+      console.log('📧 Connecting to IMAP server...');
+      
+      this.imap = new Imap(this.config);
+
+      this.imap.once('ready', () => {
+        console.log('✅ IMAP connection established');
+        this.isConnected = true;
+        resolve();
+      });
+
+      this.imap.once('error', (err) => {
+        console.error('❌ IMAP connection error:', err.message);
+        this.isConnected = false;
+        reject(err);
+      });
+
+      this.imap.once('end', () => {
+        console.log('📪 IMAP connection ended');
+        this.isConnected = false;
+      });
+
+      try {
+        this.imap.connect();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  // Disconnect from IMAP server
+  disconnect() {
+    if (this.imap && this.isConnected) {
+      this.imap.end();
+      this.isConnected = false;
+    }
+  }
+
+  // Fetch recent emails from inbox
+  async fetchRecentEmails(days = 7) {
+    try {
+      await this.connect();
+
+      return new Promise((resolve, reject) => {
+        this.imap.openBox('INBOX', true, (err, box) => {
+          if (err) {
+            return reject(err);
+          }
+
+          // Search for emails from the last X days
+          const since = new Date();
+          since.setDate(since.getDate() - days);
+          
+          this.imap.search(['UNSEEN', ['SINCE', since]], (err, results) => {
+            if (err) {
+              return reject(err);
+            }
+
+            if (!results || results.length === 0) {
+              console.log('📭 No new emails found');
+              return resolve([]);
+            }
+
+            console.log(`📬 Found ${results.length} new emails`);
+
+            const emails = [];
+            const fetch = this.imap.fetch(results, { bodies: '' });
+
+            fetch.on('message', (msg, seqno) => {
+              let emailData = { seqno };
+
+              msg.on('body', (stream, info) => {
+                let buffer = '';
+                stream.on('data', (chunk) => {
+                  buffer += chunk.toString('utf8');
+                });
+
+                stream.once('end', async () => {
+                  try {
+                    const parsed = await simpleParser(buffer);
+                    emailData.parsed = parsed;
+                    emails.push(emailData);
+                  } catch (parseErr) {
+                    console.error('❌ Error parsing email:', parseErr);
+                  }
+                });
+              });
+
+              msg.once('attributes', (attrs) => {
+                emailData.attrs = attrs;
+              });
+            });
+
+            fetch.once('error', (err) => {
+              reject(err);
+            });
+
+            fetch.once('end', () => {
+              resolve(emails);
+            });
+          });
+        });
+      });
+    } catch (error) {
+      console.error('❌ Error fetching emails:', error);
+      throw error;
+    }
+  }
+
+  // Check if an email is a reply to our sent emails
+  async isReplyToOurEmail(email) {
+    try {
+      const parsed = email.parsed;
+      
+      // Check various reply indicators
+      const subject = parsed.subject || '';
+      const inReplyTo = parsed.inReplyTo || '';
+      const references = parsed.references || [];
+      
+      // Look for our email IDs in the references or in-reply-to headers
+      if (inReplyTo) {
+        const sentEvent = await prisma.event.findFirst({
+          where: {
+            emailId: inReplyTo,
+            type: 'SENT'
+          },
+          include: {
+            contact: true,
+            enrollment: {
+              include: {
+                sequence: true
+              }
+            }
+          }
+        });
+
+        if (sentEvent) {
+          return { isReply: true, originalEvent: sentEvent };
+        }
+      }
+
+      // Check references array
+      for (const ref of references) {
+        const sentEvent = await prisma.event.findFirst({
+          where: {
+            emailId: ref,
+            type: 'SENT'
+          },
+          include: {
+            contact: true,
+            enrollment: {
+              include: {
+                sequence: true
+              }
+            }
+          }
+        });
+
+        if (sentEvent) {
+          return { isReply: true, originalEvent: sentEvent };
+        }
+      }
+
+      // Check if sender email matches any of our contacts
+      const fromEmail = parsed.from?.value?.[0]?.address || parsed.from?.text;
+      if (fromEmail) {
+        const contact = await prisma.contact.findFirst({
+          where: {
+            email: {
+              equals: fromEmail,
+              mode: 'insensitive'
+            }
+          }
+        });
+
+        if (contact) {
+          // Find the most recent sent email to this contact
+          const recentSentEvent = await prisma.event.findFirst({
+            where: {
+              contactId: contact.id,
+              type: 'SENT'
+            },
+            orderBy: {
+              timestamp: 'desc'
+            },
+            include: {
+              contact: true,
+              enrollment: {
+                include: {
+                  sequence: true
+                }
+              }
+            }
+          });
+
+          if (recentSentEvent) {
+            return { isReply: true, originalEvent: recentSentEvent };
+          }
+        }
+      }
+
+      return { isReply: false };
+    } catch (error) {
+      console.error('❌ Error checking if email is reply:', error);
+      return { isReply: false };
+    }
+  }
+
+  // Process and store reply emails
+  async processReplyEmails() {
+    try {
+      console.log('🔍 Checking for new reply emails...');
+      
+      const emails = await this.fetchRecentEmails();
+      let processedCount = 0;
+
+      for (const email of emails) {
+        const replyCheck = await this.isReplyToOurEmail(email);
+        
+        if (replyCheck.isReply && replyCheck.originalEvent) {
+          const parsed = email.parsed;
+          const originalEvent = replyCheck.originalEvent;
+
+          // Check if we already have this reply
+          const existingReply = await prisma.event.findFirst({
+            where: {
+              emailId: originalEvent.emailId,
+              type: 'REPLIED'
+            }
+          });
+
+          if (!existingReply) {
+            // Create a new REPLIED event with the actual email content
+            await prisma.event.create({
+              data: {
+                enrollmentId: originalEvent.enrollmentId,
+                contactId: originalEvent.contactId,
+                type: 'REPLIED',
+                emailId: originalEvent.emailId,
+                details: JSON.stringify({
+                  repliedAt: parsed.date || new Date().toISOString(),
+                  replySubject: parsed.subject || 'No Subject',
+                  replyBody: parsed.text || parsed.html || 'No content',
+                  replyFrom: parsed.from?.value?.[0]?.address || parsed.from?.text || 'Unknown',
+                  messageId: parsed.messageId,
+                  inReplyTo: parsed.inReplyTo,
+                  source: 'imap_monitoring',
+                  attachments: parsed.attachments?.length || 0
+                })
+              }
+            });
+
+            console.log(`✅ Stored reply from ${parsed.from?.text} for email ${originalEvent.emailId}`);
+            processedCount++;
+
+            // Update enrollment status to STOPPED since they replied
+            await prisma.enrollment.update({
+              where: { id: originalEvent.enrollmentId },
+              data: { 
+                status: 'STOPPED',
+                completedAt: new Date(),
+                nextSendAt: null
+              }
+            });
+          }
+        }
+      }
+
+      console.log(`📊 Processed ${processedCount} new replies`);
+      return processedCount;
+
+    } catch (error) {
+      console.error('❌ Error processing reply emails:', error);
+      throw error;
+    } finally {
+      this.disconnect();
+    }
+  }
+
+  // Test IMAP connection
+  async testConnection() {
+    try {
+      await this.connect();
+      console.log('✅ IMAP connection test successful');
+      this.disconnect();
+      return true;
+    } catch (error) {
+      console.error('❌ IMAP connection test failed:', error.message);
+      return false;
+    }
+  }
+}
+
+module.exports = EmailMonitorService;

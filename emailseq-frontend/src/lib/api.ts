@@ -443,6 +443,26 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
+
+  // Email Monitoring API
+  async testImapConnection() {
+    return this.request<any>('/email-monitoring/test');
+  }
+
+  async checkForReplies() {
+    return this.request<any>('/email-monitoring/check-replies', {
+      method: 'POST',
+    });
+  }
+
+  async getEmailMonitoringStatus() {
+    return this.request<any>('/email-monitoring/status');
+  }
+
+  async getRecentEmails(days?: number) {
+    const query = days ? `?days=${days}` : '';
+    return this.request<any>(`/email-monitoring/recent-emails${query}`);
+  }
 }
 
 // Export singleton instance

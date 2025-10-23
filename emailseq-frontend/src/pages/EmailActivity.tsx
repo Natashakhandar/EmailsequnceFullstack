@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, RefreshCw, Eye, Filter, Calendar, Mail, User, Activity, Trash2 } from "lucide-react";
+import { Loader2, RefreshCw, Eye, Filter, Calendar, Mail, User, Activity, Trash2, MessageCircle, Inbox } from "lucide-react";
 import { toast } from "sonner";
 import { api, Event, Contact, Sequence } from "@/lib/api";
 import EmailDetailsPopup from "@/components/popups/EmailDetailsPopup";
@@ -28,6 +28,7 @@ const EmailActivity = () => {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [checkingReplies, setCheckingReplies] = useState(false);
   const [filters, setFilters] = useState<EmailActivityFilters>({});
   const [showFilters, setShowFilters] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -124,6 +125,29 @@ const EmailActivity = () => {
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
+  const handleCheckReplies = async () => {
+    if (checkingReplies) return;
+    
+    try {
+      setCheckingReplies(true);
+      
+      const response = await api.checkForReplies();
+      
+      if (response.success) {
+        toast.success(`Found ${response.processedCount} new replies!`);
+        // Refresh the events to show new replies
+        await loadEvents(true);
+      } else {
+        toast.error('Failed to check for replies');
+      }
+    } catch (error) {
+      console.error('Error checking for replies:', error);
+      toast.error('Failed to check for replies');
+    } finally {
+      setCheckingReplies(false);
+    }
+  };
+
   const handleDeleteActivity = async (eventId: string) => {
     if (deletingIds.has(eventId)) return; // Prevent double-clicking
     
@@ -154,7 +178,20 @@ const EmailActivity = () => {
     }
   };
 
-  const getStatusBadge = (type: string) => {
+  const hasReplyContent = (event: Event) => {
+    if (event.type !== 'REPLIED' || !event.details) return false;
+    
+    try {
+      const details = JSON.parse(event.details);
+      return !!(details.replyBody || details.replyContent || details.content);
+    } catch (e) {
+      console.warn('Failed to parse event details JSON for reply content check:', e);
+      return false;
+    }
+  };
+
+  const getStatusBadge = (event: Event) => {
+    const type = event.type;
     const statusConfig = {
       SENT: { variant: "default" as const, color: "bg-blue-100 text-blue-800" },
       DELIVERED: { variant: "default" as const, color: "bg-green-100 text-green-800" },
@@ -169,9 +206,16 @@ const EmailActivity = () => {
     const config = statusConfig[type as keyof typeof statusConfig] || statusConfig.SENT;
     
     return (
-      <Badge variant={config.variant} className={config.color}>
-        {type}
-      </Badge>
+      <div className="flex items-center gap-2">
+        <Badge variant={config.variant} className={config.color}>
+          {type}
+        </Badge>
+        {type === 'REPLIED' && hasReplyContent(event) && (
+          <div title="Reply content available">
+            <MessageCircle className="w-4 h-4 text-emerald-600" />
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -195,7 +239,7 @@ const EmailActivity = () => {
         const details = JSON.parse(event.details);
         if (details.subject) return details.subject;
       } catch (e) {
-        // Ignore parsing errors
+        console.warn('Failed to parse event details JSON for email subject:', e);
       }
     }
     
@@ -251,6 +295,20 @@ const EmailActivity = () => {
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Filters
+              </Button>
+              
+              <Button
+                onClick={handleCheckReplies}
+                disabled={checkingReplies}
+                variant="outline"
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              >
+                {checkingReplies ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Inbox className="w-4 h-4 mr-2" />
+                )}
+                Check Replies
               </Button>
               
               <Button
@@ -446,7 +504,7 @@ const EmailActivity = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {getStatusBadge(event.type)}
+                          {getStatusBadge(event)}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
