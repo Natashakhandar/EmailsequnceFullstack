@@ -1,27 +1,166 @@
 import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
-import { Mail, Eye, MessageSquare, TrendingUp } from "lucide-react";
+import { Mail, Eye, MessageSquare, TrendingUp, RefreshCw } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { api } from "@/lib/api";
+
+interface DashboardStats {
+  totalEmailsSent: number;
+  openRate: { percentage: number; count: number };
+  replyRate: { percentage: number; count: number };
+  bounceRate: { percentage: number; count: number };
+  dailyActivity: number[];
+  weeklyPerformance: number[];
+  additionalMetrics: {
+    totalSequences: number;
+    totalContacts: number;
+    activeEnrollments: number;
+    totalDelivered: number;
+    totalClicked: number;
+    totalUnsubscribed: number;
+    totalFailed: number;
+  };
+  eventBreakdown: Record<string, number>;
+  dateRange: {
+    startDate: string;
+    endDate: string;
+    sequenceId: string;
+  };
+}
 
 const Dashboard = () => {
-  // Mock data for charts
-  const dailyData = [
-    { day: "Mon", emails: 45 },
-    { day: "Tue", emails: 52 },
-    { day: "Wed", emails: 48 },
-    { day: "Thu", emails: 61 },
-    { day: "Fri", emails: 55 },
-    { day: "Sat", emails: 38 },
-    { day: "Sun", emails: 42 },
-  ];
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const weeklyData = [
-    { week: "Week 1", sent: 240, opened: 156, replied: 42 },
-    { week: "Week 2", sent: 280, opened: 198, replied: 58 },
-    { week: "Week 3", sent: 320, opened: 224, replied: 67 },
-    { week: "Week 4", sent: 310, opened: 217, replied: 71 },
-  ];
+  // Fetch dashboard data on component mount
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        console.log('🔄 Fetching dashboard statistics...');
+        console.log('📡 API Base URL:', import.meta.env?.VITE_API_URL || import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3001');
+        
+        const stats = await api.getDashboardStats();
+        console.log('✅ Dashboard statistics loaded:', stats);
+        
+        setDashboardStats(stats);
+      } catch (err) {
+        console.error('❌ Error fetching dashboard data:', err);
+        
+        // Provide more detailed error information
+        let errorMessage = 'Failed to load dashboard data';
+        if (err instanceof Error) {
+          if (err.message.includes('fetch')) {
+            errorMessage = 'Cannot connect to backend server. Please ensure the backend is running on port 3001.';
+          } else {
+            errorMessage = err.message;
+          }
+        }
+        
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  // Transform daily activity data for chart (Sunday=0 to Saturday=6)
+  const dailyData = dashboardStats ? [
+    { day: "Sun", emails: dashboardStats.dailyActivity[0] || 0 },
+    { day: "Mon", emails: dashboardStats.dailyActivity[1] || 0 },
+    { day: "Tue", emails: dashboardStats.dailyActivity[2] || 0 },
+    { day: "Wed", emails: dashboardStats.dailyActivity[3] || 0 },
+    { day: "Thu", emails: dashboardStats.dailyActivity[4] || 0 },
+    { day: "Fri", emails: dashboardStats.dailyActivity[5] || 0 },
+    { day: "Sat", emails: dashboardStats.dailyActivity[6] || 0 },
+  ] : [];
+
+  // Transform weekly performance data for chart
+  const weeklyData = dashboardStats ? dashboardStats.weeklyPerformance.map((total, index) => {
+    // Calculate proportional distribution based on overall stats
+    const sentRatio = dashboardStats.totalEmailsSent > 0 ? 1 : 0;
+    const openRatio = dashboardStats.totalEmailsSent > 0 ? dashboardStats.openRate.percentage / 100 : 0;
+    const replyRatio = dashboardStats.totalEmailsSent > 0 ? dashboardStats.replyRate.percentage / 100 : 0;
+    
+    return {
+      week: `Week ${index + 1}`,
+      sent: Math.floor(total * sentRatio),
+      opened: Math.floor(total * openRatio),
+      replied: Math.floor(total * replyRatio),
+    };
+  }) : [];
+
+  // Refresh dashboard data
+  const refreshDashboard = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🔄 Refreshing dashboard statistics...');
+      const stats = await api.getDashboardStats();
+      console.log('✅ Dashboard statistics refreshed:', stats);
+      
+      setDashboardStats(stats);
+    } catch (err) {
+      console.error('❌ Error refreshing dashboard data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to refresh dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
+        <Navbar />
+        <main className="container mx-auto px-6 pt-24 pb-12">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading dashboard statistics...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
+        <Navbar />
+        <main className="container mx-auto px-6 pt-24 pb-12">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="text-red-500 text-xl mb-4">⚠️</div>
+              <p className="text-muted-foreground mb-4">Failed to load dashboard data</p>
+              <p className="text-sm text-red-500">{error}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Show dashboard with real data
+  if (!dashboardStats) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
@@ -33,46 +172,61 @@ const Dashboard = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-8"
+          className="mb-8 flex justify-between items-start"
         >
-          <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
-          <p className="text-muted-foreground">Track your email campaigns and performance</p>
+          <div>
+            <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
+            <p className="text-muted-foreground">Track your email campaigns and performance</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Data range: {dashboardStats.dateRange.startDate} to {dashboardStats.dateRange.endDate}
+            </p>
+          </div>
+          <motion.button
+            onClick={refreshDashboard}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </motion.button>
         </motion.div>
 
         {/* Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <MetricCard
             title="Total Emails Sent"
-            value="1,150"
+            value={dashboardStats.totalEmailsSent.toLocaleString()}
             icon={Mail}
-            trend="+12% from last week"
+            trend={`${dashboardStats.additionalMetrics.totalSequences} active sequences`}
             delay={0.1}
           />
           <MetricCard
             title="Open Rate"
-            value="68.5%"
+            value={`${dashboardStats.openRate.percentage.toFixed(1)}%`}
             icon={Eye}
-            percentage="68.5%"
-            total="788 of 1,150 opened"
-            trend="+5.2% from last week"
+            percentage={`${dashboardStats.openRate.percentage.toFixed(1)}%`}
+            total={`${dashboardStats.openRate.count.toLocaleString()} of ${dashboardStats.totalEmailsSent.toLocaleString()} opened`}
+            trend={`${dashboardStats.additionalMetrics.totalContacts} total contacts`}
             delay={0.2}
           />
           <MetricCard
             title="Reply Rate"
-            value="22.8%"
+            value={`${dashboardStats.replyRate.percentage.toFixed(1)}%`}
             icon={MessageSquare}
-            percentage="22.8%"
-            total="262 of 1,150 replied"
-            trend="+3.1% from last week"
+            percentage={`${dashboardStats.replyRate.percentage.toFixed(1)}%`}
+            total={`${dashboardStats.replyRate.count.toLocaleString()} of ${dashboardStats.totalEmailsSent.toLocaleString()} replied`}
+            trend={`${dashboardStats.additionalMetrics.activeEnrollments} active enrollments`}
             delay={0.3}
           />
           <MetricCard
             title="Bounce Rate"
-            value="15.2%"
+            value={`${dashboardStats.bounceRate.percentage.toFixed(1)}%`}
             icon={TrendingUp}
-            percentage="15.2%"
-            total="175 of 1,150 bounced"
-            trend="+2.4% from last week"
+            percentage={`${dashboardStats.bounceRate.percentage.toFixed(1)}%`}
+            total={`${dashboardStats.bounceRate.count.toLocaleString()} of ${dashboardStats.totalEmailsSent.toLocaleString()} bounced`}
+            trend={`${dashboardStats.additionalMetrics.totalDelivered} delivered`}
             delay={0.4}
           />
         </div>

@@ -445,6 +445,7 @@ class ApiClient {
     });
   }
 
+
   // Profile Signature API
   async getProfileSignature(): Promise<{ signature: string }> {
     return this.request<{ signature: string }>('/profile/signature');
@@ -476,6 +477,177 @@ class ApiClient {
     const query = days ? `?days=${days}` : '';
     return this.request<any>(`/email-monitoring/recent-emails${query}`);
   }
+
+  // Dashboard API
+  async getDashboardStats(params?: { startDate?: string; endDate?: string; sequenceId?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.startDate) searchParams.append('startDate', params.startDate);
+    if (params?.endDate) searchParams.append('endDate', params.endDate);
+    if (params?.sequenceId) searchParams.append('sequenceId', params.sequenceId);
+
+    const query = searchParams.toString();
+    return this.request<{
+      totalEmailsSent: number;
+      openRate: { percentage: number; count: number };
+      replyRate: { percentage: number; count: number };
+      bounceRate: { percentage: number; count: number };
+      dailyActivity: number[];
+      weeklyPerformance: number[];
+      additionalMetrics: {
+        totalSequences: number;
+        totalContacts: number;
+        activeEnrollments: number;
+        totalDelivered: number;
+        totalClicked: number;
+        totalUnsubscribed: number;
+        totalFailed: number;
+      };
+      eventBreakdown: Record<string, number>;
+      dateRange: {
+        startDate: string;
+        endDate: string;
+        sequenceId: string;
+      };
+    }>(`/dashboard/stats${query ? `?${query}` : ''}`);
+  }
+
+  async getDashboardRecentActivity(limit?: number) {
+    const query = limit ? `?limit=${limit}` : '';
+    return this.request<{
+      recentActivity: Array<{
+        id: string;
+        type: string;
+        timestamp: string;
+        contact: {
+          email: string;
+          name: string;
+        };
+        sequence: string;
+      }>;
+      count: number;
+    }>(`/dashboard/recent-activity${query}`);
+  }
+
+  async getDashboardPerformanceTrends(params?: { days?: number; sequenceId?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.days) searchParams.append('days', params.days.toString());
+    if (params?.sequenceId) searchParams.append('sequenceId', params.sequenceId);
+
+    const query = searchParams.toString();
+    return this.request<{
+      trends: Array<{
+        date: string;
+        sent: number;
+        opened: number;
+        replied: number;
+        bounced: number;
+        clicked: number;
+        delivered: number;
+        openRate: string;
+        replyRate: string;
+        bounceRate: string;
+      }>;
+      period: string;
+      totalDays: number;
+    }>(`/dashboard/performance-trends${query ? `?${query}` : ''}`);
+  }
+
+  // Reports API
+  async getReportsAnalytics(params?: { startDate?: string; endDate?: string; sequenceId?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.startDate) searchParams.append('startDate', params.startDate);
+    if (params?.endDate) searchParams.append('endDate', params.endDate);
+    if (params?.sequenceId) searchParams.append('sequenceId', params.sequenceId);
+
+    const query = searchParams.toString();
+    return this.request<{
+      totalCampaigns: number;
+      totalLeads: number;
+      avgResponseRate: number;
+      bounceRate: number;
+      emailStatusDistribution: {
+        sent: number;
+        opened: number;
+        replied: number;
+        bounced: number;
+      };
+      leadPerformance: {
+        replied: number;
+        inProgress: number;
+        noResponse: number;
+      };
+      monthlySummary: {
+        totalEmailsSent: number;
+        emailsOpened: number;
+        repliesReceived: number;
+      };
+      lastUpdated: string;
+    }>(`/reports/analytics${query ? `?${query}` : ''}`);
+  }
+
+  async getReportsPerformanceTrends(params?: { days?: number; sequenceId?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.days) searchParams.append('days', params.days.toString());
+    if (params?.sequenceId) searchParams.append('sequenceId', params.sequenceId);
+
+    const query = searchParams.toString();
+    return this.request<{
+      trends: Array<{
+        date: string;
+        sent: number;
+        opened: number;
+        replied: number;
+        bounced: number;
+        openRate: number;
+        replyRate: number;
+        bounceRate: number;
+      }>;
+      period: string;
+      totalDays: number;
+    }>(`/reports/performance-trends${query ? `?${query}` : ''}`);
+  }
+
+  async getReportsCampaignPerformance(params?: { limit?: number; sequenceId?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.sequenceId) searchParams.append('sequenceId', params.sequenceId);
+
+    const query = searchParams.toString();
+    return this.request<{
+      campaigns: Array<{
+        sequenceId: string;
+        sequenceName: string;
+        enrollments: number;
+        emailsSent: number;
+        emailsOpened: number;
+        emailsReplied: number;
+        openRate: number;
+        replyRate: number;
+      }>;
+      totalCampaigns: number;
+    }>(`/reports/campaign-performance${query ? `?${query}` : ''}`);
+  }
+
+  async getReportsRealTimeStats() {
+    return this.request<{
+      last24Hours: {
+        emailsSent: number;
+        emailsOpened: number;
+        emailsReplied: number;
+        newEnrollments: number;
+      };
+      activeEnrollments: number;
+      recentActivity: Array<{
+        id: string;
+        type: string;
+        timestamp: string;
+        contactEmail: string;
+        sequenceName: string;
+      }>;
+      lastUpdated: string;
+    }>('/reports/real-time-stats');
+  }
+
 }
 
 // Export singleton instance
