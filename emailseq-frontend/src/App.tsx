@@ -16,6 +16,8 @@ import SequencesNEW from "./pages/Sequences.NEW";
 import TemplatesPage from "./pages/TemplatesPage";
 import AdminManagement from "./pages/AdminManagement";
 import SmtpSettings from "./pages/SmtpSettings";
+import CampaignCreate from "./pages/CampaignCreate";
+import Campaigns from "./pages/Campaigns";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +35,8 @@ const App = () => (
           <Route path="/sequences" element={<SequencesNEW />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/leads" element={<Leads />} />
+          <Route path="/campaigns" element={<Campaigns />} />
+          <Route path="/campaigns/create" element={<CampaignCreate />} />
           <Route path="/email-activity" element={<EmailActivity />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/smtp-settings" element={<SmtpSettings />} />

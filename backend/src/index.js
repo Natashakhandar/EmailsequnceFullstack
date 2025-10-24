@@ -19,6 +19,7 @@ const emailMonitoringRouter = require('./routes/emailMonitoring');
 const profileRouter = require('./routes/profile');
 const dashboardRouter = require('./routes/dashboard');
 const reportsRouter = require('./routes/reports');
+const campaignsRouter = require('./routes/campaigns');
 
 // Import scheduler
 const { startScheduler } = require('./jobs/scheduler');
@@ -84,6 +85,7 @@ app.use('/api/email-monitoring', emailMonitoringRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/campaigns', campaignsRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -105,7 +107,8 @@ app.get('/', (req, res) => {
       emailMonitoring: '/api/email-monitoring',
       profile: '/api/profile',
       dashboard: '/api/dashboard',
-      reports: '/api/reports'
+      reports: '/api/reports',
+      campaigns: '/api/campaigns'
     }
   });
 });

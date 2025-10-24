@@ -42,6 +42,7 @@ model Contact {
   // Relations
   enrollments Enrollment[]
   events      Event[]
+  campaignLeads CampaignLead[]
 
   @@map("contacts")
 }
@@ -75,6 +76,7 @@ model Sequence {
   enrollments Enrollment[]
   trigger     SequenceTrigger?
   user        User?    @relation(fields: [userId], references: [id])
+  campaigns   Campaign[]
 
   @@map("sequences")
 }
@@ -111,6 +113,7 @@ model Enrollment {
   id          String   @id @default(cuid())
   contactId   String
   sequenceId  String
+  campaignId  String?  // Link enrollments to campaigns
   currentStep Int      @default(1)
   lastSentStep Int?    // Track the last step that was actually sent
   nextSendAt  DateTime?
@@ -123,6 +126,7 @@ model Enrollment {
   // Relations
   contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   sequence    Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   events      Event[]
 
   @@unique([contactId, sequenceId])
@@ -133,6 +137,7 @@ model Event {
   id           String    @id @default(cuid())
   enrollmentId String
   contactId    String
+  campaignId   String?   // Link events to campaigns
   type         EventType
   details      String?   // JSON string for additional data
   timestamp    DateTime  @default(now())
@@ -141,6 +146,7 @@ model Event {
   // Relations
   enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  campaign     Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@map("events")
 }
@@ -167,6 +173,40 @@ model SequenceTrigger {
   triggerStep SequenceStep @relation(fields: [triggerStepId], references: [id], onDelete: Cascade)
 
   @@map("sequence_triggers")
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  campaignName String
+  description String?  @db.Text
+  sequenceId  String
+  startDate   DateTime?
+  endDate     DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  sequence    Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  campaignLeads CampaignLead[]
+  enrollments Enrollment[]
+  events      Event[]
+
+  @@map("campaigns")
+}
+
+model CampaignLead {
+  id         String   @id @default(cuid())
+  campaignId String
+  contactId  String
+  createdAt  DateTime @default(now())
+
+  // Relations
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact    Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactId])
+  @@map("campaign_leads")
 }
 
 // Enums

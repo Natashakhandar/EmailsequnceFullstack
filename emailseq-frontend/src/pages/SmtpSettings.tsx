@@ -72,7 +72,7 @@ const SmtpSettings = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       <Navbar />
-      <main className="container mx-auto px-6 pt-24 pb-12 max-w-3xl">
+      <main className="container mx-auto px-6 pt-20 pb-12 max-w-3xl">
         <h1 className="text-3xl font-bold mb-6">SMTP Settings</h1>
         <div className="glass rounded-2xl p-6 shadow-card space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -115,7 +115,7 @@ const EmailActivity = () => {
   const handleFilterChange = (key: keyof EmailActivityFilters, value: string) => {
     setFilters(prev => ({
       ...prev,
-      [key]: value || undefined
+      [key]: value === "all" ? undefined : value || undefined
     }));
     setPagination(prev => ({ ...prev, page: 1 }));
   };
@@ -259,7 +259,7 @@ const EmailActivity = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <main className="container mx-auto px-6 pt-24 pb-12">
+        <main className="container mx-auto px-6 pt-20 pb-12">
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             <span className="ml-2 text-gray-600">Loading email activity...</span>
@@ -273,7 +273,7 @@ const EmailActivity = () => {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
 
-      <main className="container mx-auto px-6 pt-24 pb-12">
+      <main className="container mx-auto px-6 pt-20 pb-12">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
@@ -348,12 +348,18 @@ const EmailActivity = () => {
                       <SelectValue placeholder="All contacts" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All contacts</SelectItem>
-                      {contacts.map((contact) => (
-                        <SelectItem key={contact.id} value={contact.id}>
-                          {getContactName(contact.id)} ({contact.email})
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="all">All contacts</SelectItem>
+                      {contacts.map((contact) => {
+                        if (!contact.id) {
+                          console.warn('Skipping contact with missing ID:', contact);
+                          return null;
+                        }
+                        return (
+                          <SelectItem key={contact.id} value={String(contact.id)}>
+                            {getContactName(contact.id)} ({contact.email})
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -370,12 +376,18 @@ const EmailActivity = () => {
                       <SelectValue placeholder="All sequences" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All sequences</SelectItem>
-                      {sequences.map((sequence) => (
-                        <SelectItem key={sequence.id} value={sequence.id}>
-                          {sequence.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="all">All sequences</SelectItem>
+                      {sequences.map((sequence) => {
+                        if (!sequence.id) {
+                          console.warn('Skipping sequence with missing ID:', sequence);
+                          return null;
+                        }
+                        return (
+                          <SelectItem key={sequence.id} value={String(sequence.id)}>
+                            {sequence.name}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -392,15 +404,13 @@ const EmailActivity = () => {
                       <SelectValue placeholder="All statuses" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All statuses</SelectItem>
+                      <SelectItem value="all">All statuses</SelectItem>
                       <SelectItem value="SENT">Sent</SelectItem>
                       <SelectItem value="DELIVERED">Delivered</SelectItem>
                       <SelectItem value="OPENED">Opened</SelectItem>
                       <SelectItem value="CLICKED">Clicked</SelectItem>
                       <SelectItem value="REPLIED">Replied</SelectItem>
                       <SelectItem value="BOUNCED">Bounced</SelectItem>
-                      <SelectItem value="FAILED">Failed</SelectItem>
-                      <SelectItem value="UNSUBSCRIBED">Unsubscribed</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LogOut, User, BarChart3, Mail, Users, FileText, Layers, Shield } from "lucide-react";
+import { LogOut, User, BarChart3, Mail, Users, FileText, Layers, Shield, Target } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +52,7 @@ const Navbar = () => {
   const baseNavLinks = [
     { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
     { to: "/leads", label: "Leads", icon: Users },
+    { to: "/campaigns", label: "Campaigns", icon: Target },
     { to: "/sequences", label: "Sequences", icon: Mail },
     { to: "/templates", label: "Templates", icon: FileText },
     { to: "/smtp-settings", label: "SMTP Settings", icon: Mail },
@@ -75,14 +76,14 @@ const Navbar = () => {
       animate={{ y: 0 }}
       className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/40 shadow-card"
     >
-      <div className="container mx-auto px-6 py-4">
-        <div className="flex items-center justify-between">
+      <div className="container mx-auto px-6 py-2">
+        <div className="flex items-center justify-between h-12">
           {/* Logo */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="text-2xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"
+            className="text-xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"
           >
             Arnav Sales Company
           </motion.div>
@@ -94,7 +95,7 @@ const Navbar = () => {
                 key={link.to}
                 to={link.to}
                 className={({ isActive }) =>
-                  `relative px-4 py-2 rounded-lg transition-smooth flex items-center gap-2 ${
+                  `relative px-3 py-1.5 rounded-lg transition-smooth flex items-center gap-2 ${
                     isActive
                       ? "text-primary"
                       : "text-muted-foreground hover:text-foreground"
@@ -126,7 +127,7 @@ const Navbar = () => {
                 whileTap={{ scale: 0.95 }}
                 className="focus:outline-none"
               >
-                <Avatar className="h-10 w-10 border-2 border-primary/20 cursor-pointer">
+                <Avatar className="h-8 w-8 border-2 border-primary/20 cursor-pointer">
                   <AvatarFallback className="gradient-primary text-white font-semibold">
                     {getUserInitials()}
                   </AvatarFallback>

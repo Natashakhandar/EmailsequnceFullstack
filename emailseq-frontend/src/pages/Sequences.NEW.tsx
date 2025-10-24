@@ -763,7 +763,7 @@ const SequencesNew: React.FC = () => {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -320, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed left-0 top-0 h-full w-80 bg-white border-r border-gray-200 shadow-xl z-40 pt-32"
+            className="fixed left-0 top-0 h-full w-80 bg-white border-r border-gray-200 shadow-xl z-40 pt-20"
           >
             <div className="p-6 h-full flex flex-col">
               <div className="flex items-center justify-between mb-6">
@@ -845,7 +845,7 @@ const SequencesNew: React.FC = () => {
       </AnimatePresence>
 
       {/* Main Content Container */}
-      <div className="pt-32">
+      <div className="pt-20">
         <motion.div 
           className="flex h-[calc(100vh-8rem)]"
           style={{ 
@@ -1445,11 +1445,17 @@ Line breaks will be preserved in the final email."
                                     <SelectContent>
                                       {steps
                                         .filter(step => step.id !== selectedStep)
-                                        .map((step, index) => (
-                                          <SelectItem key={step.id} value={step.id}>
-                                            Step {step.stepOrder}: {step.subject || 'Untitled'}
-                                          </SelectItem>
-                                        ))
+                                        .map((step, index) => {
+                                          if (!step.id) {
+                                            console.warn('Skipping step with missing ID:', step);
+                                            return null;
+                                          }
+                                          return (
+                                            <SelectItem key={step.id} value={String(step.id)}>
+                                              Step {step.stepOrder}: {step.subject || 'Untitled'}
+                                            </SelectItem>
+                                          );
+                                        })
                                       }
                                     </SelectContent>
                                   </Select>

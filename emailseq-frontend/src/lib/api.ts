@@ -94,6 +94,27 @@ export interface User {
   updatedAt: string;
 }
 
+export interface Campaign {
+  id: string;
+  campaignName: string;
+  description?: string;
+  sequenceId: string;
+  startDate?: string;
+  endDate?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  sequence?: Sequence;
+  leads?: Contact[];
+  stats?: {
+    totalLeads: number;
+    emailsSent: number;
+    emailsOpened: number;
+    emailsReplied: number;
+    emailsBounced: number;
+  };
+}
+
 
 export interface LoginResponse {
   message: string;
@@ -646,6 +667,76 @@ class ApiClient {
       }>;
       lastUpdated: string;
     }>('/reports/real-time-stats');
+  }
+
+  // Campaign Management API
+  async getCampaigns(params?: { page?: number; limit?: number; isActive?: boolean }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.isActive !== undefined) searchParams.append('isActive', params.isActive.toString());
+
+    const query = searchParams.toString();
+    return this.request<{ campaigns: Campaign[]; pagination: any }>(`/campaigns${query ? `?${query}` : ''}`);
+  }
+
+  async createCampaign(campaign: {
+    campaign_name: string;
+    description?: string;
+    sequence_id: string;
+    lead_ids: string[];
+    start_date?: string;
+    end_date?: string;
+  }) {
+    return this.request<Campaign>('/campaigns', {
+      method: 'POST',
+      body: JSON.stringify(campaign),
+    });
+  }
+
+  async getCampaign(id: string) {
+    return this.request<Campaign>(`/campaigns/${id}`);
+  }
+
+  async updateCampaign(id: string, updates: {
+    campaignName?: string;
+    description?: string;
+    leadIds?: string[];
+    startDate?: string;
+    endDate?: string;
+    isActive?: boolean;
+  }) {
+    return this.request<Campaign>(`/campaigns/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteCampaign(id: string) {
+    return this.request<void>(`/campaigns/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getCampaignStats(params?: { campaignId?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.campaignId) searchParams.append('campaignId', params.campaignId);
+
+    const query = searchParams.toString();
+    return this.request<{
+      campaigns: Array<{
+        campaignId: string;
+        campaignName: string;
+        emailsSent: number;
+        emailsOpened: number;
+        emailsReplied: number;
+        emailsBounced: number;
+        openRate: number;
+        replyRate: number;
+        bounceRate: number;
+      }>;
+      totalCampaigns: number;
+    }>(`/reports/campaign-analytics${query ? `?${query}` : ''}`);
   }
 
 }

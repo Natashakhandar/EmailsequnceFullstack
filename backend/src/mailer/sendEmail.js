@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { smtpConfig, emailConfig } = require('../config/smtp');
 const { replaceTokens } = require('../utils/tokenReplace');
 const prisma = require('../db/prismaClient');
+const { broadcastRealTimeEvent } = require('../services/socketService');
 
 // Enhanced HTML formatting function
 function enhanceHtmlFormatting(htmlContent) {
@@ -143,7 +144,8 @@ async function sendEmail({
   contactData = {}, 
   enrollmentId = null,
   contactId = null,
-  signature = null
+  signature = null,
+  campaignId = null
 }) {
   try {
     const transport = createTransporter();
@@ -260,6 +262,7 @@ async function sendEmail({
         data: {
           enrollmentId,
           contactId,
+          campaignId, // Include campaign ID for tracking
           type: 'SENT',
           emailId: messageId,
           details: JSON.stringify({
@@ -271,6 +274,17 @@ async function sendEmail({
             sentFrom: emailConfig.from.address
           })
         }
+      });
+
+      // Broadcast real-time event via socket
+      broadcastRealTimeEvent({
+        type: 'SENT',
+        campaignId,
+        contactId,
+        enrollmentId,
+        to,
+        subject: processedSubject,
+        timestamp: new Date().toISOString()
       });
     }
 
@@ -291,6 +305,7 @@ async function sendEmail({
           data: {
             enrollmentId,
             contactId,
+            campaignId, // Include campaign ID for tracking
             type: 'FAILED',
             details: JSON.stringify({
               to,
@@ -431,7 +446,8 @@ async function sendSequenceEmail(enrollment) {
       contactData,
       enrollmentId: enrollment.id,
       contactId: contact.id,
-      signature: userSignature
+      signature: userSignature,
+      campaignId: fullEnrollment.campaignId // Pass campaign ID for tracking
     });
 
     if (result.success) {

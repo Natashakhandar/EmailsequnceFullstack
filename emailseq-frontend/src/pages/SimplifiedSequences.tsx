@@ -274,7 +274,7 @@ const SimplifiedSequences = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <main className="container mx-auto px-6 pt-24 pb-12">
+        <main className="container mx-auto px-6 pt-20 pb-12">
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             <span className="ml-2 text-gray-600">Loading...</span>
@@ -288,7 +288,7 @@ const SimplifiedSequences = () => {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
 
-      <main className="container mx-auto px-6 pt-24 pb-12 max-w-4xl">
+      <main className="container mx-auto px-6 pt-20 pb-12 max-w-4xl">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
@@ -350,11 +350,17 @@ const SimplifiedSequences = () => {
                       <SelectValue placeholder="Choose a template..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {localDefaultTemplates.map((template) => (
-                        <SelectItem key={template.id} value={template.id}>
-                          {template.name}
-                        </SelectItem>
-                      ))}
+                      {localDefaultTemplates.map((template) => {
+                        if (!template.id) {
+                          console.warn('Skipping template with missing ID:', template);
+                          return null;
+                        }
+                        return (
+                          <SelectItem key={template.id} value={String(template.id)}>
+                            {template.name}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>

@@ -121,7 +121,7 @@ const Dashboard = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
         <Navbar />
-        <main className="container mx-auto px-6 pt-24 pb-12">
+        <main className="container mx-auto px-6 pt-20 pb-12">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
@@ -138,7 +138,7 @@ const Dashboard = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
         <Navbar />
-        <main className="container mx-auto px-6 pt-24 pb-12">
+        <main className="container mx-auto px-6 pt-20 pb-12">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="text-red-500 text-xl mb-4">⚠️</div>
@@ -166,7 +166,7 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       <Navbar />
       
-      <main className="container mx-auto px-6 pt-24 pb-12">
+      <main className="container mx-auto px-6 pt-20 pb-12">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

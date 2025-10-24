@@ -39,6 +39,7 @@ const Leads = () => {
     timezone: "UTC"
   });
 
+
   // Delete functionality state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
@@ -102,6 +103,7 @@ const Leads = () => {
       setLoadingSequences(false);
     }
   };
+
 
 
   const handleSelectContact = (contactId: string) => {
@@ -302,6 +304,7 @@ const Leads = () => {
     }
   };
 
+
   const getStatusBadge = (status: Contact["status"]) => {
     const variants = {
       ACTIVE: "bg-green-100 text-green-700 hover:bg-green-100",
@@ -328,7 +331,7 @@ const Leads = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       <Navbar />
 
-      <main className="container mx-auto px-6 pt-24 pb-12">
+      <main className="container mx-auto px-6 pt-20 pb-12">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -339,7 +342,7 @@ const Leads = () => {
             <div>
               <h1 className="text-4xl font-bold mb-2">Leads</h1>
               <p className="text-muted-foreground">
-                Manage your leads and track their status
+                Manage your leads and enroll them in email sequences
               </p>
             </div>
 
@@ -398,13 +401,19 @@ const Leads = () => {
                           </SelectTrigger>
                           <SelectContent>
                             {sequences.length > 0 ? (
-                              sequences.map((sequence) => (
-                                <SelectItem key={sequence.id} value={sequence.id}>
-                                  {sequence.name} ({sequence.steps?.length || 0} steps)
-                                </SelectItem>
-                              ))
+                              sequences.map((sequence) => {
+                                if (!sequence.id) {
+                                  console.warn('Skipping sequence with missing ID:', sequence);
+                                  return null;
+                                }
+                                return (
+                                  <SelectItem key={sequence.id} value={String(sequence.id)}>
+                                    {sequence.name} ({sequence.steps?.length || 0} steps)
+                                  </SelectItem>
+                                );
+                              })
                             ) : (
-                              <SelectItem value="" disabled>
+                              <SelectItem value="no-sequences" disabled>
                                 {loadingSequences ? "Loading..." : "No sequences available"}
                               </SelectItem>
                             )}
@@ -574,6 +583,15 @@ const Leads = () => {
           </div>
         </motion.div>
 
+        {/* Leads Content */}
+        {renderLeadsContent()}
+      </main>
+    </div>
+  );
+
+  function renderLeadsContent() {
+    return (
+      <>
         {/* Search Bar */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -797,9 +815,10 @@ const Leads = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </main>
-    </div>
-  );
+      </>
+    );
+  }
+
 };
 
 export default Leads;

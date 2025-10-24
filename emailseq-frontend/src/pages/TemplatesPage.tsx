@@ -178,7 +178,7 @@ const TemplatesPage = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       <Navbar />
       
-      <div className="pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <div className="pt-18 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
