@@ -234,6 +234,27 @@ class EmailMonitorService {
     }
   }
 
+  // Sanitize text content for safe JSON storage
+  sanitizeForJson(text) {
+    if (!text) return '';
+    
+    // Convert to string if not already
+    let sanitized = String(text);
+    
+    // Remove control characters (0x00-0x1F and 0x7F-0x9F) except newlines and tabs
+    sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+    
+    // Limit length to prevent oversized JSON (5000 chars for body content)
+    if (sanitized.length > 5000) {
+      sanitized = sanitized.substring(0, 5000) + '... [truncated]';
+    }
+    
+    // Normalize line endings
+    sanitized = sanitized.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    return sanitized;
+  }
+
   // Process and store reply emails
   async processReplyEmails() {
     try {
@@ -258,6 +279,13 @@ class EmailMonitorService {
           });
 
           if (!existingReply) {
+            // Sanitize email content before storing
+            const replyBody = this.sanitizeForJson(parsed.text || parsed.html || 'No content');
+            const replySubject = this.sanitizeForJson(parsed.subject || 'No Subject');
+            const replyFrom = this.sanitizeForJson(
+              parsed.from?.value?.[0]?.address || parsed.from?.text || 'Unknown'
+            );
+            
             // Create a new REPLIED event with the actual email content
             await prisma.event.create({
               data: {
@@ -267,11 +295,11 @@ class EmailMonitorService {
                 emailId: originalEvent.emailId,
                 details: JSON.stringify({
                   repliedAt: parsed.date || new Date().toISOString(),
-                  replySubject: parsed.subject || 'No Subject',
-                  replyBody: parsed.text || parsed.html || 'No content',
-                  replyFrom: parsed.from?.value?.[0]?.address || parsed.from?.text || 'Unknown',
-                  messageId: parsed.messageId,
-                  inReplyTo: parsed.inReplyTo,
+                  replySubject: replySubject,
+                  replyBody: replyBody,
+                  replyFrom: replyFrom,
+                  messageId: parsed.messageId || '',
+                  inReplyTo: parsed.inReplyTo || '',
                   source: 'imap_monitoring',
                   attachments: parsed.attachments?.length || 0
                 })

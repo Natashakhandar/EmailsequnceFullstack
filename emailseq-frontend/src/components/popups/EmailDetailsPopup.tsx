@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Event } from "@/lib/api";
+import { safeJsonParse } from "@/lib/utils";
 
 interface EmailDetailsPopupProps {
   event: Event;
@@ -63,20 +64,14 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
   const getEmailContent = () => {
     // Try to get email content from event details
     if (event.details) {
-      try {
-        const details = JSON.parse(event.details);
-        return {
-          subject: details.subject || 'Email Subject',
-          body: details.body || details.content || 'Email content not available'
-        };
-      } catch (e) {
-        console.warn('Failed to parse event details JSON:', e);
-        // Return fallback content on parsing error
-        return {
-          subject: 'Email Subject',
-          body: 'Email content not available (JSON parse error)'
-        };
-      }
+      const details = safeJsonParse<any>(event.details, {
+        subject: 'Email Subject',
+        body: 'Email content not available (JSON parse error)'
+      });
+      return {
+        subject: details.subject || 'Email Subject',
+        body: details.body || details.content || 'Email content not available'
+      };
     }
     
     // Fallback to sequence step template
@@ -102,13 +97,8 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
   const getReplyToEmail = () => {
     // Get reply-to email from event details
     if (event.details) {
-      try {
-        const details = JSON.parse(event.details);
-        return details.replyTo || details.sentFrom || null;
-      } catch (e) {
-        console.warn('Failed to parse event details for reply-to email:', e);
-        return null;
-      }
+      const details = safeJsonParse<any>(event.details, {});
+      return details.replyTo || details.sentFrom || null;
     }
     return null;
   };
@@ -119,24 +109,18 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
       return null;
     }
 
-    try {
-      const details = JSON.parse(event.details);
-      return {
-        replySubject: details.replySubject || details.subject || 'Reply Subject',
-        replyBody: details.replyBody || details.replyContent || details.content || 'Reply content not available',
-        repliedAt: details.repliedAt || event.timestamp,
-        replyFrom: details.replyFrom || event.contact?.email || 'Unknown sender'
-      };
-    } catch (e) {
-      console.warn('Failed to parse reply details JSON:', e);
-      // Return fallback reply content on parsing error
-      return {
-        replySubject: 'Reply Subject (JSON parse error)',
-        replyBody: 'Reply content not available due to data format error',
-        repliedAt: event.timestamp,
-        replyFrom: event.contact?.email || 'Unknown sender'
-      };
-    }
+    const details = safeJsonParse<any>(event.details, {});
+    
+    // Extract reply data with proper fallbacks
+    const replySubject = details.replySubject || details.subject;
+    const replyBody = details.replyBody || details.replyContent || details.content || details.body;
+    
+    return {
+      replySubject: replySubject || 'Reply Subject',
+      replyBody: replyBody || 'Reply content not available',
+      repliedAt: details.repliedAt || event.timestamp,
+      replyFrom: details.replyFrom || event.contact?.email || 'Unknown sender'
+    };
   };
 
   const copyToClipboard = async (text: string) => {

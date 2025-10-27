@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, RefreshCw, Eye, Filter, Calendar, Mail, User, Activity, Trash2, MessageCircle, Inbox } from "lucide-react";
 import { toast } from "sonner";
 import { api, Event, Contact, Sequence } from "@/lib/api";
+import { safeJsonParse } from "@/lib/utils"; // Import safeJsonParse
 import EmailDetailsPopup from "@/components/popups/EmailDetailsPopup";
 
 interface EmailActivityFilters {
@@ -181,13 +182,8 @@ const EmailActivity = () => {
   const hasReplyContent = (event: Event) => {
     if (event.type !== 'REPLIED' || !event.details) return false;
     
-    try {
-      const details = JSON.parse(event.details);
-      return !!(details.replyBody || details.replyContent || details.content);
-    } catch (e) {
-      console.warn('Failed to parse event details JSON for reply content check:', e);
-      return false;
-    }
+    const details = safeJsonParse<any>(event.details, {});
+    return !!(details.replyBody || details.replyContent || details.content);
   };
 
   const getStatusBadge = (event: Event) => {
@@ -235,12 +231,8 @@ const EmailActivity = () => {
   const getEmailSubject = (event: Event) => {
     // Try to get subject from event details or enrollment sequence steps
     if (event.details) {
-      try {
-        const details = JSON.parse(event.details);
-        if (details.subject) return details.subject;
-      } catch (e) {
-        console.warn('Failed to parse event details JSON for email subject:', e);
-      }
+      const details = safeJsonParse<{ subject?: string }>(event.details, {});
+      if (details.subject) return details.subject;
     }
     
     // Fallback to sequence step template subject
