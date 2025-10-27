@@ -202,16 +202,9 @@ const EmailActivity = () => {
     const config = statusConfig[type as keyof typeof statusConfig] || statusConfig.SENT;
     
     return (
-      <div className="flex items-center gap-2">
-        <Badge variant={config.variant} className={config.color}>
-          {type}
-        </Badge>
-        {type === 'REPLIED' && hasReplyContent(event) && (
-          <div title="Reply content available">
-            <MessageCircle className="w-4 h-4 text-emerald-600" />
-          </div>
-        )}
-      </div>
+      <Badge variant={config.variant} className={config.color}>
+        {type}
+      </Badge>
     );
   };
 

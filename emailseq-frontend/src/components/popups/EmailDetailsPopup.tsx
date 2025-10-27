@@ -61,6 +61,21 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
     return `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.email;
   };
 
+  const cleanReplyText = (text: string) => {
+    if (!text) return '';
+    
+    // Convert literal \n strings to actual newlines
+    let cleaned = text.replace(/\\n/g, '\n');
+    
+    // Remove email quote markers (>) at the start of lines
+    cleaned = cleaned.split('\n').map(line => line.replace(/^>\s*/, '')).join('\n');
+    
+    // Remove excessive newlines
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    
+    return cleaned.trim();
+  };
+
   const getEmailContent = () => {
     // Try to get email content from event details
     if (event.details) {
@@ -69,8 +84,8 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
         body: 'Email content not available (JSON parse error)'
       });
       return {
-        subject: details.subject || 'Email Subject',
-        body: details.body || details.content || 'Email content not available'
+        subject: cleanReplyText(details.subject || 'Email Subject'),
+        body: cleanReplyText(details.body || details.content || 'Email content not available')
       };
     }
     
@@ -116,8 +131,8 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
     const replyBody = details.replyBody || details.replyContent || details.content || details.body;
     
     return {
-      replySubject: replySubject || 'Reply Subject',
-      replyBody: replyBody || 'Reply content not available',
+      replySubject: cleanReplyText(replySubject || 'Reply Subject'),
+      replyBody: cleanReplyText(replyBody || 'Reply content not available'),
       repliedAt: details.repliedAt || event.timestamp,
       replyFrom: details.replyFrom || event.contact?.email || 'Unknown sender'
     };
@@ -338,6 +353,50 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
                               {copied ? 'Copied!' : 'Copy Email'}
                             </Button>
                           </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Open Tracking - Only show for OPENED events */}
+                  {event.type === 'OPENED' && event.details && (
+                    <>
+                      <Separator />
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+                          <Activity className="w-5 h-5 text-purple-600" />
+                          Email Opened
+                        </h3>
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Activity className="w-5 h-5 text-purple-600" />
+                            <span className="text-sm font-medium text-purple-800">
+                              This email was opened by the recipient
+                            </span>
+                          </div>
+                          {(() => {
+                            const details = safeJsonParse<any>(event.details, {});
+                            return (
+                              <div className="space-y-2 text-sm text-purple-900">
+                                {details.openedAt && (
+                                  <div>
+                                    <span className="font-medium">Opened at:</span> {formatDate(details.openedAt)}
+                                  </div>
+                                )}
+                                {details.userAgent && (
+                                  <div>
+                                    <span className="font-medium">Device:</span> {details.userAgent.substring(0, 100)}
+                                    {details.userAgent.length > 100 && '...'}
+                                  </div>
+                                )}
+                                {details.ip && (
+                                  <div>
+                                    <span className="font-medium">IP Address:</span> {details.ip}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </>

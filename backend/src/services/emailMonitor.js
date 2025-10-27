@@ -244,13 +244,25 @@ class EmailMonitorService {
     // Remove control characters (0x00-0x1F and 0x7F-0x9F) except newlines and tabs
     sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
     
+    // Convert literal \n strings to actual newlines (in case they exist)
+    sanitized = sanitized.replace(/\\n/g, '\n');
+    
+    // Remove email quote markers (>) at the start of lines
+    sanitized = sanitized.split('\n').map(line => line.replace(/^>\s*/, '')).join('\n');
+    
+    // Normalize line endings
+    sanitized = sanitized.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // Remove excessive newlines (more than 2 consecutive)
+    sanitized = sanitized.replace(/\n{3,}/g, '\n\n');
+    
+    // Trim whitespace
+    sanitized = sanitized.trim();
+    
     // Limit length to prevent oversized JSON (5000 chars for body content)
     if (sanitized.length > 5000) {
       sanitized = sanitized.substring(0, 5000) + '... [truncated]';
     }
-    
-    // Normalize line endings
-    sanitized = sanitized.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     
     return sanitized;
   }
