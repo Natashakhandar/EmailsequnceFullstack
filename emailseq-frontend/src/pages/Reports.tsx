@@ -1,15 +1,15 @@
 import { motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
-import { TrendingUp, Users, Mail, Activity, Target } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { TrendingUp, Users, Mail, Activity, Target, Eye, Reply, AlertCircle } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import io from "socket.io-client";
 
 const Reports = () => {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
-  const [campaignStats, setCampaignStats] = useState<any>(null);
+  const [campaignPerformanceData, setCampaignPerformanceData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [socket, setSocket] = useState<any>(null);
@@ -22,19 +22,19 @@ const Reports = () => {
       
       console.log('📊 Fetching reports data...');
       
-      const [analyticsResponse, campaignResponse] = await Promise.all([
+      const [analyticsResponse, performanceResponse] = await Promise.all([
         api.getReportsAnalytics().catch(err => {
           console.warn('Analytics API failed:', err.message);
           return null;
         }),
-        api.getCampaignStats().catch(err => {
-          console.warn('Campaign stats API failed:', err.message);
+        api.getReportsPerformanceTrends({ days: 30 }).catch(err => {
+          console.warn('Performance trends API failed:', err.message);
           return null;
         })
       ]);
       
       console.log('📊 Analytics response:', analyticsResponse);
-      console.log('📊 Campaign stats response:', campaignResponse);
+      console.log('📊 Performance response:', performanceResponse);
       
       // Validate and set analytics data
       if (analyticsResponse && typeof analyticsResponse === 'object') {
@@ -44,16 +44,16 @@ const Reports = () => {
         setAnalyticsData(null);
       }
       
-      // Validate and set campaign stats
-      if (campaignResponse && typeof campaignResponse === 'object') {
-        setCampaignStats(campaignResponse);
+      // Validate and set performance data
+      if (performanceResponse && typeof performanceResponse === 'object') {
+        setCampaignPerformanceData(performanceResponse);
       } else {
-        console.warn('Invalid campaign stats response:', campaignResponse);
-        setCampaignStats(null);
+        console.warn('Invalid performance response:', performanceResponse);
+        setCampaignPerformanceData(null);
       }
       
-      // If both requests failed, show error
-      if (!analyticsResponse && !campaignResponse) {
+      // If all requests failed, show error
+      if (!analyticsResponse && !performanceResponse) {
         setError('Unable to load reports data. Please check your connection and try again.');
       }
       
@@ -82,11 +82,11 @@ const Reports = () => {
     const socketConnection = io(import.meta.env.VITE_API_URL || 'http://localhost:3001');
     setSocket(socketConnection);
     
-    // Listen for campaign stats updates
-    socketConnection.on('campaignStatsUpdate', (data) => {
-      console.log('Received campaign stats update:', data);
+    // Listen for analytics updates
+    socketConnection.on('analyticsUpdate', (data) => {
+      console.log('Received analytics update:', data);
       if (data && typeof data === 'object') {
-        setCampaignStats(data);
+        setAnalyticsData(prev => prev ? { ...prev, ...data } : data);
       }
     });
     
@@ -124,20 +124,53 @@ const Reports = () => {
     { name: "Bounced", value: analyticsData.emailStatusDistribution.bounced || 0, color: "hsl(0 70% 60%)" },
   ] : [];
 
-  const campaignPerformanceData = campaignStats?.campaigns ? campaignStats.campaigns.slice(0, 5).map((campaign: any, index: number) => ({
-    name: campaign.campaignName || 'Unknown Campaign',
-    emailsSent: campaign.emailsSent || 0,
-    emailsOpened: campaign.emailsOpened || 0,
-    emailsReplied: campaign.emailsReplied || 0,
-    emailsBounced: campaign.emailsBounced || 0,
-    color: `hsl(${(index * 72) % 360} 70% 60%)`
-  })) : [];
+  // Prepare campaign analytics from /api/reports/analytics response
+  const campaignAnalytics = analyticsData?.campaignBreakdown || [];
+  
+  // Add debug logging for campaign analytics as requested
+  console.log("✅ Loaded campaign analytics:", analyticsData?.campaignBreakdown);
+  console.log("📊 Analytics data structure:", {
+    hasAnalyticsData: !!analyticsData,
+    hasCampaignBreakdown: !!analyticsData?.campaignBreakdown,
+    campaignBreakdownLength: analyticsData?.campaignBreakdown?.length || 0,
+    analyticsDataKeys: analyticsData ? Object.keys(analyticsData) : []
+  });
+  
+  // Enhanced debug logging for each campaign
+  if (campaignAnalytics.length > 0) {
+    console.log("📊 Individual campaign data:");
+    campaignAnalytics.forEach((campaign, index) => {
+      console.log(`Campaign ${index + 1}:`, {
+        name: campaign.name,
+        sent: campaign.sent,
+        opened: campaign.opened,
+        replied: campaign.replied,
+        bounced: campaign.bounced,
+        openRate: campaign.openRate,
+        replyRate: campaign.replyRate
+      });
+    });
+  } else {
+    console.warn("⚠️ No campaign analytics found. Check if:");
+    console.warn("- Backend /api/reports/analytics returns campaignBreakdown array");
+    console.warn("- Campaign data has correct field names: name, sent, opened, replied, bounced");
+  }
+  
+  // Prepare bar chart data for campaign performance using processed analytics
+  const campaignBarData = campaignAnalytics.slice(0, 5).map((campaign: any) => ({
+    name: campaign.name,
+    Sent: campaign.sent,
+    Opened: campaign.opened,
+    Replied: campaign.replied,
+    Bounced: campaign.bounced
+  }));
 
-  const campaignPieData = campaignStats?.campaigns ? [
-    { name: "Sent", value: campaignStats.campaigns.reduce((sum: number, c: any) => sum + (c.emailsSent || 0), 0), color: "hsl(var(--primary))" },
-    { name: "Opened", value: campaignStats.campaigns.reduce((sum: number, c: any) => sum + (c.emailsOpened || 0), 0), color: "hsl(var(--secondary))" },
-    { name: "Replied", value: campaignStats.campaigns.reduce((sum: number, c: any) => sum + (c.emailsReplied || 0), 0), color: "hsl(var(--accent))" },
-    { name: "Bounced", value: campaignStats.campaigns.reduce((sum: number, c: any) => sum + (c.emailsBounced || 0), 0), color: "hsl(0 70% 60%)" },
+  // Use processed campaign analytics for pie chart data
+  const campaignPieData = campaignAnalytics.length > 0 ? [
+    { name: "Sent", value: campaignAnalytics.reduce((sum: number, c: any) => sum + c.sent, 0), color: "hsl(var(--primary))" },
+    { name: "Opened", value: campaignAnalytics.reduce((sum: number, c: any) => sum + c.opened, 0), color: "hsl(var(--secondary))" },
+    { name: "Replied", value: campaignAnalytics.reduce((sum: number, c: any) => sum + c.replied, 0), color: "hsl(var(--accent))" },
+    { name: "Bounced", value: campaignAnalytics.reduce((sum: number, c: any) => sum + c.bounced, 0), color: "hsl(0 70% 60%)" },
   ] : [];
 
   if (loading) {
@@ -183,9 +216,17 @@ const Reports = () => {
   }
 
   // Check if we have any data to display
-  const hasData = analyticsData || campaignStats;
+  const hasData = analyticsData;
   const hasAnalyticsData = analyticsData && Object.keys(analyticsData).length > 0;
-  const hasCampaignData = campaignStats?.campaigns && campaignStats.campaigns.length > 0;
+  const hasCampaignData = campaignAnalytics.length > 0;
+  
+  // Debug logging for campaign data validation
+  console.log('📊 Campaign Analytics Debug:', {
+    rawCampaigns: analyticsData?.campaignBreakdown?.length || 0,
+    processedCampaigns: campaignAnalytics.length,
+    sampleCampaign: campaignAnalytics[0] || null,
+    hasCampaignData
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
@@ -233,7 +274,7 @@ const Reports = () => {
 
         {/* Metric Cards */}
         {hasAnalyticsData && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <MetricCard
               title="Total Campaigns"
               value={analyticsData?.totalCampaigns?.toString() || "0"}
@@ -242,20 +283,25 @@ const Reports = () => {
               delay={0.1}
             />
             <MetricCard
-              title="Total Leads"
-              value={analyticsData?.totalLeads?.toLocaleString() || "0"}
-              icon={Users}
-              trend="Total contacts enrolled"
+              title="Total Emails"
+              value={analyticsData?.emailStatusDistribution?.sent?.toLocaleString() || "0"}
+              icon={Activity}
+              trend="Emails sent"
+              delay={0.15}
+            />
+            <MetricCard
+              title="Opened"
+              value={analyticsData?.emailStatusDistribution?.opened?.toLocaleString() || "0"}
+              icon={Eye}
+              trend={`${analyticsData?.emailStatusDistribution?.sent > 0 ? (((analyticsData?.emailStatusDistribution?.opened || 0) / analyticsData.emailStatusDistribution.sent * 100).toFixed(1)) : '0'}% open rate`}
               delay={0.2}
             />
             <MetricCard
-              title="Avg. Response Rate"
-              value={`${analyticsData?.avgResponseRate?.toFixed(1) || '0'}%`}
-              icon={TrendingUp}
-              percentage={`${analyticsData?.avgResponseRate?.toFixed(1) || '0'}%`}
-              total={`${analyticsData?.emailStatusDistribution?.replied || 0} of ${analyticsData?.emailStatusDistribution?.sent || 0} responded`}
-              trend={`Bounce rate: ${analyticsData?.bounceRate?.toFixed(1) || '0'}%`}
-              delay={0.3}
+              title="Replied"
+              value={analyticsData?.emailStatusDistribution?.replied?.toLocaleString() || "0"}
+              icon={Reply}
+              trend={`${analyticsData?.avgResponseRate?.toFixed(1) || '0'}% reply rate`}
+              delay={0.25}
             />
           </div>
         )}
@@ -310,7 +356,7 @@ const Reports = () => {
             </ResponsiveContainer>
           </motion.div>
 
-          {/* Campaign Performance */}
+          {/* Campaign Performance Bar Chart */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -321,49 +367,55 @@ const Reports = () => {
               <Target className="w-5 h-5" />
               Campaign Performance
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={campaignPieData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value, percent }) =>
-                    `${name}: ${(percent * 100).toFixed(0)}% (${value})`
-                  }
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                  animationDuration={1000}
-                  animationBegin={0}
-                >
-                  {campaignPieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "0.75rem",
-                    padding: "12px",
-                    boxShadow: "var(--shadow-card)",
-                  }}
-                  formatter={(value: number, name: string, props: any) => {
-                    const total = campaignPieData.reduce((sum, item) => sum + item.value, 0);
-                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
-                    return [`${percentage}% – ${value} of ${total} emails`, name];
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 500 }} />
-              </PieChart>
-            </ResponsiveContainer>
+            {campaignBarData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={campaignBarData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                    interval={0}
+                  />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "0.75rem",
+                      padding: "12px",
+                      boxShadow: "var(--shadow-card)",
+                    }}
+                    formatter={(value: number, name: string) => [
+                      `${value} emails`,
+                      name
+                    ]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 500 }} />
+                  <Bar dataKey="Sent" fill="hsl(var(--primary))" name="Sent" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Opened" fill="hsl(var(--secondary))" name="Opened" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Replied" fill="hsl(var(--accent))" name="Replied" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Bounced" fill="hsl(0 70% 60%)" name="Bounced" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-64 text-muted-foreground">
+                <div className="text-center">
+                  <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">No campaign data yet</p>
+                  <p className="text-sm">Create and run campaigns to see performance metrics</p>
+                </div>
+              </div>
+            )}
           </motion.div>
           </div>
         )}
 
         {/* Campaign Stats Table */}
-        {hasCampaignData && (
+        {hasCampaignData ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -388,25 +440,73 @@ const Reports = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {campaignStats.campaigns.slice(0, 10).map((campaign: any, index: number) => (
-                    <motion.tr
-                      key={campaign.campaignId}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.8 + index * 0.05 }}
-                      className="border-b border-border/30 hover:bg-muted/30 transition-smooth"
-                    >
-                      <td className="py-3 px-2 font-medium">{campaign.campaignName || 'Unknown Campaign'}</td>
-                      <td className="py-3 px-2 text-center">{campaign.emailsSent || 0}</td>
-                      <td className="py-3 px-2 text-center">{campaign.emailsOpened || 0}</td>
-                      <td className="py-3 px-2 text-center">{campaign.emailsReplied || 0}</td>
-                      <td className="py-3 px-2 text-center">{campaign.emailsBounced || 0}</td>
-                      <td className="py-3 px-2 text-center">{campaign.openRate?.toFixed(1) || '0.0'}%</td>
-                      <td className="py-3 px-2 text-center">{campaign.replyRate?.toFixed(1) || '0.0'}%</td>
-                    </motion.tr>
-                  ))}
+                  {campaignAnalytics.slice(0, 10).map((campaign: any, index: number) => {
+                    return (
+                      <motion.tr
+                        key={campaign.campaignId || `campaign-${index}`}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.8 + index * 0.05 }}
+                        className="border-b border-border/30 hover:bg-muted/30 transition-all duration-200 cursor-pointer group"
+                        title={`Click for ${campaign.name} details`}
+                      >
+                        <td className="py-3 px-2 font-medium group-hover:text-primary transition-colors">
+                          {campaign.name || 'Unknown Campaign'}
+                        </td>
+                        <td className="py-3 px-2 text-center font-medium">
+                          {campaign.sent ?? 0}
+                        </td>
+                        <td className="py-3 px-2 text-center">
+                          <span className={(campaign.opened ?? 0) > 0 ? 'text-secondary font-medium' : ''}>
+                            {campaign.opened ?? 0}
+                          </span>
+                        </td>
+                        <td className="py-3 px-2 text-center">
+                          <span className={(campaign.replied ?? 0) > 0 ? 'text-accent font-medium' : ''}>
+                            {campaign.replied ?? 0}
+                          </span>
+                        </td>
+                        <td className="py-3 px-2 text-center">
+                          <span className={(campaign.bounced ?? 0) > 0 ? 'text-destructive font-medium' : ''}>
+                            {campaign.bounced ?? 0}
+                          </span>
+                        </td>
+                        <td className="py-3 px-2 text-center font-medium">
+                          <span className={(campaign.openRate ?? 0) > 0 ? 'text-secondary' : 'text-muted-foreground'}>
+                            {(campaign.openRate ?? 0).toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-2 text-center font-medium">
+                          <span className={(campaign.replyRate ?? 0) > 0 ? 'text-accent' : 'text-muted-foreground'}>
+                            {(campaign.replyRate ?? 0).toFixed(1)}%
+                          </span>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
                 </tbody>
               </table>
+            </div>
+          </motion.div>
+        ) : hasAnalyticsData && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            className="mt-6 glass rounded-2xl p-6 shadow-card"
+          >
+            <div className="text-center py-8">
+              <AlertCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <h3 className="text-lg font-semibold mb-2">No campaign data yet</h3>
+              <p className="text-muted-foreground mb-4">
+                Create and run campaigns to see detailed performance breakdown
+              </p>
+              <button 
+                onClick={fetchAnalyticsData}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              >
+                Refresh Data
+              </button>
             </div>
           </motion.div>
         )}

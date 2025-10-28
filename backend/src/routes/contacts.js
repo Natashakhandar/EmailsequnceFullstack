@@ -148,25 +148,133 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/contacts/:id - Delete contact
+// DELETE /api/contacts/:id - Delete lead/contact and all related data safely
 router.delete('/:id', async (req, res) => {
   try {
-    const deletedId = req.params.id;
-    
-    await prisma.contact.delete({
-      where: { id: deletedId }
+    const { id } = req.params;
+
+    console.log('🗑️ Deleting lead/contact:', { contactId: id });
+
+    // Verify contact exists and get detailed information
+    const existingContact = await prisma.contact.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            enrollments: true,
+            events: true,
+            campaignLeads: true
+          }
+        }
+      }
     });
 
-    res.status(200).json({
-      message: "Lead deleted successfully",
-      deletedId: deletedId
+    if (!existingContact) {
+      return res.status(404).json({ 
+        error: 'Lead not found',
+        contactId: id
+      });
+    }
+
+    // Get detailed breakdown before deletion
+    const relatedData = {
+      enrollments: await prisma.enrollment.count({ where: { contactId: id } }),
+      events: await prisma.event.count({ where: { enrollmentId: { in: (await prisma.enrollment.findMany({ where: { contactId: id }, select: { id: true } })).map(e => e.id) } } }),
+      campaignLeads: await prisma.campaignLead.count({ where: { contactId: id } }),
+      directEvents: await prisma.event.count({ where: { contactId: id } })
+    };
+
+    console.log('📊 Lead deletion impact:', {
+      contactId: id,
+      email: existingContact.email,
+      name: `${existingContact.firstName || ''} ${existingContact.lastName || ''}`.trim(),
+      relatedData
     });
+
+    // Delete contact with comprehensive transaction
+    const deletionResult = await prisma.$transaction(async (tx) => {
+      // Step 1: Get all enrollments for this contact to find related events
+      const enrollments = await tx.enrollment.findMany({
+        where: { contactId: id },
+        select: { id: true }
+      });
+      const enrollmentIds = enrollments.map(e => e.id);
+
+      // Step 2: Delete all events related to this contact's enrollments
+      const deletedEnrollmentEvents = await tx.event.deleteMany({
+        where: { enrollmentId: { in: enrollmentIds } }
+      });
+
+      // Step 3: Delete any direct events for this contact
+      const deletedDirectEvents = await tx.event.deleteMany({
+        where: { contactId: id }
+      });
+
+      // Step 4: Delete all enrollments for this contact
+      const deletedEnrollments = await tx.enrollment.deleteMany({
+        where: { contactId: id }
+      });
+
+      // Step 5: Delete campaign lead relationships
+      const deletedCampaignLeads = await tx.campaignLead.deleteMany({
+        where: { contactId: id }
+      });
+
+      // Step 6: Delete the contact itself
+      const deletedContact = await tx.contact.delete({
+        where: { id }
+      });
+
+      return {
+        contact: deletedContact,
+        enrollmentEventsDeleted: deletedEnrollmentEvents.count,
+        directEventsDeleted: deletedDirectEvents.count,
+        enrollmentsDeleted: deletedEnrollments.count,
+        campaignLeadsDeleted: deletedCampaignLeads.count
+      };
+    });
+
+    console.log('✅ Lead deleted successfully:', {
+      contactId: id,
+      email: existingContact.email,
+      deletionStats: {
+        enrollmentEventsDeleted: deletionResult.enrollmentEventsDeleted,
+        directEventsDeleted: deletionResult.directEventsDeleted,
+        enrollmentsDeleted: deletionResult.enrollmentsDeleted,
+        campaignLeadsDeleted: deletionResult.campaignLeadsDeleted
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Lead deleted successfully',
+      deletedLead: {
+        id,
+        email: existingContact.email,
+        name: `${existingContact.firstName || ''} ${existingContact.lastName || ''}`.trim() || 'Unknown',
+        company: existingContact.company,
+        deletionStats: {
+          totalEventsDeleted: deletionResult.enrollmentEventsDeleted + deletionResult.directEventsDeleted,
+          enrollmentsDeleted: deletionResult.enrollmentsDeleted,
+          campaignAssociationsRemoved: deletionResult.campaignLeadsDeleted
+        }
+      }
+    });
+
   } catch (error) {
     if (error.code === 'P2025') {
-      return res.status(404).json({ error: 'Contact not found' });
+      return res.status(404).json({ 
+        success: false,
+        error: 'Lead not found',
+        contactId: req.params.id
+      });
     }
-    console.error('Error deleting contact:', error);
-    res.status(500).json({ message: 'Failed to delete lead' });
+    console.error('❌ Error deleting lead:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to delete lead',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

@@ -333,6 +333,15 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Validate ID parameter exists
+    if (!id || typeof id !== 'string' || id.trim().length === 0) {
+      console.error('❌ Invalid campaign ID parameter:', { id, type: typeof id });
+      return res.status(400).json({
+        error: 'Invalid campaign ID parameter',
+        details: 'Campaign ID must be a non-empty string'
+      });
+    }
+
     console.log('📊 Fetching campaign details:', { campaignId: id });
 
     const campaign = await getCampaignWithStats(id);
@@ -341,7 +350,41 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Campaign not found' });
     }
 
-    res.json({ campaign });
+    // Format response to match exact specification
+    const response = {
+      id: campaign.id,
+      campaignName: campaign.campaignName,
+      description: campaign.description || '',
+      isActive: campaign.isActive,
+      startDate: campaign.startDate,
+      endDate: campaign.endDate,
+      sequence: {
+        id: campaign.sequence?.id,
+        name: campaign.sequence?.name
+      },
+      leads: (campaign.leads || []).map(lead => ({
+        id: lead.id,
+        firstName: lead.firstName || '',
+        lastName: lead.lastName || '',
+        email: lead.email
+      })),
+      stats: {
+        totalEmailsSent: campaign.stats?.emails?.sent || 0,
+        totalOpened: campaign.stats?.emails?.opened || 0,
+        totalReplied: campaign.stats?.emails?.replied || 0,
+        totalBounced: campaign.stats?.emails?.bounced || 0
+      }
+    };
+
+    console.log('✅ Campaign details response formatted:', {
+      campaignId: response.id,
+      campaignName: response.campaignName,
+      leadsCount: response.leads.length,
+      sequenceName: response.sequence.name,
+      totalEmailsSent: response.stats.totalEmailsSent
+    });
+
+    res.json(response);
 
   } catch (error) {
     console.error('❌ Error fetching campaign:', error);
@@ -486,18 +529,29 @@ router.patch('/:id', async (req, res) => {
 });
 
 /**
- * DELETE /api/campaigns/:id - Delete campaign
+ * DELETE /api/campaigns/:id - Delete campaign and all related data safely
  */
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log('📊 Deleting campaign:', { campaignId: id });
+    // Validate ID parameter exists
+    if (!id || typeof id !== 'string' || id.trim().length === 0) {
+      console.error('❌ Invalid campaign ID parameter:', { id, type: typeof id });
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid campaign ID parameter',
+        details: 'Campaign ID must be a non-empty string'
+      });
+    }
 
-    // Verify campaign exists
+    console.log('🗑️ Deleting campaign:', { campaignId: id });
+
+    // Verify campaign exists and get detailed counts
     const existingCampaign = await prisma.campaign.findUnique({
       where: { id },
       include: {
+        sequence: { select: { id: true, name: true } },
         _count: {
           select: {
             campaignLeads: true,
@@ -509,50 +563,84 @@ router.delete('/:id', async (req, res) => {
     });
 
     if (!existingCampaign) {
-      return res.status(404).json({ error: 'Campaign not found' });
+      return res.status(404).json({ 
+        error: 'Campaign not found',
+        campaignId: id
+      });
     }
 
-    // Delete campaign with transaction (cascade will handle related records)
-    await prisma.$transaction(async (tx) => {
-      // Update enrollments to remove campaign association
-      await tx.enrollment.updateMany({
+    // Get detailed breakdown before deletion
+    const relatedData = {
+      campaignLeads: await prisma.campaignLead.count({ where: { campaignId: id } }),
+      enrollments: await prisma.enrollment.count({ where: { campaignId: id } }),
+      events: await prisma.event.count({ where: { campaignId: id } })
+    };
+
+    console.log('📊 Campaign deletion impact:', {
+      campaignId: id,
+      campaignName: existingCampaign.campaignName,
+      sequenceName: existingCampaign.sequence?.name,
+      relatedData
+    });
+
+    // Delete campaign with comprehensive transaction
+    const deletionResult = await prisma.$transaction(async (tx) => {
+      // Step 1: Delete all events associated with this campaign
+      const deletedEvents = await tx.event.deleteMany({
+        where: { campaignId: id }
+      });
+
+      // Step 2: Update enrollments to remove campaign association (preserve enrollments)
+      const updatedEnrollments = await tx.enrollment.updateMany({
         where: { campaignId: id },
         data: { campaignId: null }
       });
 
-      // Update events to remove campaign association
-      await tx.event.updateMany({
-        where: { campaignId: id },
-        data: { campaignId: null }
+      // Step 3: Delete campaign leads relationships
+      const deletedCampaignLeads = await tx.campaignLead.deleteMany({
+        where: { campaignId: id }
       });
 
-      // Delete campaign (cascade will delete campaign_leads)
-      await tx.campaign.delete({
+      // Step 4: Delete the campaign itself
+      const deletedCampaign = await tx.campaign.delete({
         where: { id }
       });
+
+      return {
+        campaign: deletedCampaign,
+        eventsDeleted: deletedEvents.count,
+        enrollmentsUpdated: updatedEnrollments.count,
+        campaignLeadsDeleted: deletedCampaignLeads.count
+      };
     });
 
     console.log('✅ Campaign deleted successfully:', {
       campaignId: id,
-      leadsAffected: existingCampaign._count.campaignLeads,
-      enrollmentsAffected: existingCampaign._count.enrollments,
-      eventsAffected: existingCampaign._count.events
+      campaignName: existingCampaign.campaignName,
+      deletionStats: {
+        eventsDeleted: deletionResult.eventsDeleted,
+        enrollmentsUpdated: deletionResult.enrollmentsUpdated,
+        campaignLeadsDeleted: deletionResult.campaignLeadsDeleted
+      }
+    });
+
+    // Broadcast stats update
+    broadcastGeneralStats({
+      totalCampaigns: await prisma.campaign.count({ where: { isActive: true } }),
+      totalLeads: await prisma.contact.count({ where: { status: 'ACTIVE' } }),
+      event: 'campaign_deleted'
     });
 
     res.json({
+      success: true,
       message: 'Campaign deleted successfully',
-      deletedCampaign: {
-        id,
-        campaignName: existingCampaign.campaignName,
-        leadsAffected: existingCampaign._count.campaignLeads,
-        enrollmentsAffected: existingCampaign._count.enrollments,
-        eventsAffected: existingCampaign._count.events
-      }
+      deletedId: id
     });
 
   } catch (error) {
     console.error('❌ Error deleting campaign:', error);
     res.status(500).json({
+      success: false,
       error: 'Failed to delete campaign',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -605,8 +693,27 @@ async function getCampaignWithStats(campaignId) {
   return {
     ...campaign,
     stats,
-    leads: campaign.campaignLeads.map(cl => cl.contact)
+    leads: campaign.campaignLeads.map(cl => cl.contact),
+    // Add status calculation for frontend
+    status: calculateCampaignStatus(campaign)
   };
+}
+
+/**
+ * Helper function to calculate campaign status
+ */
+function calculateCampaignStatus(campaign) {
+  const now = new Date();
+  
+  if (!campaign.isActive) {
+    return 'Inactive';
+  } else if (campaign.endDate && now > new Date(campaign.endDate)) {
+    return 'Completed';
+  } else if (campaign.startDate && now < new Date(campaign.startDate)) {
+    return 'Upcoming';
+  } else {
+    return 'Active';
+  }
 }
 
 /**

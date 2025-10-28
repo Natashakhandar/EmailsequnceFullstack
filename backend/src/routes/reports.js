@@ -10,12 +10,15 @@ router.get('/analytics', async (req, res) => {
   try {
     const { startDate, endDate, sequenceId, campaignId } = req.query;
 
-    console.log('📊 Fetching reports analytics with filters:', {
-      startDate,
-      endDate,
-      sequenceId,
-      campaignId
-    });
+    // Log analytics request (production-safe)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 Fetching reports analytics with filters:', {
+        startDate,
+        endDate,
+        sequenceId,
+        campaignId
+      });
+    }
 
     // Build where clause for filtering events
     const eventWhere = {};
@@ -35,10 +38,25 @@ router.get('/analytics', async (req, res) => {
       eventWhere.campaignId = campaignId;
     }
 
-    // Get event counts grouped by type
+    // Get event counts grouped by type (only events with campaignId for consistency)
     const eventStats = await prisma.event.groupBy({
       by: ['type'],
-      where: eventWhere,
+      where: {
+        ...eventWhere,
+        campaignId: { not: null } // Only count events associated with campaigns
+      },
+      _count: {
+        type: true
+      }
+    });
+
+    // Also get uncategorized events (without campaignId) for transparency
+    const uncategorizedEventStats = await prisma.event.groupBy({
+      by: ['type'],
+      where: {
+        ...eventWhere,
+        campaignId: null
+      },
       _count: {
         type: true
       }
@@ -46,6 +64,11 @@ router.get('/analytics', async (req, res) => {
 
     // Convert to object for easier access
     const eventCounts = eventStats.reduce((acc, stat) => {
+      acc[stat.type.toLowerCase()] = stat._count.type;
+      return acc;
+    }, {});
+
+    const uncategorizedEventCounts = uncategorizedEventStats.reduce((acc, stat) => {
       acc[stat.type.toLowerCase()] = stat._count.type;
       return acc;
     }, {});
@@ -63,10 +86,135 @@ router.get('/analytics', async (req, res) => {
     const avgResponseRate = totalEmailsSent > 0 ? ((totalReplied / totalEmailsSent) * 100) : 0;
     const bounceRate = totalEmailsSent > 0 ? ((totalBounced / totalEmailsSent) * 100) : 0;
 
-    // Get total campaigns (actual campaigns, not sequences)
-    const totalCampaigns = await prisma.campaign.count({
-      where: { isActive: true }
+    // Step 1: Get campaign basic info
+    const campaignBreakdown = await prisma.campaign.findMany({
+      where: { 
+        isActive: true,
+        ...(campaignId ? { id: campaignId } : {})
+      },
+      select: {
+        id: true,
+        campaignName: true,
+        description: true,
+        startDate: true,
+        endDate: true,
+        sequence: {
+          select: {
+            name: true
+          }
+        }
+      }
     });
+
+    // Log campaign data retrieval for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📋 Campaign data retrieved:', {
+        totalCampaigns: campaignBreakdown.length,
+        campaignsWithNames: campaignBreakdown.filter(c => c.campaignName && c.campaignName.trim()).length,
+        campaignsWithoutNames: campaignBreakdown.filter(c => !c.campaignName || !c.campaignName.trim()).length,
+        sampleCampaigns: campaignBreakdown.slice(0, 3).map(c => ({
+          id: c.id.slice(-8),
+          campaignName: c.campaignName,
+          hasSequence: !!c.sequence?.name,
+          sequenceName: c.sequence?.name
+        }))
+      });
+    }
+
+    // Step 2: Aggregate events by campaign_id and type with proper filtering
+    const campaignEventStats = await prisma.event.groupBy({
+      by: ['campaignId', 'type'],
+      where: {
+        campaignId: { in: campaignBreakdown.map(c => c.id) },
+        ...eventWhere
+      },
+      _count: {
+        type: true
+      }
+    });
+
+    // Log campaign event aggregation (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 Campaign event aggregation:', {
+        totalCampaigns: campaignBreakdown.length,
+        eventStatsCount: campaignEventStats.length,
+        sampleEventStats: campaignEventStats.slice(0, 3)
+      });
+    }
+
+    // Step 3: Build campaign stats with proper event counts
+    const campaignStats = campaignBreakdown.map(campaign => {
+      // Get events for this specific campaign
+      const campaignEvents = campaignEventStats.filter(stat => stat.campaignId === campaign.id);
+      
+      const eventCounts = campaignEvents.reduce((acc, stat) => {
+        const type = stat.type.toLowerCase();
+        acc[type] = stat._count.type;
+        return acc;
+      }, {});
+
+      const sent = eventCounts.sent || 0;
+      const opened = eventCounts.opened || 0;
+      const replied = eventCounts.replied || 0;
+      const bounced = eventCounts.bounced || 0;
+
+      // Ensure campaign name is never empty or null
+      const campaignName = campaign.campaignName?.trim() || `Campaign ${campaign.id.slice(-8)}`;
+
+      return {
+        id: campaign.id,
+        campaignName: campaignName,
+        name: campaignName, // Frontend-friendly alias
+        sequenceName: campaign.sequence?.name || 'Unknown Sequence',
+        description: campaign.description || '',
+        startDate: campaign.startDate,
+        endDate: campaign.endDate,
+        emailsSent: sent,
+        emailsOpened: opened,
+        emailsReplied: replied,
+        emailsBounced: bounced,
+        sent: sent, // Frontend-friendly alias
+        opened: opened, // Frontend-friendly alias
+        replied: replied, // Frontend-friendly alias
+        bounced: bounced, // Frontend-friendly alias
+        openRate: sent > 0 ? parseFloat(((opened / sent) * 100).toFixed(2)) : 0,
+        replyRate: sent > 0 ? parseFloat(((replied / sent) * 100).toFixed(2)) : 0,
+        bounceRate: sent > 0 ? parseFloat(((bounced / sent) * 100).toFixed(2)) : 0
+      };
+    });
+
+    const totalCampaigns = campaignBreakdown.length;
+
+    // Step 4: Verify totals match (sum of campaign stats should equal overall totals)
+    const campaignTotals = campaignStats.reduce((acc, campaign) => {
+      acc.sent += campaign.emailsSent;
+      acc.opened += campaign.emailsOpened;
+      acc.replied += campaign.emailsReplied;
+      acc.bounced += campaign.emailsBounced;
+      return acc;
+    }, { sent: 0, opened: 0, replied: 0, bounced: 0 });
+
+    // Log verification results (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Campaign Analytics Verification:', {
+        overallTotals: { sent: totalEmailsSent, opened: totalOpened, replied: totalReplied, bounced: totalBounced },
+        campaignTotals,
+        match: {
+          sent: campaignTotals.sent === totalEmailsSent,
+          opened: campaignTotals.opened === totalOpened,
+          replied: campaignTotals.replied === totalReplied,
+          bounced: campaignTotals.bounced === totalBounced
+        },
+        campaignAnalytics: campaignStats.map(c => ({
+          name: c.campaignName,
+          sent: c.emailsSent,
+          opened: c.emailsOpened,
+          replied: c.emailsReplied,
+          openRate: c.openRate,
+          replyRate: c.replyRate
+        }))
+      });
+    }
 
     // Get total leads (contacts)
     const totalLeads = await prisma.contact.count({
@@ -142,6 +290,9 @@ router.get('/analytics', async (req, res) => {
       // Monthly Summary
       monthlySummary,
       
+      // Campaign breakdown with actual names
+      campaignBreakdown: campaignStats,
+      
       // Metadata
       dateRange: {
         startDate: startDate || 'All time',
@@ -153,18 +304,64 @@ router.get('/analytics', async (req, res) => {
       // Raw event breakdown for debugging
       eventBreakdown: eventCounts,
       
+      // Uncategorized events (without campaignId)
+      uncategorizedEvents: {
+        sent: uncategorizedEventCounts.sent || 0,
+        opened: uncategorizedEventCounts.opened || 0,
+        replied: uncategorizedEventCounts.replied || 0,
+        bounced: uncategorizedEventCounts.bounced || 0,
+        clicked: uncategorizedEventCounts.clicked || 0,
+        delivered: uncategorizedEventCounts.delivered || 0
+      },
+      
       // Timestamp for real-time updates
       lastUpdated: new Date().toISOString()
     };
 
-    console.log('✅ Reports analytics compiled:', {
+    // Enhanced analytics data logging
+    console.log('✅ Analytics data generated:', {
       totalCampaigns,
       totalLeads,
       avgResponseRate: response.avgResponseRate,
       bounceRate: response.bounceRate,
       totalEmailsSent,
-      monthlyEmailsSent: monthlySummary.totalEmailsSent
+      monthlyEmailsSent: monthlySummary.totalEmailsSent,
+      campaignsWithValidNames: campaignStats.filter(c => !c.campaignName.startsWith('Campaign ')).length,
+      campaignBreakdown: campaignStats.map(c => ({
+        name: c.name,
+        sent: c.sent,
+        opened: c.opened,
+        replied: c.replied,
+        bounced: c.bounced,
+        openRate: c.openRate,
+        replyRate: c.replyRate,
+        bounceRate: c.bounceRate
+      }))
     });
+
+    // Additional detailed logging for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Detailed Campaign Analytics:', {
+        rawCampaignCount: campaignBreakdown.length,
+        processedCampaignCount: campaignStats.length,
+        sampleCampaignData: campaignStats.slice(0, 2).map(c => ({
+          id: c.id,
+          originalName: campaignBreakdown.find(orig => orig.id === c.id)?.campaignName,
+          processedName: c.name,
+          hasSequence: !!c.sequenceName,
+          sequenceName: c.sequenceName,
+          metrics: {
+            sent: c.sent,
+            opened: c.opened,
+            replied: c.replied,
+            bounced: c.bounced,
+            openRate: c.openRate,
+            replyRate: c.replyRate,
+            bounceRate: c.bounceRate
+          }
+        }))
+      });
+    }
 
     res.json(response);
 
@@ -265,42 +462,66 @@ router.get('/performance-trends', async (req, res) => {
 
 /**
  * GET /api/reports/campaign-performance
- * Get performance metrics for individual campaigns/sequences
+ * Get performance metrics for individual campaigns (not sequences)
  */
 router.get('/campaign-performance', async (req, res) => {
   try {
     const { limit = 10 } = req.query;
 
-    // Get all active sequences with their performance metrics
-    const sequences = await prisma.sequence.findMany({
+    // Log performance request (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 Fetching campaign performance data with limit:', limit);
+    }
+
+    // Get all active campaigns with their performance metrics
+    const campaigns = await prisma.campaign.findMany({
       where: { isActive: true },
       select: {
         id: true,
-        name: true,
+        campaignName: true,
         description: true,
+        startDate: true,
+        endDate: true,
         createdAt: true,
-        enrollments: {
+        sequence: {
           select: {
             id: true,
-            status: true,
-            events: {
-              select: {
-                type: true
-              }
-            }
+            name: true,
+            description: true
+          }
+        },
+        _count: {
+          select: {
+            enrollments: true,
+            events: true
+          }
+        },
+        events: {
+          select: {
+            type: true
           }
         }
       },
-      take: parseInt(limit)
+      take: parseInt(limit),
+      orderBy: { createdAt: 'desc' }
     });
 
-    // Calculate performance for each sequence
-    const campaignPerformance = sequences.map(sequence => {
-      const events = sequence.enrollments.flatMap(enrollment => enrollment.events);
-      
-      const eventCounts = events.reduce((acc, event) => {
-        const type = event.type.toLowerCase();
-        acc[type] = (acc[type] || 0) + 1;
+    // Log campaign count (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`📊 Found ${campaigns.length} campaigns for performance analysis`);
+    }
+
+    // Calculate performance for each campaign using optimized approach
+    const campaignPerformance = await Promise.all(campaigns.map(async campaign => {
+      // Get event stats for this specific campaign
+      const eventStats = await prisma.event.groupBy({
+        by: ['type'],
+        where: { campaignId: campaign.id },
+        _count: { type: true }
+      });
+
+      const eventCounts = eventStats.reduce((acc, stat) => {
+        acc[stat.type.toLowerCase()] = stat._count.type;
         return acc;
       }, {});
 
@@ -308,26 +529,65 @@ router.get('/campaign-performance', async (req, res) => {
       const opened = eventCounts.opened || 0;
       const replied = eventCounts.replied || 0;
       const bounced = eventCounts.bounced || 0;
+      const clicked = eventCounts.clicked || 0;
+      const delivered = eventCounts.delivered || 0;
+
+      // Get active enrollments count for this campaign
+      const activeEnrollments = await prisma.enrollment.count({
+        where: { 
+          campaignId: campaign.id,
+          status: 'ACTIVE'
+        }
+      });
+
+      // Calculate status based on dates
+      const now = new Date();
+      let status = 'Active';
+      if (!campaign.isActive) {
+        status = 'Inactive';
+      } else if (campaign.endDate && now > new Date(campaign.endDate)) {
+        status = 'Completed';
+      } else if (campaign.startDate && now < new Date(campaign.startDate)) {
+        status = 'Upcoming';
+      }
 
       return {
-        id: sequence.id,
-        name: sequence.name,
-        description: sequence.description,
-        createdAt: sequence.createdAt,
-        totalEnrollments: sequence.enrollments.length,
-        activeEnrollments: sequence.enrollments.filter(e => e.status === 'ACTIVE').length,
+        id: campaign.id,
+        campaignName: campaign.campaignName || 'Unknown Campaign',
+        name: campaign.campaignName || 'Unknown Campaign', // Alias for backward compatibility
+        description: campaign.description || '',
+        sequenceName: campaign.sequence?.name || 'Unknown Sequence',
+        sequenceId: campaign.sequence?.id || null,
+        startDate: campaign.startDate,
+        endDate: campaign.endDate,
+        status: status,
+        createdAt: campaign.createdAt,
+        totalEnrollments: campaign._count?.enrollments || 0,
+        activeEnrollments: activeEnrollments,
         emailsSent: sent,
         emailsOpened: opened,
         repliesReceived: replied,
         emailsBounced: bounced,
+        emailsClicked: clicked,
+        emailsDelivered: delivered,
         openRate: sent > 0 ? parseFloat(((opened / sent) * 100).toFixed(2)) : 0,
         responseRate: sent > 0 ? parseFloat(((replied / sent) * 100).toFixed(2)) : 0,
-        bounceRate: sent > 0 ? parseFloat(((bounced / sent) * 100).toFixed(2)) : 0
+        bounceRate: sent > 0 ? parseFloat(((bounced / sent) * 100).toFixed(2)) : 0,
+        clickRate: sent > 0 ? parseFloat(((clicked / sent) * 100).toFixed(2)) : 0
       };
-    });
+    }));
 
     // Sort by response rate (best performing first)
     campaignPerformance.sort((a, b) => b.responseRate - a.responseRate);
+
+    // Log compilation results (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ Campaign performance data compiled:', {
+        totalCampaigns: campaignPerformance.length,
+        campaignsWithNames: campaignPerformance.filter(c => c.campaignName !== 'Unknown Campaign').length,
+        topCampaign: campaignPerformance[0]?.campaignName || 'None'
+      });
+    }
 
     res.json({
       campaigns: campaignPerformance,
@@ -442,10 +702,13 @@ router.get('/campaign-analytics', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
-    console.log('📊 Fetching campaign analytics with filters:', {
-      startDate,
-      endDate
-    });
+    // Log campaign analytics request (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 Fetching campaign analytics with filters:', {
+        startDate,
+        endDate
+      });
+    }
 
     // Build where clause for filtering
     const where = {};
@@ -503,16 +766,31 @@ router.get('/campaign-analytics', async (req, res) => {
         const replied = eventCounts.replied || 0;
         const bounced = eventCounts.bounced || 0;
 
+        // Calculate status based on dates and isActive flag
+        const now = new Date();
+        let status = 'Active';
+        if (!campaign.isActive) {
+          status = 'Inactive';
+        } else if (campaign.endDate && now > new Date(campaign.endDate)) {
+          status = 'Completed';
+        } else if (campaign.startDate && now < new Date(campaign.startDate)) {
+          status = 'Upcoming';
+        }
+
         return {
           id: campaign.id,
-          name: campaign.campaignName,
-          sequenceName: campaign.sequence.name,
-          description: campaign.description,
+          campaignName: campaign.campaignName || 'Unknown Campaign',
+          name: campaign.campaignName || 'Unknown Campaign', // Alias for backward compatibility
+          sequenceName: campaign.sequence?.name || 'Unknown Sequence',
+          sequenceId: campaign.sequence?.id || null,
+          description: campaign.description || '',
           startDate: campaign.startDate,
           endDate: campaign.endDate,
+          status: status,
+          isActive: campaign.isActive,
           createdAt: campaign.createdAt,
-          totalLeads: campaign._count.campaignLeads,
-          totalEnrollments: campaign._count.enrollments,
+          totalLeads: campaign._count?.campaignLeads || 0,
+          totalEnrollments: campaign._count?.enrollments || 0,
           stats: {
             totalSent: sent,
             opened: opened,
@@ -591,7 +869,13 @@ router.get('/campaign-analytics', async (req, res) => {
       totalCampaigns: response.totalCampaigns,
       totalLeads: response.summary.totalLeads,
       totalEmailsSent: response.summary.totalEmailsSent,
-      avgReplyRate: response.summary.avgReplyRate
+      avgReplyRate: response.summary.avgReplyRate,
+      campaignsWithNames: campaignStats.filter(c => c.campaignName !== 'Unknown Campaign').length,
+      topCampaigns: campaignStats.slice(0, 3).map(c => ({ 
+        name: c.campaignName, 
+        sent: c.stats.totalSent,
+        replyRate: c.stats.replyRate 
+      }))
     });
 
     res.json(response);

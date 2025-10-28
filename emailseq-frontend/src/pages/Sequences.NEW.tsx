@@ -845,9 +845,9 @@ const SequencesNew: React.FC = () => {
       </AnimatePresence>
 
       {/* Main Content Container */}
-      <div className="pt-20">
+      <div className="pt-32">
         <motion.div 
-          className="flex h-[calc(100vh-8rem)]"
+          className="flex min-h-[calc(100vh-8rem)]"
           style={{ 
             marginLeft: sidebarOpen ? '320px' : '0px'
           }}
@@ -858,13 +858,13 @@ const SequencesNew: React.FC = () => {
         >
 
           {/* Main Content Area */}
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex flex-1">
           {/* Steps Sidebar */}
           <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="w-80 bg-white border-r border-gray-200 flex flex-col shadow-sm"
+            className="w-80 bg-white border-r border-gray-200 flex flex-col shadow-sm min-h-[calc(100vh-8rem)]"
           >
             {/* Sidebar Header */}
             <motion.div 
@@ -885,7 +885,7 @@ const SequencesNew: React.FC = () => {
             </motion.div>
 
             {/* Steps List */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4 max-h-[calc(100vh-20rem)]">
               <div className="space-y-2">
                 <AnimatePresence mode="popLayout">
                   {steps.map((step, index) => {
@@ -1030,7 +1030,7 @@ const SequencesNew: React.FC = () => {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, delay: 0.2 }}
-            className="flex-1 flex flex-col bg-gray-50"
+            className="flex-1 flex flex-col bg-gray-50 min-h-[calc(100vh-8rem)]"
           >
             {/* Header with Tabs */}
             <motion.div 
@@ -1051,7 +1051,7 @@ const SequencesNew: React.FC = () => {
             </motion.div>
 
             {/* Main Content */}
-            <div className="flex-1 p-6 overflow-y-auto">
+            <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
               <AnimatePresence mode="wait">
                 {selectedStep ? (
               <motion.div
@@ -1073,9 +1073,9 @@ const SequencesNew: React.FC = () => {
                   scale: 0.95,
                   transition: { duration: 0.2 }
                 }}
-                className="max-w-4xl mx-auto"
+                className="max-w-4xl mx-auto pb-8"
               >
-                <Card className="shadow-xl border-0 bg-white/95 backdrop-blur-sm overflow-hidden">
+                <Card className="shadow-xl border-0 bg-white/95 backdrop-blur-sm overflow-visible mb-8">
                   <CardHeader className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-b border-slate-200">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <CardTitle className="flex items-center text-lg sm:text-xl">
@@ -1112,7 +1112,7 @@ const SequencesNew: React.FC = () => {
                     </div>
                   </CardHeader>
                   
-                  <CardContent className="p-8 space-y-8">
+                  <CardContent className="p-6 sm:p-8 space-y-6 sm:space-y-8">
                     {/* Template Selector */}
                     <motion.div
                       initial={{ opacity: 0, x: -20 }}
@@ -1645,7 +1645,7 @@ Line breaks will be preserved in the final email."
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.4 }}
-                      className="flex justify-between items-center pt-6 border-t border-gray-200"
+                      className="flex justify-between items-center pt-6 border-t border-gray-200 pb-4"
                     >
                       <div className="text-sm text-gray-500">
                         Changes are saved automatically

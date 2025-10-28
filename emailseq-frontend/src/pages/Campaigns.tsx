@@ -67,6 +67,15 @@ const Campaigns = () => {
   // Campaign details modal
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [campaignLeads, setCampaignLeads] = useState<Contact[]>([]);
+  const [loadingCampaignDetails, setLoadingCampaignDetails] = useState(false);
+  
+  // Delete confirmation states
+  const [showDeleteCampaignDialog, setShowDeleteCampaignDialog] = useState(false);
+  const [showDeleteLeadDialog, setShowDeleteLeadDialog] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState<Contact | null>(null);
+  const [deletingCampaign, setDeletingCampaign] = useState(false);
+  const [deletingLead, setDeletingLead] = useState(false);
   
   // Filters and search
   const [searchTerm, setSearchTerm] = useState("");
@@ -96,6 +105,139 @@ const Campaigns = () => {
     } finally {
       setLoadingCampaigns(false);
     }
+  };
+
+  const loadCampaignDetails = async (campaignId: string) => {
+    try {
+      setLoadingCampaignDetails(true);
+      console.log('🔍 Loading campaign details for ID:', campaignId);
+      
+      const campaign = await api.getCampaign(campaignId);
+      console.log('📊 Campaign data received:', {
+        id: campaign.id,
+        campaignName: campaign.campaignName,
+        isActive: campaign.isActive,
+        sequenceId: campaign.sequenceId,
+        leadsCount: campaign.leads?.length || 0,
+        hasSequence: !!campaign.sequence,
+        sequenceName: campaign.sequence?.name
+      });
+      
+      // Ensure we have the complete campaign data
+      if (!campaign.id || !campaign.campaignName) {
+        throw new Error('Invalid campaign data received from server');
+      }
+      
+      setSelectedCampaign(campaign);
+      setCampaignLeads(campaign.leads || []);
+      
+      console.log('✅ Campaign details loaded successfully:', {
+        campaignName: campaign.campaignName,
+        leadsCount: campaign.leads?.length || 0,
+        sequenceId: campaign.sequenceId,
+        status: campaign.isActive ? 'Active' : 'Inactive'
+      });
+    } catch (error: any) {
+      console.error('❌ Error loading campaign details:', error);
+      
+      if (error.status === 404) {
+        toast.error("Campaign not found. It may have been deleted.");
+        setShowDetailsModal(false);
+      } else {
+        toast.error(error.message || "Failed to load campaign details");
+      }
+      
+      // Reset states on error
+      setSelectedCampaign(null);
+      setCampaignLeads([]);
+    } finally {
+      setLoadingCampaignDetails(false);
+    }
+  };
+
+  const handleDeleteCampaign = async () => {
+    if (!selectedCampaign?.id) {
+      console.error('❌ No campaign selected for deletion');
+      toast.error("No campaign selected");
+      return;
+    }
+    
+    try {
+      setDeletingCampaign(true);
+      console.log('🗑️ Deleting campaign:', {
+        id: selectedCampaign.id,
+        name: selectedCampaign.campaignName
+      });
+      
+      await api.deleteCampaign(selectedCampaign.id);
+      
+      toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`);
+      
+      // Close all modals and reset states
+      setShowDeleteCampaignDialog(false);
+      setShowDetailsModal(false);
+      setSelectedCampaign(null);
+      setCampaignLeads([]);
+      
+      // Refresh the campaigns list
+      await loadCampaigns();
+      
+      console.log('✅ Campaign deleted and list refreshed');
+    } catch (error: any) {
+      console.error('❌ Error deleting campaign:', error);
+      
+      if (error.status === 404 || error.message?.includes('not found')) {
+        toast.error("Campaign not found. It may have already been deleted.");
+        // Close modals and refresh list even on 404
+        setShowDeleteCampaignDialog(false);
+        setShowDetailsModal(false);
+        setSelectedCampaign(null);
+        setCampaignLeads([]);
+        await loadCampaigns();
+      } else if (error.status === 403) {
+        toast.error("You don't have permission to delete this campaign.");
+      } else {
+        toast.error(error.message || "Failed to delete campaign. Please try again.");
+      }
+    } finally {
+      setDeletingCampaign(false);
+    }
+  };
+
+  const handleDeleteLead = async () => {
+    if (!leadToDelete) return;
+    
+    try {
+      setDeletingLead(true);
+      await api.deleteContact(leadToDelete.id);
+      toast.success("Lead deleted successfully");
+      
+      // Remove the lead from the local state immediately
+      setCampaignLeads(prev => prev.filter(lead => lead.id !== leadToDelete.id));
+      
+      setShowDeleteLeadDialog(false);
+      setLeadToDelete(null);
+    } catch (error: any) {
+      console.error("Error deleting lead:", error);
+      toast.error(error.message || "Failed to delete lead");
+    } finally {
+      setDeletingLead(false);
+    }
+  };
+
+  const handleViewCampaign = (campaign: Campaign) => {
+    console.log('👁️ Opening campaign details for:', {
+      id: campaign.id,
+      name: campaign.campaignName
+    });
+    
+    // Reset states before loading new data
+    setSelectedCampaign(null);
+    setCampaignLeads([]);
+    
+    // Open modal and load fresh data
+    setShowDetailsModal(true);
+    loadCampaignDetails(campaign.id);
   };
 
   const loadLeads = async () => {
@@ -459,10 +601,7 @@ const Campaigns = () => {
                           <TableCell>
                             <div className="flex items-center gap-1">
                               <Button
-                                onClick={() => {
-                                  setSelectedCampaign(campaign);
-                                  setShowDetailsModal(true);
-                                }}
+                                onClick={() => handleViewCampaign(campaign)}
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 w-8 p-0"
@@ -716,61 +855,325 @@ const Campaigns = () => {
       </Dialog>
 
       {/* Campaign Details Modal */}
-      <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-        <DialogContent className="sm:max-w-2xl glass-dark backdrop-blur-xl">
+      <AnimatePresence>
+        {showDetailsModal && (
+          <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
+            <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-white/95 backdrop-blur-lg shadow-2xl border border-white/30 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">Campaign Details</DialogTitle>
           </DialogHeader>
           
-          {selectedCampaign && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            {loadingCampaignDetails ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary mr-2" />
+                <span className="text-gray-600">Loading campaign details...</span>
+              </div>
+            ) : selectedCampaign ? (
             <div className="space-y-6 mt-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Campaign Name</Label>
-                  <p className="text-lg font-semibold">{selectedCampaign.campaignName}</p>
+              {/* Campaign Info */}
+              <div className="grid grid-cols-2 gap-6">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
+                  <Label className="text-sm font-medium text-gray-600">Campaign Name</Label>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{selectedCampaign.campaignName}</p>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Status</Label>
-                  <div className="mt-1">{getStatusBadge(selectedCampaign)}</div>
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border border-green-100">
+                  <Label className="text-sm font-medium text-gray-600">Status</Label>
+                  <div className="mt-2">{getStatusBadge(selectedCampaign)}</div>
                 </div>
               </div>
               
               {selectedCampaign.description && (
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Description</Label>
-                  <p className="mt-1">{selectedCampaign.description}</p>
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <Label className="text-sm font-medium text-gray-600">Description</Label>
+                  <p className="mt-2 text-gray-800 leading-relaxed">{selectedCampaign.description}</p>
                 </div>
               )}
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Start Date</Label>
-                  <p className="mt-1">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-xl border border-purple-100">
+                  <Label className="text-sm font-medium text-gray-600">Start Date</Label>
+                  <p className="mt-2 text-lg font-semibold text-gray-900">
                     {selectedCampaign.startDate 
-                      ? new Date(selectedCampaign.startDate).toLocaleDateString()
+                      ? new Date(selectedCampaign.startDate).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })
                       : "Not set"
                     }
                   </p>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">End Date</Label>
-                  <p className="mt-1">
+                <div className="bg-gradient-to-br from-orange-50 to-red-50 p-4 rounded-xl border border-orange-100">
+                  <Label className="text-sm font-medium text-gray-600">End Date</Label>
+                  <p className="mt-2 text-lg font-semibold text-gray-900">
                     {selectedCampaign.endDate 
-                      ? new Date(selectedCampaign.endDate).toLocaleDateString()
+                      ? new Date(selectedCampaign.endDate).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })
                       : "Not set"
                     }
                   </p>
                 </div>
               </div>
               
+              <div className="bg-gradient-to-br from-teal-50 to-cyan-50 p-4 rounded-xl border border-teal-100">
+                <Label className="text-sm font-medium text-gray-600">Email Sequence</Label>
+                <p className="mt-2 text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-teal-600" />
+                  {selectedCampaign.sequence?.name || 
+                   sequences.find(s => s.id === selectedCampaign.sequenceId)?.name || 
+                   `Sequence ID: ${selectedCampaign.sequenceId}` ||
+                   'Unknown Sequence'}
+                </p>
+                {selectedCampaign.sequence?.description && (
+                  <p className="mt-1 text-sm text-gray-600">
+                    {selectedCampaign.sequence.description}
+                  </p>
+                )}
+              </div>
+
+              {/* Leads Section */}
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex items-center justify-between mb-6">
+                  <Label className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <Users className="w-6 h-6 text-blue-600" />
+                    Campaign Leads ({campaignLeads.length})
+                  </Label>
+                </div>
+                
+                {loadingCampaignDetails ? (
+                  <div className="text-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-gray-600">Loading campaign leads...</p>
+                  </div>
+                ) : campaignLeads.length === 0 ? (
+                  <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-blue-50 rounded-2xl border border-gray-200">
+                    <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Leads Found</h3>
+                    <p className="text-gray-600">
+                      This campaign doesn't have any leads assigned yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Company</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="w-16">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {campaignLeads.map((lead) => (
+                          <TableRow key={lead.id} className="hover:bg-blue-50 transition-colors duration-200">
+                            <TableCell>
+                              <div className="font-medium">
+                                {`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'N/A'}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">{lead.email}</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">{lead.company || 'N/A'}</div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={lead.status === 'ACTIVE' ? 'default' : 'secondary'}
+                                className={lead.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : ''}
+                              >
+                                {lead.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                onClick={() => {
+                                  setLeadToDelete(lead);
+                                  setShowDeleteLeadDialog(true);
+                                }}
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                title="Delete Lead"
+                              >
+                                🗑️
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+                <Button
+                  onClick={() => setShowDetailsModal(false)}
+                  variant="outline"
+                  className="rounded-xl px-6 py-2 border-gray-300 hover:bg-gray-50 transition-colors"
+                >
+                  Close
+                </Button>
+                
+                <Button
+                  onClick={() => setShowDeleteCampaignDialog(true)}
+                  variant="destructive"
+                  className="rounded-xl px-6 py-2 bg-red-600 hover:bg-red-700 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Campaign
+                </Button>
+              </div>
+            </div>
+            ) : (
+              <div className="text-center py-12">
+                <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Campaign Not Found</h3>
+                <p className="text-gray-600 mb-4">Unable to load campaign details. The campaign may have been deleted.</p>
+                <Button
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    loadCampaigns();
+                  }}
+                  variant="outline"
+                  className="rounded-xl"
+                >
+                  Refresh Campaigns
+                </Button>
+              </div>
+            )}
+          </motion.div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Campaign Confirmation Dialog */}
+      <AnimatePresence>
+        {showDeleteCampaignDialog && (
+          <Dialog open={showDeleteCampaignDialog} onOpenChange={setShowDeleteCampaignDialog}>
+            <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-lg shadow-2xl border border-red-200 rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-red-700">Delete Campaign</DialogTitle>
+            </DialogHeader>
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-4 mt-4"
+            >
+              <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+                <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-red-800">Are you sure you want to delete this campaign?</p>
+                  <p className="text-sm text-red-600 mt-1">
+                    This action cannot be undone. The campaign "{selectedCampaign?.campaignName}" and all its associated data will be permanently deleted.
+                  </p>
+                  {campaignLeads.length > 0 && (
+                    <p className="text-xs text-red-500 mt-2">
+                      ⚠️ This will also remove {campaignLeads.length} lead{campaignLeads.length !== 1 ? 's' : ''} from this campaign.
+                    </p>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <Button
+                  onClick={() => setShowDeleteCampaignDialog(false)}
+                  variant="outline"
+                  disabled={deletingCampaign}
+                  className="rounded-xl px-6 py-2 border-gray-300 hover:bg-gray-50"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleDeleteCampaign}
+                  variant="destructive"
+                  disabled={deletingCampaign}
+                  className="rounded-xl px-6 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deletingCampaign ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Campaign
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Lead Confirmation Dialog */}
+      <Dialog open={showDeleteLeadDialog} onOpenChange={setShowDeleteLeadDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-destructive">Delete Lead</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            <div className="flex items-center gap-3 p-4 bg-destructive/10 rounded-xl">
+              <AlertCircle className="w-6 h-6 text-destructive flex-shrink-0" />
               <div>
-                <Label className="text-sm font-medium text-muted-foreground">Email Sequence</Label>
-                <p className="mt-1">
-                  {sequences.find(s => s.id === selectedCampaign.sequenceId)?.name || 'Unknown Sequence'}
+                <p className="font-medium text-destructive">Are you sure you want to delete this lead?</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  This will permanently delete "{leadToDelete?.firstName} {leadToDelete?.lastName}" ({leadToDelete?.email}) from the system.
                 </p>
               </div>
             </div>
-          )}
+            
+            <div className="flex items-center justify-end gap-3 pt-4">
+              <Button
+                onClick={() => {
+                  setShowDeleteLeadDialog(false);
+                  setLeadToDelete(null);
+                }}
+                variant="outline"
+                disabled={deletingLead}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDeleteLead}
+                variant="destructive"
+                disabled={deletingLead}
+              >
+                {deletingLead ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Lead
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

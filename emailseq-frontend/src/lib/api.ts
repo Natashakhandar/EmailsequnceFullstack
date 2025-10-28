@@ -592,6 +592,16 @@ class ApiClient {
         replied: number;
         bounced: number;
       };
+      campaignBreakdown: Array<{
+        name: string;
+        sent: number;
+        opened: number;
+        replied: number;
+        bounced: number;
+        openRate: number;
+        replyRate: number;
+        bounceRate: number;
+      }>;
       leadPerformance: {
         replied: number;
         inProgress: number;

@@ -74,6 +74,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/auth', authRouter);
 app.use('/api/contacts', contactsRouter);
+app.use('/api/leads', contactsRouter); // Alias for contacts (leads)
 app.use('/api/templates', templatesRouter);
 app.use('/api/sequences', sequencesRouter);
 app.use('/api/enrollments', enrollmentsRouter);
@@ -98,6 +99,7 @@ app.get('/', (req, res) => {
       health: '/health',
       auth: '/api/auth',
       contacts: '/api/contacts',
+      leads: '/api/leads',
       templates: '/api/templates',
       sequences: '/api/sequences',
       enrollments: '/api/enrollments',
