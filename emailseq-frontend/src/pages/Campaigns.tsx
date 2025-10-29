@@ -80,6 +80,7 @@ const Campaigns = () => {
   // Filters and search
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [leadsSearchTerm, setLeadsSearchTerm] = useState("");
 
   // Load data on component mount
   useEffect(() => {
@@ -164,14 +165,15 @@ const Campaigns = () => {
     
     try {
       setDeletingCampaign(true);
-      console.log('🗑️ Deleting campaign:', {
+      console.log('🗑 Deleting campaign:', {
         id: selectedCampaign.id,
         name: selectedCampaign.campaignName
       });
       
       await api.deleteCampaign(selectedCampaign.id);
       
-      toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`);
+toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`);
+
       
       // Close all modals and reset states
       setShowDeleteCampaignDialog(false);
@@ -226,7 +228,7 @@ const Campaigns = () => {
   };
 
   const handleViewCampaign = (campaign: Campaign) => {
-    console.log('👁️ Opening campaign details for:', {
+    console.log('👁 Opening campaign details for:', {
       id: campaign.id,
       name: campaign.campaignName
     });
@@ -357,6 +359,7 @@ const Campaigns = () => {
       
       toast.success("Campaign created successfully!");
       setShowCreateForm(false);
+      setLeadsSearchTerm(""); // Reset search term
       setFormData({
         campaignName: "",
         description: "",
@@ -365,9 +368,10 @@ const Campaigns = () => {
         startDate: "",
         endDate: ""
       });
+      setErrors({});
       
-      // Reload campaigns list
-      loadCampaigns();
+      // Refresh campaigns list
+      await loadCampaigns();
       
     } catch (error: any) {
       console.error("Error creating campaign:", error);
@@ -379,6 +383,7 @@ const Campaigns = () => {
 
   const handleShowCreateForm = () => {
     setShowCreateForm(true);
+    setLeadsSearchTerm(""); // Reset search term when opening modal
     loadLeads();
     loadSequences();
   };
@@ -403,6 +408,7 @@ const Campaigns = () => {
     return <Badge variant="default" className="bg-green-100 text-green-800">Active</Badge>;
   };
 
+  // Filter campaigns based on search and status
   const filteredCampaigns = campaigns.filter(campaign => {
     const matchesSearch = campaign.campaignName.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -506,7 +512,8 @@ const Campaigns = () => {
                     size="sm"
                     disabled={loadingCampaigns}
                   >
-                    <RefreshCw className={`w-4 h-4 ${loadingCampaigns ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 ${loadingCampaigns ? 'animate-spin' : ''}`} />
+
                   </Button>
                 </div>
               </div>
@@ -624,7 +631,11 @@ const Campaigns = () => {
 
       {/* Create Campaign Modal */}
       <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto glass-dark backdrop-blur-xl">
+       <DialogContent
+  className="sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-white shadow-2xl border border-gray-200 rounded-2xl"
+  style={{ backgroundColor: 'white' }}
+>
+
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">Create New Campaign</DialogTitle>
           </DialogHeader>
@@ -640,7 +651,8 @@ const Campaigns = () => {
                 value={formData.campaignName}
                 onChange={(e) => handleInputChange('campaignName', e.target.value)}
                 placeholder="e.g., Q1 Product Launch Campaign"
-                className={`rounded-xl ${errors.campaignName ? 'border-red-500' : ''}`}
+          className={`rounded-xl ${errors.campaignName ? 'border-red-500' : ''}`}
+
               />
               {errors.campaignName && (
                 <div className="flex items-center gap-2 text-sm text-red-600">
@@ -772,44 +784,90 @@ const Campaigns = () => {
                   </p>
                 </div>
               ) : (
-                <div className={`border rounded-xl p-4 max-h-[300px] overflow-y-auto ${errors.leadIds ? 'border-red-500' : ''}`}>
-                  {/* Select All */}
-                  <div className="flex items-center space-x-2 mb-3 pb-3 border-b">
-                    <Checkbox 
-                      checked={formData.leadIds.length === leads.length && leads.length > 0}
-                      onCheckedChange={handleSelectAllLeads}
+                <div className={`border rounded-xl p-4 max-h-[300px] overflow-y-auto bg-white ${errors.leadIds ? 'border-red-500' : ''}`}>
+                  {/* Search Bar */}
+                  <div className="mb-3 pb-3 border-b">
+                    <Input
+                      placeholder="Search leads..."
+                      value={leadsSearchTerm}
+                      onChange={(e) => setLeadsSearchTerm(e.target.value)}
+                      className="w-full"
                     />
-                    <Label className="text-sm font-medium">
-                      Select All Active Leads ({leads.length})
-                    </Label>
                   </div>
                   
-                  {/* Individual Leads */}
-                  <div className="space-y-2">
-                    {leads.map((lead) => (
-                      <div key={lead.id} className="flex items-center space-x-2 py-1">
-                        <Checkbox 
-                          checked={formData.leadIds.includes(lead.id)}
-                          onCheckedChange={() => handleLeadSelection(lead.id)}
-                        />
-                        <Label className="text-sm cursor-pointer flex-1">
-                          <div className="flex items-center justify-between">
-                            <span>
-                              {`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.email}
-                            </span>
-                            <span className="text-muted-foreground text-xs">
-                              {lead.email}
-                            </span>
-                          </div>
-                          {lead.company && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {lead.company}
+                  {(() => {
+                    // Filter leads based on search term
+                    const filteredLeads = leads.filter((lead) => {
+                      const searchLower = leadsSearchTerm.toLowerCase();
+                     const fullName = `${(lead.firstName || '')} ${(lead.lastName || '')}`.trim();
+
+                      return (
+                        fullName.toLowerCase().includes(searchLower) ||
+                        lead.email.toLowerCase().includes(searchLower) ||
+                        (lead.company && lead.company.toLowerCase().includes(searchLower))
+                      );
+                    });
+                    
+                    return (
+                      <>
+                        {/* Select All */}
+                        <div className="flex items-center space-x-2 mb-3 pb-3 border-b">
+                          <Checkbox 
+                            checked={filteredLeads.length > 0 && filteredLeads.every(lead => formData.leadIds.includes(lead.id))}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                // Add all filtered leads to selection
+                                const newLeadIds = [...new Set([...formData.leadIds, ...filteredLeads.map(lead => lead.id)])];
+                                setFormData(prev => ({ ...prev, leadIds: newLeadIds }));
+                              } else {
+                                // Remove all filtered leads from selection
+                                const filteredLeadIds = filteredLeads.map(lead => lead.id);
+                                const newLeadIds = formData.leadIds.filter(id => !filteredLeadIds.includes(id));
+                                setFormData(prev => ({ ...prev, leadIds: newLeadIds }));
+                              }
+                            }}
+                          />
+                          <Label className="text-sm font-medium">
+                            Select All {leadsSearchTerm ? 'Filtered' : 'Active'} Leads ({filteredLeads.length})
+                          </Label>
+                        </div>
+                        
+                        {/* Individual Leads */}
+                        <div className="space-y-2">
+                          {filteredLeads.length === 0 && leadsSearchTerm ? (
+                            <div className="text-center py-4 text-muted-foreground">
+                              <p>No leads found matching "{leadsSearchTerm}"</p>
                             </div>
+                          ) : (
+                            filteredLeads.map((lead) => (
+                              <div key={lead.id} className="flex items-center space-x-2 py-1">
+                                <Checkbox 
+                                  checked={formData.leadIds.includes(lead.id)}
+                                  onCheckedChange={() => handleLeadSelection(lead.id)}
+                                />
+                                <Label className="text-sm cursor-pointer flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <span>
+                                     {`${(lead.firstName || '')} ${(lead.lastName || '')}`.trim() || lead.email}
+
+                                    </span>
+                                    <span className="text-muted-foreground text-xs">
+                                      {lead.email}
+                                    </span>
+                                  </div>
+                                  {lead.company && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {lead.company}
+                                    </div>
+                                  )}
+                                </Label>
+                              </div>
+                            ))
                           )}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
               
@@ -826,7 +884,10 @@ const Campaigns = () => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setShowCreateForm(false)}
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setLeadsSearchTerm(""); // Reset search term when canceling
+                }}
                 className="rounded-xl"
               >
                 Cancel
@@ -858,7 +919,11 @@ const Campaigns = () => {
       <AnimatePresence>
         {showDetailsModal && (
           <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-            <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-white/95 backdrop-blur-lg shadow-2xl border border-white/30 rounded-2xl">
+          <DialogContent
+  className="sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-white shadow-xl border border-gray-200 rounded-2xl"
+  style={{ backgroundColor: 'white' }}
+>
+
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">Campaign Details</DialogTitle>
           </DialogHeader>
@@ -928,10 +993,10 @@ const Campaigns = () => {
                 <Label className="text-sm font-medium text-gray-600">Email Sequence</Label>
                 <p className="mt-2 text-lg font-semibold text-gray-900 flex items-center gap-2">
                   <Mail className="w-5 h-5 text-teal-600" />
-                  {selectedCampaign.sequence?.name || 
-                   sequences.find(s => s.id === selectedCampaign.sequenceId)?.name || 
-                   `Sequence ID: ${selectedCampaign.sequenceId}` ||
-                   'Unknown Sequence'}
+                 {selectedCampaign.sequence?.name ||
+ sequences.find((s) => s.id === selectedCampaign.sequenceId)?.name ||
+ `Sequence ID: ${selectedCampaign.sequenceId}` ||
+ 'Unknown Sequence'}
                 </p>
                 {selectedCampaign.sequence?.description && (
                   <p className="mt-1 text-sm text-gray-600">
@@ -979,7 +1044,8 @@ const Campaigns = () => {
                           <TableRow key={lead.id} className="hover:bg-blue-50 transition-colors duration-200">
                             <TableCell>
                               <div className="font-medium">
-                                {`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'N/A'}
+                              {`${(lead.firstName || '')} ${(lead.lastName || '')}`.trim() || 'N/A'}
+
                               </div>
                             </TableCell>
                             <TableCell>
@@ -1007,7 +1073,7 @@ const Campaigns = () => {
                                 className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                                 title="Delete Lead"
                               >
-                                🗑️
+                                🗑
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -1086,7 +1152,7 @@ const Campaigns = () => {
                   </p>
                   {campaignLeads.length > 0 && (
                     <p className="text-xs text-red-500 mt-2">
-                      ⚠️ This will also remove {campaignLeads.length} lead{campaignLeads.length !== 1 ? 's' : ''} from this campaign.
+                      ⚠ This will also remove {campaignLeads.length} lead{campaignLeads.length !== 1 ? 's' : ''} from this campaign.
                     </p>
                   )}
                 </div>
