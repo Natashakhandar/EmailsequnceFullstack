@@ -32,6 +32,7 @@
     "imap": "^0.8.19",
     "jsonwebtoken": "^9.0.2",
     "mailparser": "^3.7.5",
+    "mysql2": "^3.18.2",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.10.1",
     "pg": "^8.16.3",
