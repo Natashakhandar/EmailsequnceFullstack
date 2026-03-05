@@ -798,8 +798,8 @@ const SequencesNew: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       whileHover={{ scale: 1.02 }}
                       className={`p-4 rounded-xl cursor-pointer transition-all duration-200 border ${editingSequenceId === sequence.id
-                          ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                          : 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
+                        ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
                         }`}
                       onClick={() => loadSequence(sequence)}
                     >
@@ -813,8 +813,8 @@ const SequencesNew: React.FC = () => {
                           )}
                         </h4>
                         <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${sequence.isActive
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-600'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-600'
                           }`}>
                           {sequence.isActive ? 'Active' : 'Inactive'}
                         </span>
@@ -1282,12 +1282,36 @@ Line breaks will be preserved in the final email."
                               )}
                             </div>
 
-                            <div className="flex justify-between items-center mt-2">
+                            <div className="flex flex-wrap gap-2 mt-3 items-center">
+                              <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-1 rounded">Quick Insert:</span>
+                              {['{{firstName}}', '{{lastName}}', '{{email}}', '{{companyName}}'].map(tag => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={() => {
+                                    if (selectedStep) {
+                                      let currentBody = (steps.find(s => s.id === selectedStep)?.body || '').replace(/<br\s*\/?>/gi, '\n');
+                                      if (currentBody.length > 0 && !currentBody.endsWith(' ') && !currentBody.endsWith('\n')) {
+                                        currentBody += ' ';
+                                      }
+                                      currentBody += tag;
+                                      const htmlContent = currentBody.replace(/\n/g, '<br>');
+                                      updateStep(selectedStep, 'body', htmlContent);
+                                    }
+                                  }}
+                                  className="text-xs bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-md hover:bg-indigo-100 transition-colors border border-indigo-200 shadow-sm"
+                                >
+                                  +{tag.replace(/[{}]/g, '')}
+                                </button>
+                              ))}
+                            </div>
+
+                            <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
                               <p className="text-sm text-gray-500">
-                                Use personalization variables to make emails more engaging
+                                Variables pull details directly from the selected Leads/Contacts
                               </p>
-                              <span className="text-xs text-gray-400">
-                                {(steps.find(s => s.id === selectedStep)?.body || '').replace(/<br\s*\/?>/gi, '\n').length} characters
+                              <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-full">
+                                {(steps.find(s => s.id === selectedStep)?.body || '').replace(/<br\s*\/?>/gi, '\n').length} chars
                               </span>
                             </div>
 

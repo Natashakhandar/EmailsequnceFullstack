@@ -13,10 +13,10 @@ async function checkForReplies() {
   try {
     isRunning = true;
     console.log('🔍 Starting scheduled email reply check...');
-    
+
     const monitor = new EmailMonitorService();
     const processedCount = await monitor.processReplyEmails();
-    
+
     if (processedCount > 0) {
       console.log(`✅ Email monitoring: Found and processed ${processedCount} new replies`);
     } else {
@@ -32,9 +32,9 @@ async function checkForReplies() {
 // Start the email monitoring scheduler
 function startEmailMonitoring() {
   // Check if email monitoring is configured
-  const isConfigured = !!(process.env.IMAP_HOST || process.env.SMTP_HOST) && 
-                      !!(process.env.IMAP_USER || process.env.SMTP_USER) && 
-                      !!(process.env.IMAP_PASSWORD || process.env.SMTP_PASSWORD);
+  const isConfigured = !!(process.env.IMAP_HOST || process.env.SMTP_HOST) &&
+    !!(process.env.IMAP_USER || process.env.SMTP_USER) &&
+    !!(process.env.IMAP_PASSWORD || process.env.SMTP_PASSWORD);
 
   if (!isConfigured) {
     console.log('⚠️  Email monitoring not configured. Add IMAP credentials to .env file to enable automatic reply detection.');
@@ -42,7 +42,7 @@ function startEmailMonitoring() {
   }
 
   console.log('📧 Starting email monitoring scheduler...');
-  
+
   // Run every 5 minutes to check for new replies
   cron.schedule('*/5 * * * *', checkForReplies, {
     scheduled: true,
@@ -50,7 +50,7 @@ function startEmailMonitoring() {
   });
 
   console.log('✅ Email monitoring scheduler started (runs every 5 minutes)');
-  
+
   // Run initial check after 30 seconds
   setTimeout(() => {
     console.log('🚀 Running initial email reply check...');

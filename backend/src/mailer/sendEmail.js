@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const Imap = require('imap');
 const { v4: uuidv4 } = require('uuid');
 const { smtpConfig, emailConfig } = require('../config/smtp');
 const { replaceTokens } = require('../utils/tokenReplace');
@@ -31,7 +32,7 @@ function enhanceHtmlFormatting(htmlContent) {
 
   // Ensure proper paragraph spacing
   enhanced = enhanced.replace(/\n\n/g, '</p><p>');
-  
+
   // Convert single line breaks to <br> tags if not already HTML
   if (!enhanced.includes('<br') && !enhanced.includes('<p>')) {
     enhanced = enhanced.replace(/\n/g, '<br>');
@@ -120,7 +121,7 @@ async function verifyConnection() {
 async function generateUnsubscribeToken(contactId) {
   try {
     const token = uuidv4();
-    
+
     await prisma.unsubscribeToken.create({
       data: {
         token,
@@ -135,13 +136,84 @@ async function generateUnsubscribeToken(contactId) {
   }
 }
 
+// Save sent email to IMAP Sent folder
+async function saveToSentFolder(mailOptions) {
+  const imapHost = process.env.IMAP_HOST;
+  const imapUser = process.env.IMAP_USER || process.env.SMTP_USER;
+  const imapPass = process.env.IMAP_PASSWORD || process.env.SMTP_PASS;
+
+  if (!imapHost || !imapUser || !imapPass) {
+    return; // IMAP not configured, skip
+  }
+
+  return new Promise((resolve, reject) => {
+    const imap = new Imap({
+      user: imapUser,
+      password: imapPass,
+      host: imapHost,
+      port: parseInt(process.env.IMAP_PORT) || 993,
+      tls: true,
+      tlsOptions: { rejectUnauthorized: false },
+      authTimeout: 5000,
+      connTimeout: 10000
+    });
+
+    // Build raw email string
+    const fromStr = mailOptions.from.name
+      ? `"${mailOptions.from.name}" <${mailOptions.from.address}>`
+      : mailOptions.from.address;
+    const rawEmail = [
+      `From: ${fromStr}`,
+      `To: ${mailOptions.to}`,
+      `Subject: ${mailOptions.subject}`,
+      `Content-Type: text/html; charset=utf-8`,
+      `Date: ${new Date().toUTCString()}`,
+      mailOptions.headers?.['Message-ID'] ? `Message-ID: ${mailOptions.headers['Message-ID']}` : '',
+      '',
+      mailOptions.html || mailOptions.text || ''
+    ].filter(Boolean).join('\r\n');
+
+    imap.once('ready', () => {
+      // Try common Sent folder names
+      const sentFolders = ['Sent', 'INBOX.Sent', 'Sent Messages', 'Sent Items'];
+
+      const tryAppend = (index) => {
+        if (index >= sentFolders.length) {
+          imap.end();
+          return reject(new Error('No Sent folder found'));
+        }
+
+        imap.append(rawEmail, { mailbox: sentFolders[index], flags: ['Seen'] }, (err) => {
+          if (err) {
+            console.warn(`⚠️ Failed to append to ${sentFolders[index]}:`, err.message);
+            // Try next folder name
+            tryAppend(index + 1);
+          } else {
+            console.log('📤 Email saved to Sent folder');
+            imap.end();
+            resolve();
+          }
+        });
+      };
+
+      tryAppend(0);
+    });
+
+    imap.once('error', (err) => {
+      reject(err);
+    });
+
+    imap.connect();
+  });
+}
+
 // Send individual email
-async function sendEmail({ 
-  to, 
-  subject, 
-  htmlBody, 
-  textBody, 
-  contactData = {}, 
+async function sendEmail({
+  to,
+  subject,
+  htmlBody,
+  textBody,
+  contactData = {},
   enrollmentId = null,
   contactId = null,
   signature = null,
@@ -149,28 +221,29 @@ async function sendEmail({
 }) {
   try {
     const transport = createTransporter();
-    
+
     // CRITICAL LOGGING: Input validation
     console.log('📧 SENDMAIL INPUT VALIDATION');
     console.log('Sending email body length:', htmlBody?.length || 0);
     console.log('Sending email body type:', typeof htmlBody);
     console.log('To:', to);
     console.log('Has signature:', !!signature);
-    
-    // Replace tokens in subject and body
-    const processedSubject = replaceTokens(subject, contactData);
-    
+
+    // Replace tokens in subject and body (removeUnmatched: true so empty contact fields don't show raw tokens)
+    const tokenOptions = { removeUnmatched: true };
+    const processedSubject = replaceTokens(subject, contactData, tokenOptions);
+
     // Process email body: replace tokens and convert line breaks to <br> tags
-    let processedEmailBody = replaceTokens(htmlBody, contactData);
+    let processedEmailBody = replaceTokens(htmlBody, contactData, tokenOptions);
     console.log('After token replacement - body length:', processedEmailBody?.length || 0);
-    
+
     const formattedBody = processedEmailBody.replace(/\n/g, '<br>');
     console.log('After line break conversion - body length:', formattedBody?.length || 0);
-    
+
     // Process signature: replace tokens and convert line breaks to <br> tags
-    const formattedSignature = signature && signature.trim() ? 
-      replaceTokens(signature, contactData).replace(/\n/g, '<br>') : "";
-    
+    const formattedSignature = signature && signature.trim() ?
+      replaceTokens(signature, contactData, tokenOptions).replace(/\n/g, '<br>') : "";
+
     // Generate final email HTML with proper left alignment and structure
     const fullEmailHtml = `
       <div style="text-align:left; font-family:Arial, sans-serif; line-height:1.6; padding: 16px; max-width: 600px;">
@@ -178,15 +251,15 @@ async function sendEmail({
         ${formattedSignature ? `<br><br>${formattedSignature}` : ''}
       </div>
     `;
-    
+
     console.log('Final email HTML length:', fullEmailHtml?.length || 0);
     console.log('Final email contains signature:', fullEmailHtml.includes(formattedSignature));
-    
+
     let processedHtmlBody = fullEmailHtml;
-    
+
     // Generate text version from HTML if not provided (signature is already included in processedHtmlBody)
-    let processedTextBody = textBody ? 
-      replaceTokens(textBody, contactData) : 
+    let processedTextBody = textBody ?
+      replaceTokens(textBody, contactData, tokenOptions) :
       generateTextFromHtml(processedHtmlBody);
 
     // Generate unique Message-ID for tracking
@@ -195,7 +268,7 @@ async function sendEmail({
     // Add tracking pixel to HTML body if enrollmentId is provided
     if (enrollmentId && processedHtmlBody) {
       const trackingPixel = `<img src="${emailConfig.appUrl}/api/track/open?emailId=${encodeURIComponent(messageId)}" width="1" height="1" style="display:none;" alt="" />`;
-      
+
       // Try to insert before closing body tag, otherwise append
       if (processedHtmlBody.includes('</body>')) {
         processedHtmlBody = processedHtmlBody.replace('</body>', `${trackingPixel}</body>`);
@@ -245,16 +318,21 @@ async function sendEmail({
     console.log('Final payload text length:', mailOptions.text?.length || 0);
     console.log('Recipient:', mailOptions.to);
     console.log('Subject:', mailOptions.subject);
-    
+
     // Send email - THIS IS THE ONLY SENDMAIL CALL PER SEQUENCE STEP
     const info = await transport.sendMail(mailOptions);
-    
+
     // DELIVERY CONFIRMATION
     console.log('✅ EMAIL DELIVERY CONFIRMED');
     console.log(`📧 Email sent successfully to ${to}`);
     console.log(`Message ID: ${info.messageId}`);
     console.log('Response:', info.response);
     console.log('Exactly ONE email sent for this sequence step');
+
+    // Save to IMAP Sent folder (async, non-blocking)
+    saveToSentFolder(mailOptions).catch(err => {
+      console.log('⚠️ Could not save to Sent folder:', err.message);
+    });
 
     // Log sent event if enrollment provided
     if (enrollmentId && contactId) {
@@ -377,11 +455,11 @@ async function sendSequenceEmail(enrollment) {
     // Check if contact is still active
     if (contact.status === 'UNSUBSCRIBED' || contact.status === 'BOUNCED') {
       console.log(`Skipping email for ${contact.email} - status: ${contact.status}`);
-      
+
       // Update enrollment status
       await prisma.enrollment.update({
         where: { id: enrollment.id },
-        data: { 
+        data: {
           status: contact.status === 'UNSUBSCRIBED' ? 'UNSUBSCRIBED' : 'STOPPED',
           completedAt: new Date(),
           nextSendAt: null
@@ -423,7 +501,7 @@ async function sendSequenceEmail(enrollment) {
     console.log('Has custom body:', !!currentStep.body);
     console.log('Has template body:', !!currentStep.template?.body);
     console.log('Email body source:', currentStep.body ? 'Custom Step' : 'Template');
-    
+
     if (emailBody && emailBody.length > 100) {
       console.log('Email body preview (first 100 chars):', emailBody.substring(0, 100) + '...');
       console.log('Email body preview (last 100 chars):', '...' + emailBody.substring(emailBody.length - 100));
@@ -476,7 +554,7 @@ async function sendSequenceEmail(enrollment) {
       // Calculate next step timing
       const nextStep = enrollment.currentStep + 1;
       const nextStepData = await prisma.sequenceStep.findFirst({
-        where: { 
+        where: {
           sequenceId: sequence.id,
           stepOrder: nextStep,
           isActive: true
@@ -521,12 +599,12 @@ async function sendSequenceEmail(enrollment) {
 
   } catch (error) {
     console.error('Error sending sequence email:', error);
-    
+
     // Update enrollment with error
     try {
       await prisma.enrollment.update({
         where: { id: enrollment.id },
-        data: { 
+        data: {
           status: 'STOPPED',
           completedAt: new Date(),
           nextSendAt: null

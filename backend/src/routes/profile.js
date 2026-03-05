@@ -32,7 +32,7 @@ router.get('/signature', async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching user signature:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch signature',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -47,22 +47,22 @@ router.post('/signature', async (req, res) => {
 
     // Validate signature input
     if (signature !== null && signature !== undefined && typeof signature !== 'string') {
-      return res.status(400).json({ 
-        error: 'Signature must be a string or null' 
+      return res.status(400).json({
+        error: 'Signature must be a string or null'
       });
     }
 
     // Limit signature length (e.g., 10KB)
     if (signature && signature.length > 10000) {
-      return res.status(400).json({ 
-        error: 'Signature is too long. Maximum length is 10,000 characters.' 
+      return res.status(400).json({
+        error: 'Signature is too long. Maximum length is 10,000 characters.'
       });
     }
 
     // Update user signature
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { 
+      data: {
         signature: signature || null,
         updatedAt: new Date()
       },
@@ -84,12 +84,12 @@ router.post('/signature', async (req, res) => {
 
   } catch (error) {
     console.error('Error updating user signature:', error);
-    
+
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'User not found' });
     }
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       error: 'Failed to update signature',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -129,7 +129,7 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching user profile:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch profile',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });

@@ -499,7 +499,7 @@ You can also use HTML formatting like:
 <a href='https://example.com'>Links</a>"
               />
               <p className="text-sm text-muted-foreground">
-                This signature will be automatically added to all emails in your sequences. 
+                This signature will be automatically added to all emails in your sequences.
                 Line breaks will be preserved. You can also use HTML formatting like &lt;b&gt;bold&lt;/b&gt;, &lt;i&gt;italic&lt;/i&gt;, and &lt;a href="url"&gt;links&lt;/a&gt;.
               </p>
             </div>
@@ -530,7 +530,7 @@ You can also use HTML formatting like:
                 <Label className="text-sm font-medium text-muted-foreground mb-2 block">
                   Preview:
                 </Label>
-                <div 
+                <div
                   className="text-sm text-foreground whitespace-pre-wrap"
                   dangerouslySetInnerHTML={{ __html: signature }}
                 />

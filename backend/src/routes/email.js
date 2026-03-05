@@ -74,6 +74,7 @@ router.get('/track/open', async (req, res) => {
         data: {
           enrollmentId: existingEvent.enrollmentId,
           contactId: existingEvent.contactId,
+          campaignId: existingEvent.campaignId,
           type: 'OPENED',
           emailId: emailId,
           details: JSON.stringify({
@@ -102,7 +103,7 @@ router.get('/track/open', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Open tracking error:', error);
-    
+
     // Always return the pixel, even on error
     res.set({
       'Content-Type': 'image/png',
@@ -153,6 +154,7 @@ router.post('/track/reply', async (req, res) => {
         data: {
           enrollmentId: existingEvent.enrollmentId,
           contactId: existingEvent.contactId,
+          campaignId: existingEvent.campaignId,
           type: 'REPLIED',
           emailId: emailId,
           details: JSON.stringify({
@@ -168,8 +170,8 @@ router.post('/track/reply', async (req, res) => {
       console.log(`✅ Reply tracking: Marked email as replied with content for emailId: ${emailId}`);
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Reply tracked successfully with content',
       emailId: emailId
     });
@@ -218,6 +220,7 @@ router.get('/track/reply', async (req, res) => {
         data: {
           enrollmentId: existingEvent.enrollmentId,
           contactId: existingEvent.contactId,
+          campaignId: existingEvent.campaignId,
           type: 'REPLIED',
           emailId: emailId,
           details: JSON.stringify({
@@ -230,8 +233,8 @@ router.get('/track/reply', async (req, res) => {
       console.log(`✅ Reply tracking: Marked email as replied for emailId: ${emailId}`);
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Reply tracked successfully',
       emailId: emailId
     });

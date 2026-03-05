@@ -28,7 +28,7 @@ const SimpleEditTemplatesPopup = ({
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
 
   // Default professional signature
-  const defaultSignature = `--\nBest regards,\nArnav Sales Company\nEmpowering Businesses with ERP, SaaS & App Solutions`;
+  const defaultSignature = `--\nBest regards,\nBoostNow Sales Company\nEmpowering Businesses with ERP, SaaS & App Solutions`;
 
   // Fetch custom templates from API
   const fetchCustomTemplates = async () => {
@@ -115,10 +115,10 @@ const SimpleEditTemplatesPopup = ({
       // Combine body and signature before saving
       const fullBody = combineBodyAndSignature(editData.body, editData.signature);
       const updates = { subject: editData.subject, body: fullBody };
-      
+
       // Check if this is a custom template (from API)
       const isCustomTemplate = customTemplates.some(t => t.id === templateId);
-      
+
       if (isCustomTemplate) {
         // Update custom template via API
         await api.updateTemplate(templateId, updates);
@@ -129,7 +129,7 @@ const SimpleEditTemplatesPopup = ({
         onTemplateUpdate(templateId, updates);
         toast.success("Default template updated successfully ✅");
       }
-      
+
       setEditingTemplate(null);
       setEditData({ subject: "", body: "", signature: "" });
     } catch (error) {
@@ -186,7 +186,7 @@ const SimpleEditTemplatesPopup = ({
                           </Badge>
                         </div>
                       </div>
-                      
+
                       {editingTemplate !== template.id && (
                         <Button
                           onClick={() => startEditing(template)}
@@ -211,7 +211,7 @@ const SimpleEditTemplatesPopup = ({
                             className="rounded-xl"
                           />
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label htmlFor={`body-${template.id}`}>Email Body</Label>
                           <Textarea
@@ -222,7 +222,7 @@ const SimpleEditTemplatesPopup = ({
                             className="rounded-xl min-h-[200px] resize-none"
                           />
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label htmlFor={`signature-${template.id}`}>Email Signature</Label>
                           <Textarea
@@ -236,7 +236,7 @@ const SimpleEditTemplatesPopup = ({
                             📝 Professional signature that will be appended to your email
                           </p>
                         </div>
-                        
+
                         <div className="flex gap-2 justify-end">
                           <Button
                             onClick={cancelEditing}
@@ -265,7 +265,7 @@ const SimpleEditTemplatesPopup = ({
                             {template.subject}
                           </div>
                         </div>
-                        
+
                         <div>
                           <Label className="text-sm font-medium text-muted-foreground">Body:</Label>
                           <div className="text-sm text-muted-foreground bg-gray-50 rounded-lg p-3 mt-1 whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">

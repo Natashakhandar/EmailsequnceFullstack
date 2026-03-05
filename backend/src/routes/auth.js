@@ -128,55 +128,9 @@ router.post('/register', authenticateToken, requireSuperAdmin, async (req, res) 
   }
 });
 
-// POST /api/auth/signup - Open registration for users
+// POST /api/auth/signup - Open registration disabled (only superadmin can add users)
 router.post('/signup', async (req, res) => {
-  try {
-    const { email, password, firstName, lastName } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() }
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
-    }
-
-    // Hash password
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email: email.toLowerCase(),
-        password: hashedPassword,
-        firstName: firstName || '',
-        lastName: lastName || '',
-        role: 'USER',
-        isActive: true
-      }
-    });
-
-    // Generate token
-    const token = generateToken(user.id);
-
-    // Return user data (without password) and token
-    const { password: _, ...userWithoutPassword } = user;
-
-    res.status(201).json({
-      message: 'User created successfully',
-      user: userWithoutPassword,
-      token
-    });
-  } catch (error) {
-    console.error('Signup error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  return res.status(403).json({ error: 'Open registration is disabled. Please contact an administrator.' });
 });
 
 // GET /api/auth/me - Get current user info

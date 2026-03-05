@@ -14,13 +14,11 @@ import {
   Shield,
   User as UserIcon,
   Plus,
-  Edit,
-  Trash2,
   AlertCircle,
   Eye,
   EyeOff,
-  UserCheck,
-  UserX
+  Edit2,
+  Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, User } from "@/lib/api";
@@ -31,11 +29,17 @@ const AdminManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    email: "",
+    firstName: "",
+    lastName: "",
+    role: "USER" as "USER" | "ADMIN" | "SUPERADMIN",
+    isActive: true
+  });
 
-  // Form states
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -44,7 +48,6 @@ const AdminManagement = () => {
     role: "USER" as "USER" | "ADMIN" | "SUPERADMIN"
   });
 
-  // Check if current user is superadmin
   useEffect(() => {
     const checkUserRole = async () => {
       try {
@@ -82,71 +85,13 @@ const AdminManagement = () => {
     e.preventDefault();
     try {
       await api.createUser(formData);
-      toast.success('Admin user created successfully');
+      toast.success('User created successfully! They can now login.');
       setIsCreateDialogOpen(false);
       resetForm();
       await fetchUsers();
     } catch (error) {
       console.error('Failed to create user:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to create user');
-    }
-  };
-
-  const handleUpdateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-
-    try {
-      const updateData = {
-        email: formData.email,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        role: formData.role,
-      };
-
-      await api.updateUser(editingUser.id, updateData);
-      toast.success('Admin user updated successfully');
-      setIsEditDialogOpen(false);
-      setEditingUser(null);
-      resetForm();
-      await fetchUsers();
-    } catch (error) {
-      console.error('Failed to update user:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to update user');
-    }
-  };
-
-  const handleDeleteUser = async (userId: string, userEmail: string) => {
-    if (currentUser?.id === userId) {
-      toast.error('You cannot delete your own account');
-      return;
-    }
-
-    if (confirm(`Are you sure you want to delete ${userEmail}? This action cannot be undone.`)) {
-      try {
-        await api.deleteUser(userId);
-        toast.success('User deleted successfully');
-        await fetchUsers();
-      } catch (error) {
-        console.error('Failed to delete user:', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to delete user');
-      }
-    }
-  };
-
-  const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
-    if (currentUser?.id === userId) {
-      toast.error('You cannot deactivate your own account');
-      return;
-    }
-
-    try {
-      await api.updateUser(userId, { isActive: !currentStatus });
-      toast.success(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
-      await fetchUsers();
-    } catch (error) {
-      console.error('Failed to toggle user status:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to update user status');
     }
   };
 
@@ -161,16 +106,40 @@ const AdminManagement = () => {
     setShowPassword(false);
   };
 
-  const openEditDialog = (user: User) => {
-    setEditingUser(user);
-    setFormData({
+  const handleEditClick = (user: User) => {
+    setEditingUserId(user.id);
+    setEditFormData({
       email: user.email,
-      password: "",
       firstName: user.firstName || "",
       lastName: user.lastName || "",
-      role: user.role
+      role: user.role,
+      isActive: user.isActive
     });
     setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUserId) return;
+    try {
+      await api.updateUser(editingUserId, editFormData);
+      toast.success('User updated successfully!');
+      setIsEditDialogOpen(false);
+      await fetchUsers();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update user');
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm("Are you sure you want to delete this user?")) return;
+    try {
+      await api.deleteUser(userId);
+      toast.success('User deleted successfully!');
+      await fetchUsers();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete user');
+    }
   };
 
   const getRoleInfo = (role: string) => {
@@ -187,9 +156,7 @@ const AdminManagement = () => {
   const getUserInitials = (user: User) => {
     const firstName = user.firstName || '';
     const lastName = user.lastName || '';
-    if (firstName && lastName) {
-      return `${firstName[0]}${lastName[0]}`.toUpperCase();
-    }
+    if (firstName && lastName) return `${firstName[0]}${lastName[0]}`.toUpperCase();
     if (firstName) return firstName[0].toUpperCase();
     return user.email[0].toUpperCase();
   };
@@ -208,7 +175,7 @@ const AdminManagement = () => {
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Loading admin management...</p>
+              <p className="text-muted-foreground">Loading...</p>
             </div>
           </div>
         </main>
@@ -246,7 +213,7 @@ const AdminManagement = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold mb-2">User Management</h1>
-              <p className="text-muted-foreground">Manage user accounts and permissions</p>
+              <p className="text-muted-foreground">Create and manage user accounts</p>
             </div>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
@@ -312,16 +279,12 @@ const AdminManagement = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="role">Role</Label>
-                    <select
+                    <Input
                       id="role"
-                      value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value as "USER" | "ADMIN" | "SUPERADMIN" })}
-                      className="w-full p-2 border border-border rounded-md bg-background"
-                    >
-                      <option value="USER">User</option>
-                      <option value="ADMIN">Admin</option>
-                      <option value="SUPERADMIN">Super Admin</option>
-                    </select>
+                      value="User"
+                      disabled
+                      className="w-full bg-muted/50 cursor-not-allowed"
+                    />
                   </div>
                   <div className="flex gap-2 pt-4">
                     <Button type="submit" className="flex-1">Create User</Button>
@@ -329,6 +292,70 @@ const AdminManagement = () => {
                       setIsCreateDialogOpen(false);
                       resetForm();
                     }}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Edit User</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleUpdateUser} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="editFirstName">First Name</Label>
+                      <Input
+                        id="editFirstName"
+                        value={editFormData.firstName}
+                        onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="editLastName">Last Name</Label>
+                      <Input
+                        id="editLastName"
+                        value={editFormData.lastName}
+                        onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="editEmail">Email</Label>
+                    <Input
+                      id="editEmail"
+                      type="email"
+                      value={editFormData.email}
+                      onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="editRole">Role</Label>
+                    <Input
+                      id="editRole"
+                      value={editFormData.role === "USER" ? "User" : editFormData.role === "ADMIN" ? "Admin" : "Super Admin"}
+                      disabled
+                      className="w-full bg-muted/50 cursor-not-allowed"
+                    />
+                  </div>
+                  <div className="space-y-2 flex items-center justify-between">
+                    <Label>Active Status</Label>
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 cursor-pointer"
+                      checked={editFormData.isActive}
+                      onChange={(e) => setEditFormData({ ...editFormData, isActive: e.target.checked })}
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-4">
+                    <Button type="submit" className="flex-1">Update User</Button>
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                       Cancel
                     </Button>
                   </div>
@@ -345,7 +372,7 @@ const AdminManagement = () => {
           </Alert>
         )}
 
-        {/* Admin Users Grid */}
+        {/* Users Grid */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -359,69 +386,45 @@ const AdminManagement = () => {
             return (
               <Card key={user.id} className="glass hover-lift">
                 <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-12 w-12">
-                        <AvatarFallback className="gradient-primary text-white font-semibold">
-                          {getUserInitials(user)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <CardTitle className="text-lg">{getFullName(user)}</CardTitle>
-                        <p className="text-sm text-muted-foreground">{user.email}</p>
-                      </div>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12">
+                      <AvatarFallback className="gradient-primary text-white font-semibold">
+                        {getUserInitials(user)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-lg truncate">{getFullName(user)}</CardTitle>
+                      <p className="text-sm text-muted-foreground truncate">{user.email}</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <IconComponent className={`w-5 h-5 ${roleInfo.color.includes('yellow') ? 'text-yellow-600' : roleInfo.color.includes('blue') ? 'text-blue-600' : 'text-gray-600'}`} />
-                    </div>
+                    <IconComponent className={`w-5 h-5 flex-shrink-0 ${roleInfo.color.includes('yellow') ? 'text-yellow-600' : roleInfo.color.includes('blue') ? 'text-blue-600' : 'text-gray-600'}`} />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Badge variant={roleInfo.badgeVariant} className={roleInfo.color}>
-                        {roleInfo.label}
-                      </Badge>
-                      <div className="flex items-center gap-1">
-                        <div className={`w-2 h-2 rounded-full ${user.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                        <span className="text-xs text-muted-foreground">
-                          {user.isActive ? 'Active' : 'Inactive'}
-                        </span>
+                  <div className="flex items-center justify-between">
+                    <Badge variant={roleInfo.badgeVariant} className={roleInfo.color}>
+                      {roleInfo.label}
+                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <div className={`w-2 h-2 rounded-full ${user.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                      <span className="text-xs text-muted-foreground">
+                        {user.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between mt-4">
+                    <p className="text-xs text-muted-foreground">
+                      Created: {new Date(user.createdAt).toLocaleDateString()}
+                    </p>
+                    {user.id !== currentUser?.id && (
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50" onClick={() => handleEditClick(user)}>
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeleteUser(user.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                    </div>
-
-                    <div className="text-xs text-muted-foreground">
-                      <p>Created: {new Date(user.createdAt).toLocaleDateString()}</p>
-                      <p>Updated: {new Date(user.updatedAt).toLocaleDateString()}</p>
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEditDialog(user)}
-                        className="flex-1"
-                      >
-                        <Edit className="w-3 h-3 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleToggleUserStatus(user.id, user.isActive)}
-                        disabled={currentUser?.id === user.id}
-                      >
-                        {user.isActive ? <UserX className="w-3 h-3" /> : <UserCheck className="w-3 h-3" />}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteUser(user.id, user.email)}
-                        disabled={currentUser?.id === user.id}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -440,74 +443,6 @@ const AdminManagement = () => {
             </Button>
           </div>
         )}
-
-        {/* Edit Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Edit User</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleUpdateUser} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="editFirstName">First Name</Label>
-                  <Input
-                    id="editFirstName"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editLastName">Last Name</Label>
-                  <Input
-                    id="editLastName"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editEmail">Email</Label>
-                <Input
-                  id="editEmail"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editRole">Role</Label>
-                <select
-                  id="editRole"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as "USER" | "ADMIN" | "SUPERADMIN" })}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                  disabled={editingUser?.id === currentUser?.id}
-                >
-                  <option value="USER">User</option>
-                  <option value="ADMIN">Admin</option>
-                  <option value="SUPERADMIN">Super Admin</option>
-                </select>
-                {editingUser?.id === currentUser?.id && (
-                  <p className="text-xs text-muted-foreground">You cannot change your own role</p>
-                )}
-              </div>
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" className="flex-1">Update User</Button>
-                <Button type="button" variant="outline" onClick={() => {
-                  setIsEditDialogOpen(false);
-                  setEditingUser(null);
-                  resetForm();
-                }}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
       </main>
     </div>
   );
