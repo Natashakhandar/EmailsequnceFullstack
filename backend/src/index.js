@@ -35,7 +35,7 @@ app.use(helmet());
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'http://localhost:8080', 
+    'http://localhost:8080',
     'http://localhost:5173',
     'http://localhost:8081',
     'http://127.0.0.1:3000',
@@ -43,7 +43,8 @@ app.use(cors({
     'http://127.0.0.1:5173',
     'http://127.0.0.1:8081',
     'https://email.boostnow.in',
-    'https://www.email.boostnow.in'
+    'https://www.email.boostnow.in',
+    'https://silver-tapir-929419.hostingersite.com'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -53,7 +54,7 @@ app.use(cors({
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 500, // Increased limit for production to avoid early blocking
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);
@@ -66,8 +67,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development'
   });
@@ -122,14 +123,14 @@ app.get('/', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  
+
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'Invalid JSON in request body' });
   }
-  
+
   res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
       : err.message,
     ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
   });
@@ -145,7 +146,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Email Sequencing Backend running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  
+
   // Start the email scheduler
   startScheduler();
   console.log('📧 Email scheduler started');

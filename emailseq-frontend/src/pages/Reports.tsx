@@ -79,7 +79,8 @@ const Reports = () => {
     fetchAnalyticsData();
     
     // Set up socket connection for real-time updates
-    const socketConnection = io(import.meta.env.VITE_API_URL || 'http://localhost:3001');
+    const apiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+    const socketConnection = io(apiUrl);
     setSocket(socketConnection);
     
     // Listen for analytics updates
@@ -117,11 +118,28 @@ const Reports = () => {
   }, []);
 
   // Prepare chart data from API response with safe fallbacks
+  // Combine campaign events and uncategorized events for the main distribution
   const statusData = analyticsData?.emailStatusDistribution ? [
-    { name: "Sent", value: analyticsData.emailStatusDistribution.sent || 0, color: "hsl(var(--primary))" },
-    { name: "Opened", value: analyticsData.emailStatusDistribution.opened || 0, color: "hsl(var(--secondary))" },
-    { name: "Replied", value: analyticsData.emailStatusDistribution.replied || 0, color: "hsl(var(--accent))" },
-    { name: "Bounced", value: analyticsData.emailStatusDistribution.bounced || 0, color: "hsl(0 70% 60%)" },
+    { 
+      name: "Sent", 
+      value: (analyticsData.emailStatusDistribution.sent || 0) + (analyticsData.uncategorizedEvents?.sent || 0), 
+      color: "hsl(var(--primary))" 
+    },
+    { 
+      name: "Opened", 
+      value: (analyticsData.emailStatusDistribution.opened || 0) + (analyticsData.uncategorizedEvents?.opened || 0), 
+      color: "hsl(var(--secondary))" 
+    },
+    { 
+      name: "Replied", 
+      value: (analyticsData.emailStatusDistribution.replied || 0) + (analyticsData.uncategorizedEvents?.replied || 0), 
+      color: "hsl(var(--accent))" 
+    },
+    { 
+      name: "Bounced", 
+      value: (analyticsData.emailStatusDistribution.bounced || 0) + (analyticsData.uncategorizedEvents?.bounced || 0), 
+      color: "hsl(0 70% 60%)" 
+    },
   ] : [];
 
   // Prepare campaign analytics from /api/reports/analytics response
@@ -284,23 +302,23 @@ const Reports = () => {
             />
             <MetricCard
               title="Total Emails"
-              value={analyticsData?.emailStatusDistribution?.sent?.toLocaleString() || "0"}
+              value={((analyticsData?.emailStatusDistribution?.sent || 0) + (analyticsData?.uncategorizedEvents?.sent || 0)).toLocaleString()}
               icon={Activity}
-              trend="Emails sent"
+              trend="Total emails sent"
               delay={0.15}
             />
             <MetricCard
               title="Opened"
-              value={analyticsData?.emailStatusDistribution?.opened?.toLocaleString() || "0"}
+              value={((analyticsData?.emailStatusDistribution?.opened || 0) + (analyticsData?.uncategorizedEvents?.opened || 0)).toLocaleString()}
               icon={Eye}
-              trend={`${analyticsData?.emailStatusDistribution?.sent > 0 ? (((analyticsData?.emailStatusDistribution?.opened || 0) / analyticsData.emailStatusDistribution.sent * 100).toFixed(1)) : '0'}% open rate`}
+              trend={`${((analyticsData?.emailStatusDistribution?.sent || 0) + (analyticsData?.uncategorizedEvents?.sent || 0)) > 0 ? ((((analyticsData?.emailStatusDistribution?.opened || 0) + (analyticsData?.uncategorizedEvents?.opened || 0)) / ((analyticsData?.emailStatusDistribution?.sent || 0) + (analyticsData?.uncategorizedEvents?.sent || 0)) * 100).toFixed(1)) : '0'}% open rate`}
               delay={0.2}
             />
             <MetricCard
               title="Replied"
-              value={analyticsData?.emailStatusDistribution?.replied?.toLocaleString() || "0"}
+              value={((analyticsData?.emailStatusDistribution?.replied || 0) + (analyticsData?.uncategorizedEvents?.replied || 0)).toLocaleString()}
               icon={Reply}
-              trend={`${analyticsData?.avgResponseRate?.toFixed(1) || '0'}% reply rate`}
+              trend="Overall reply rate"
               delay={0.25}
             />
           </div>

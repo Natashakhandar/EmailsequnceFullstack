@@ -56,7 +56,7 @@ const Dashboard = () => {
         let errorMessage = 'Failed to load dashboard data';
         if (err instanceof Error) {
           if (err.message.includes('fetch')) {
-            errorMessage = 'Cannot connect to backend server. Please ensure the backend is running on port 3001.';
+            errorMessage = 'Cannot connect to backend server. Please verify the API status and your connection.';
           } else {
             errorMessage = err.message;
           }
