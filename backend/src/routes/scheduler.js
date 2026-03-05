@@ -6,7 +6,11 @@ const {
   getSchedulerStats
 } = require('../jobs/scheduler');
 const { sendTestEmail, verifyConnection } = require('../mailer/sendEmail');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
+
+// Apply authentication middleware to all scheduler routes
+router.use(authenticateToken);
 
 // GET /api/scheduler/status - Get scheduler status
 router.get('/status', async (req, res) => {

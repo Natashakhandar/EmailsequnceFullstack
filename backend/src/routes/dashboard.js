@@ -1,6 +1,10 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
+
+// Apply authentication middleware to all dashboard routes
+router.use(authenticateToken);
 
 /**
  * GET /api/dashboard/stats
@@ -11,7 +15,13 @@ router.get('/stats', async (req, res) => {
     const { startDate, endDate, sequenceId } = req.query;
 
     // Build where clause for filtering
-    const where = {};
+    const where = {
+      enrollment: {
+        sequence: {
+          userId: req.user.id
+        }
+      }
+    };
     if (startDate || endDate) {
       where.timestamp = {};
       if (startDate) where.timestamp.gte = new Date(startDate);
@@ -19,9 +29,7 @@ router.get('/stats', async (req, res) => {
     }
 
     if (sequenceId) {
-      where.enrollment = {
-        sequenceId
-      };
+      where.enrollment.sequenceId = sequenceId;
     }
 
     console.log('📊 Fetching dashboard statistics with filters:', {
@@ -62,7 +70,7 @@ router.get('/stats', async (req, res) => {
     // Get daily activity for the last 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
+
     const dailyEvents = await prisma.event.findMany({
       where: {
         ...where,
@@ -90,7 +98,7 @@ router.get('/stats', async (req, res) => {
     // Get weekly performance for the last 4 weeks
     const fourWeeksAgo = new Date();
     fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-    
+
     const weeklyEvents = await prisma.event.findMany({
       where: {
         ...where,
@@ -121,15 +129,13 @@ router.get('/stats', async (req, res) => {
 
     // Get additional metrics
     const totalSequences = await prisma.sequence.count({
-      where: { isActive: true }
+      where: { userId: req.user.id, isActive: true }
     });
-
     const totalContacts = await prisma.contact.count({
-      where: { status: 'ACTIVE' }
+      where: { userId: req.user.id, status: 'ACTIVE' }
     });
-
     const activeEnrollments = await prisma.enrollment.count({
-      where: { status: 'ACTIVE' }
+      where: { status: 'ACTIVE', sequence: { userId: req.user.id } }
     });
 
     const response = {
@@ -244,20 +250,23 @@ router.get('/recent-activity', async (req, res) => {
 router.get('/performance-trends', async (req, res) => {
   try {
     const { days = 30, sequenceId } = req.query;
-    
+
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
 
     const where = {
       timestamp: {
         gte: startDate
+      },
+      enrollment: {
+        sequence: {
+          userId: req.user.id
+        }
       }
     };
 
     if (sequenceId) {
-      where.enrollment = {
-        sequenceId
-      };
+      where.enrollment.sequenceId = sequenceId;
     }
 
     const events = await prisma.event.findMany({

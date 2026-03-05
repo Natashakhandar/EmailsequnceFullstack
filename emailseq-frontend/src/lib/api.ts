@@ -493,6 +493,25 @@ class ApiClient {
     });
   }
 
+  // User SMTP Settings API
+  async getSmtpSettings() {
+    return this.request<any>('/smtp/settings');
+  }
+
+  async updateSmtpSettings(settings: any) {
+    return this.request<any>('/smtp/settings', {
+      method: 'POST',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async testSmtpSettings(settings: any) {
+    return this.request<any>('/smtp/test', {
+      method: 'POST',
+      body: JSON.stringify(settings),
+    });
+  }
+
 
   // Profile Signature API
   async getProfileSignature(): Promise<{ signature: string }> {
