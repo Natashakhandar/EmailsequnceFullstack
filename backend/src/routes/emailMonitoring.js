@@ -12,7 +12,7 @@ router.get('/test', authenticateToken, async (req, res) => {
   try {
     const monitor = new EmailMonitorService();
     const isConnected = await monitor.testConnection();
-    
+
     if (isConnected) {
       res.json({
         success: true,
@@ -43,10 +43,10 @@ router.get('/test', authenticateToken, async (req, res) => {
 router.post('/check-replies', authenticateToken, async (req, res) => {
   try {
     console.log('📧 Manual reply check triggered by user');
-    
+
     const monitor = new EmailMonitorService();
     const processedCount = await monitor.processReplyEmails();
-    
+
     res.json({
       success: true,
       message: `Successfully processed ${processedCount} new replies`,
@@ -73,9 +73,9 @@ router.get('/status', authenticateToken, async (req, res) => {
       imapHost: process.env.IMAP_HOST || process.env.SMTP_HOST || 'Not configured',
       imapPort: process.env.IMAP_PORT || '993',
       imapUser: process.env.IMAP_USER || process.env.SMTP_USER || 'Not configured',
-      isConfigured: !!(process.env.IMAP_HOST || process.env.SMTP_HOST) && 
-                    !!(process.env.IMAP_USER || process.env.SMTP_USER) && 
-                    !!(process.env.IMAP_PASSWORD || process.env.SMTP_PASSWORD)
+      isConfigured: !!(process.env.IMAP_HOST || process.env.SMTP_HOST) &&
+        !!(process.env.IMAP_USER || process.env.SMTP_USER) &&
+        !!(process.env.IMAP_PASSWORD || process.env.SMTP_PASS)
     };
 
     res.json({
@@ -102,9 +102,9 @@ router.get('/recent-emails', authenticateToken, async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 7;
     const monitor = new EmailMonitorService();
-    
+
     const emails = await monitor.fetchRecentEmails(days);
-    
+
     // Return sanitized email data (no full content for security)
     const sanitizedEmails = emails.map(email => ({
       seqno: email.seqno,

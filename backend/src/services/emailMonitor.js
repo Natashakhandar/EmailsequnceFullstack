@@ -8,7 +8,7 @@ class EmailMonitorService {
     this.isConnected = false;
     this.config = {
       user: process.env.IMAP_USER || process.env.SMTP_USER,
-      password: process.env.IMAP_PASSWORD || process.env.SMTP_PASSWORD,
+      password: process.env.IMAP_PASSWORD || process.env.SMTP_PASS,
       host: process.env.IMAP_HOST || process.env.SMTP_HOST,
       port: parseInt(process.env.IMAP_PORT) || 993,
       tls: process.env.IMAP_TLS !== 'false',
@@ -28,7 +28,7 @@ class EmailMonitorService {
       }
 
       console.log('📧 Connecting to IMAP server...');
-      
+
       this.imap = new Imap(this.config);
 
       this.imap.once('ready', () => {
@@ -78,8 +78,9 @@ class EmailMonitorService {
           // Search for emails from the last X days
           const since = new Date();
           since.setDate(since.getDate() - days);
-          
-          this.imap.search(['UNSEEN', ['SINCE', since]], (err, results) => {
+          // Search for all emails from the last X days, not just unseen 
+          // (otherwise it misses replies the user quickly read manually)
+          this.imap.search([['SINCE', since]], (err, results) => {
             if (err) {
               return reject(err);
             }
@@ -91,7 +92,7 @@ class EmailMonitorService {
 
             console.log(`📬 Found ${results.length} new emails`);
 
-            const emails = [];
+            const parsePromises = [];
             const fetch = this.imap.fetch(results, { bodies: '' });
 
             fetch.on('message', (msg, seqno) => {
@@ -103,14 +104,15 @@ class EmailMonitorService {
                   buffer += chunk.toString('utf8');
                 });
 
-                stream.once('end', async () => {
-                  try {
-                    const parsed = await simpleParser(buffer);
+                stream.once('end', () => {
+                  const p = simpleParser(buffer).then(parsed => {
                     emailData.parsed = parsed;
-                    emails.push(emailData);
-                  } catch (parseErr) {
+                    return emailData;
+                  }).catch(parseErr => {
                     console.error('❌ Error parsing email:', parseErr);
-                  }
+                    return null;
+                  });
+                  parsePromises.push(p);
                 });
               });
 
@@ -124,7 +126,9 @@ class EmailMonitorService {
             });
 
             fetch.once('end', () => {
-              resolve(emails);
+              Promise.all(parsePromises).then(results => {
+                resolve(results.filter(Boolean));
+              });
             });
           });
         });
@@ -139,12 +143,12 @@ class EmailMonitorService {
   async isReplyToOurEmail(email) {
     try {
       const parsed = email.parsed;
-      
+
       // Check various reply indicators
       const subject = parsed.subject || '';
       const inReplyTo = parsed.inReplyTo || '';
       const references = parsed.references || [];
-      
+
       // Look for our email IDs in the references or in-reply-to headers
       if (inReplyTo) {
         const sentEvent = await prisma.event.findFirst({
@@ -194,10 +198,7 @@ class EmailMonitorService {
       if (fromEmail) {
         const contact = await prisma.contact.findFirst({
           where: {
-            email: {
-              equals: fromEmail,
-              mode: 'insensitive'
-            }
+            email: fromEmail
           }
         });
 
@@ -237,33 +238,33 @@ class EmailMonitorService {
   // Sanitize text content for safe JSON storage
   sanitizeForJson(text) {
     if (!text) return '';
-    
+
     // Convert to string if not already
     let sanitized = String(text);
-    
+
     // Remove control characters (0x00-0x1F and 0x7F-0x9F) except newlines and tabs
     sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
-    
+
     // Convert literal \n strings to actual newlines (in case they exist)
     sanitized = sanitized.replace(/\\n/g, '\n');
-    
+
     // Remove email quote markers (>) at the start of lines
     sanitized = sanitized.split('\n').map(line => line.replace(/^>\s*/, '')).join('\n');
-    
+
     // Normalize line endings
     sanitized = sanitized.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    
+
     // Remove excessive newlines (more than 2 consecutive)
     sanitized = sanitized.replace(/\n{3,}/g, '\n\n');
-    
+
     // Trim whitespace
     sanitized = sanitized.trim();
-    
+
     // Limit length to prevent oversized JSON (5000 chars for body content)
     if (sanitized.length > 5000) {
       sanitized = sanitized.substring(0, 5000) + '... [truncated]';
     }
-    
+
     return sanitized;
   }
 
@@ -271,13 +272,13 @@ class EmailMonitorService {
   async processReplyEmails() {
     try {
       console.log('🔍 Checking for new reply emails...');
-      
+
       const emails = await this.fetchRecentEmails();
       let processedCount = 0;
 
       for (const email of emails) {
         const replyCheck = await this.isReplyToOurEmail(email);
-        
+
         if (replyCheck.isReply && replyCheck.originalEvent) {
           const parsed = email.parsed;
           const originalEvent = replyCheck.originalEvent;
@@ -297,12 +298,13 @@ class EmailMonitorService {
             const replyFrom = this.sanitizeForJson(
               parsed.from?.value?.[0]?.address || parsed.from?.text || 'Unknown'
             );
-            
+
             // Create a new REPLIED event with the actual email content
             await prisma.event.create({
               data: {
                 enrollmentId: originalEvent.enrollmentId,
                 contactId: originalEvent.contactId,
+                campaignId: originalEvent.campaignId,
                 type: 'REPLIED',
                 emailId: originalEvent.emailId,
                 details: JSON.stringify({
@@ -324,7 +326,7 @@ class EmailMonitorService {
             // Update enrollment status to STOPPED since they replied
             await prisma.enrollment.update({
               where: { id: originalEvent.enrollmentId },
-              data: { 
+              data: {
                 status: 'STOPPED',
                 completedAt: new Date(),
                 nextSendAt: null

@@ -22,8 +22,9 @@ const reportsRouter = require('./routes/reports');
 const campaignsRouter = require('./routes/campaigns');
 const fixEventDetailsRouter = require('./routes/fixEventDetails');
 
-// Import scheduler
+// Import scheduler and email monitor
 const { startScheduler } = require('./jobs/scheduler');
+const { startEmailMonitoring } = require('./jobs/emailMonitorJob');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -150,6 +151,9 @@ app.listen(PORT, () => {
   // Start the email scheduler
   startScheduler();
   console.log('📧 Email scheduler started');
+
+  // Start the email reply monitor
+  startEmailMonitoring();
 });
 
 // Graceful shutdown

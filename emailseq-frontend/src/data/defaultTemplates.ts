@@ -13,7 +13,7 @@ export const defaultTemplates: DefaultTemplate[] = [
     id: 'template-intro',
     name: 'Intro Email',
     subject: 'Transform Your Business with Custom IT Solutions - {{firstName}}',
-    body: 'Hi {{firstName}},\n\nI hope this email finds you well. My name is {{company}} from {{companyName}}, and we specialize in delivering cutting-edge IT solutions that drive business growth.\n\nWe help companies like yours streamline operations through:\n• Custom ERP Systems - Tailored to your business processes\n• SaaS Development - Scalable cloud-based solutions\n• Mobile & Web Applications - User-friendly, responsive designs\n• Digital Transformation - Modernizing legacy systems\n\nI\'d love to discuss how we can help {{companyName}} achieve its technology goals. Would you be available for a brief 15-minute call this week?',
+    body: 'Hi {{firstName}},\n\nI hope this email finds you well. My name is {{firstName}} from {{companyName}}, and we specialize in delivering cutting-edge IT solutions that drive business growth.\n\nWe help companies like yours streamline operations through:\n• Custom ERP Systems - Tailored to your business processes\n• SaaS Development - Scalable cloud-based solutions\n• Mobile & Web Applications - User-friendly, responsive designs\n• Digital Transformation - Modernizing legacy systems\n\nI\'d love to discuss how we can help {{companyName}} achieve its technology goals. Would you be available for a brief 15-minute call this week?',
     type: 'intro',
     description: 'Professional introduction highlighting IT services (ERP, SaaS, App Development)'
   },

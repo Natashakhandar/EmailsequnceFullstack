@@ -62,12 +62,12 @@ const Navbar = () => {
   ];
 
   // Add Admin Management link for superadmins
-  const navLinks = currentUser?.role === 'SUPERADMIN' 
+  const navLinks = currentUser?.role === 'SUPERADMIN'
     ? [
-        ...baseNavLinks.slice(0, -1), // All links except Profile
-        { to: "/admin-management", label: "Admin Management", icon: Shield },
-        baseNavLinks[baseNavLinks.length - 1] // Profile link at the end
-      ]
+      ...baseNavLinks.slice(0, -1), // All links except Profile
+      { to: "/admin-management", label: "Admin Management", icon: Shield },
+      baseNavLinks[baseNavLinks.length - 1] // Profile link at the end
+    ]
     : baseNavLinks;
 
   return (
@@ -85,7 +85,7 @@ const Navbar = () => {
             transition={{ delay: 0.2 }}
             className="text-xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"
           >
-            Arnav Sales Company
+            BoostNow Sales Company
           </motion.div>
 
           {/* Navigation Links */}
@@ -95,10 +95,9 @@ const Navbar = () => {
                 key={link.to}
                 to={link.to}
                 className={({ isActive }) =>
-                  `relative px-3 py-1.5 rounded-lg transition-smooth flex items-center gap-2 ${
-                    isActive
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground"
+                  `relative px-3 py-1.5 rounded-lg transition-smooth flex items-center gap-2 ${isActive
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                   }`
                 }
               >

@@ -49,7 +49,7 @@ const Login = () => {
           className="text-center mb-8"
         >
           <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
-            Arnav Sales Company
+            BoostNow Sales Company
           </h1>
           <p className="text-muted-foreground">Premium Email Automation</p>
         </motion.div>
@@ -126,17 +126,6 @@ const Login = () => {
             </motion.div>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              Don't have an account?{" "}
-              <Link
-                to="/signup"
-                className="text-primary font-medium hover:underline transition-smooth"
-              >
-                Sign up
-              </Link>
-            </p>
-          </div>
         </motion.div>
       </motion.div>
     </div>

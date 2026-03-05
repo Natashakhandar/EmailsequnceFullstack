@@ -29,7 +29,7 @@ const ManageTemplatesPopup = ({
   const [customTemplates, setCustomTemplates] = useState<DefaultTemplate[]>([]);
 
   // Default professional signature
-  const defaultSignature = `--\nBest regards,\nArnav Sales Company\nEmpowering Businesses with ERP, SaaS & App Solutions`;
+  const defaultSignature = `--\nBest regards,\nBoostNow Sales Company\nEmpowering Businesses with ERP, SaaS & App Solutions`;
 
   // Helper function to extract body and signature for editing
   const extractBodyAndSignature = (fullBody: string): { body: string; signature: string } => {
@@ -148,210 +148,92 @@ const ManageTemplatesPopup = ({
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full max-h-[calc(90vh-200px)] pr-4">
             <div className="space-y-6 pb-4">
-            {/* Custom Template Creation Section */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="glass rounded-xl p-6 shadow-card border-2 border-dashed border-primary/30"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-lg">Create Custom Template</h4>
-                    <Badge className="text-xs mt-1 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300">
-                      custom
-                    </Badge>
-                  </div>
-                </div>
-                
-                {!showCustomTemplate && (
-                  <Button
-                    onClick={() => setShowCustomTemplate(true)}
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl border-primary/20 hover:border-primary"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create New
-                  </Button>
-                )}
-              </div>
-
-              <p className="text-sm text-muted-foreground mb-4 italic">
-                Create your own personalized email template with custom subject and body
-              </p>
-
-              <AnimatePresence>
-                {showCustomTemplate && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="space-y-4"
-                  >
-                    <div className="space-y-2">
-                      <Label htmlFor="custom-subject">Subject Line</Label>
-                      <Input
-                        id="custom-subject"
-                        value={customTemplate.subject}
-                        onChange={(e) => setCustomTemplate(prev => ({ ...prev, subject: e.target.value }))}
-                        placeholder="Enter your custom email subject..."
-                        className="rounded-xl"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="custom-body">Email Body</Label>
-                      <Textarea
-                        id="custom-body"
-                        value={customTemplate.body}
-                        onChange={(e) => setCustomTemplate(prev => ({ ...prev, body: e.target.value }))}
-                        placeholder="Enter your custom email content...\n\nTip: You can use {{firstName}}, {{lastName}}, {{companyName}} for personalization"
-                        className="rounded-xl min-h-[200px] resize-none"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="custom-signature">Email Signature</Label>
-                      <Textarea
-                        id="custom-signature"
-                        value={customTemplate.signature || defaultSignature}
-                        onChange={(e) => setCustomTemplate(prev => ({ ...prev, signature: e.target.value }))}
-                        placeholder={defaultSignature}
-                        className="rounded-xl min-h-[100px] resize-none"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        📝 Professional signature that will be appended to your email
-                      </p>
-                    </div>
-                    
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        onClick={() => {
-                          setShowCustomTemplate(false);
-                          setCustomTemplate({ subject: "", body: "", signature: "" });
-                        }}
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl border-primary/20 hover:border-primary"
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={saveCustomTemplate}
-                        size="sm"
-                        className="gradient-primary text-white rounded-xl shadow-luxury"
-                      >
-                        <Save className="w-4 h-4 mr-2" />
-                        Save Template
-                      </Button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-
-            {/* Predefined and Custom Templates */}
-            {allTemplates.map((template, index) => (
+              {/* Custom Template Creation Section */}
               <motion.div
-                key={template.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="glass rounded-xl p-6 shadow-card"
+                className="glass rounded-xl p-6 shadow-card border-2 border-dashed border-primary/30"
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center">
-                      <Mail className="w-5 h-5 text-white" />
+                      <Plus className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <h4 className="font-semibold text-lg">{template.name}</h4>
-                      <Badge className={`text-xs mt-1 ${getTypeColor(template.type)}`}>
-                        {template.type}
+                      <h4 className="font-semibold text-lg">Create Custom Template</h4>
+                      <Badge className="text-xs mt-1 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300">
+                        custom
                       </Badge>
                     </div>
                   </div>
-                  
-                  {editingTemplate !== template.id && (
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => startEditing(template)}
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl border-primary/20 hover:border-primary"
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit
-                      </Button>
-                      {template.type === 'custom' && (
-                        <Button
-                          onClick={() => deleteCustomTemplate(template.id)}
-                          variant="outline"
-                          size="sm"
-                          className="rounded-xl border-red-200 hover:border-red-400 text-red-600 hover:text-red-700"
-                        >
-                          <X className="w-4 h-4 mr-2" />
-                          Delete
-                        </Button>
-                      )}
-                    </div>
+
+                  {!showCustomTemplate && (
+                    <Button
+                      onClick={() => setShowCustomTemplate(true)}
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl border-primary/20 hover:border-primary"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create New
+                    </Button>
                   )}
                 </div>
 
                 <p className="text-sm text-muted-foreground mb-4 italic">
-                  {template.description}
+                  Create your own personalized email template with custom subject and body
                 </p>
 
-                <AnimatePresence mode="wait">
-                  {editingTemplate === template.id ? (
+                <AnimatePresence>
+                  {showCustomTemplate && (
                     <motion.div
-                      key="editing"
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
                       className="space-y-4"
                     >
                       <div className="space-y-2">
-                        <Label htmlFor={`subject-${template.id}`}>Subject Line</Label>
+                        <Label htmlFor="custom-subject">Subject Line</Label>
                         <Input
-                          id={`subject-${template.id}`}
-                          value={editData.subject}
-                          onChange={(e) => setEditData(prev => ({ ...prev, subject: e.target.value }))}
+                          id="custom-subject"
+                          value={customTemplate.subject}
+                          onChange={(e) => setCustomTemplate(prev => ({ ...prev, subject: e.target.value }))}
+                          placeholder="Enter your custom email subject..."
                           className="rounded-xl"
                         />
                       </div>
-                      
+
                       <div className="space-y-2">
-                        <Label htmlFor={`body-${template.id}`}>Email Body</Label>
+                        <Label htmlFor="custom-body">Email Body</Label>
                         <Textarea
-                          id={`body-${template.id}`}
-                          value={editData.body}
-                          onChange={(e) => setEditData(prev => ({ ...prev, body: e.target.value }))}
+                          id="custom-body"
+                          value={customTemplate.body}
+                          onChange={(e) => setCustomTemplate(prev => ({ ...prev, body: e.target.value }))}
+                          placeholder="Enter your custom email content...\n\nTip: You can use {{firstName}}, {{lastName}}, {{companyName}} for personalization"
                           className="rounded-xl min-h-[200px] resize-none"
                         />
                       </div>
-                      
+
                       <div className="space-y-2">
-                        <Label htmlFor={`signature-${template.id}`}>Email Signature</Label>
+                        <Label htmlFor="custom-signature">Email Signature</Label>
                         <Textarea
-                          id={`signature-${template.id}`}
-                          value={editData.signature}
-                          onChange={(e) => setEditData(prev => ({ ...prev, signature: e.target.value }))}
+                          id="custom-signature"
+                          value={customTemplate.signature || defaultSignature}
+                          onChange={(e) => setCustomTemplate(prev => ({ ...prev, signature: e.target.value }))}
+                          placeholder={defaultSignature}
                           className="rounded-xl min-h-[100px] resize-none"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
                           📝 Professional signature that will be appended to your email
                         </p>
                       </div>
-                      
+
                       <div className="flex gap-2 justify-end">
                         <Button
-                          onClick={cancelEditing}
+                          onClick={() => {
+                            setShowCustomTemplate(false);
+                            setCustomTemplate({ subject: "", body: "", signature: "" });
+                          }}
                           variant="outline"
                           size="sm"
                           className="rounded-xl border-primary/20 hover:border-primary"
@@ -360,41 +242,159 @@ const ManageTemplatesPopup = ({
                           Cancel
                         </Button>
                         <Button
-                          onClick={() => saveChanges(template.id)}
+                          onClick={saveCustomTemplate}
                           size="sm"
                           className="gradient-primary text-white rounded-xl shadow-luxury"
                         >
                           <Save className="w-4 h-4 mr-2" />
-                          Save Changes
+                          Save Template
                         </Button>
-                      </div>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="viewing"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="space-y-3"
-                    >
-                      <div>
-                        <Label className="text-sm font-medium text-muted-foreground">Subject:</Label>
-                        <div className="text-sm bg-muted/30 rounded-lg p-3 mt-1">
-                          {template.subject}
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <Label className="text-sm font-medium text-muted-foreground">Body:</Label>
-                        <div className="text-sm text-muted-foreground bg-muted/30 rounded-lg p-3 mt-1 whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">
-                          {template.body}
-                        </div>
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
               </motion.div>
-            ))}
+
+              {/* Predefined and Custom Templates */}
+              {allTemplates.map((template, index) => (
+                <motion.div
+                  key={template.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="glass rounded-xl p-6 shadow-card"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center">
+                        <Mail className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-lg">{template.name}</h4>
+                        <Badge className={`text-xs mt-1 ${getTypeColor(template.type)}`}>
+                          {template.type}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {editingTemplate !== template.id && (
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => startEditing(template)}
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl border-primary/20 hover:border-primary"
+                        >
+                          <Edit className="w-4 h-4 mr-2" />
+                          Edit
+                        </Button>
+                        {template.type === 'custom' && (
+                          <Button
+                            onClick={() => deleteCustomTemplate(template.id)}
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl border-red-200 hover:border-red-400 text-red-600 hover:text-red-700"
+                          >
+                            <X className="w-4 h-4 mr-2" />
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-sm text-muted-foreground mb-4 italic">
+                    {template.description}
+                  </p>
+
+                  <AnimatePresence mode="wait">
+                    {editingTemplate === template.id ? (
+                      <motion.div
+                        key="editing"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="space-y-4"
+                      >
+                        <div className="space-y-2">
+                          <Label htmlFor={`subject-${template.id}`}>Subject Line</Label>
+                          <Input
+                            id={`subject-${template.id}`}
+                            value={editData.subject}
+                            onChange={(e) => setEditData(prev => ({ ...prev, subject: e.target.value }))}
+                            className="rounded-xl"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor={`body-${template.id}`}>Email Body</Label>
+                          <Textarea
+                            id={`body-${template.id}`}
+                            value={editData.body}
+                            onChange={(e) => setEditData(prev => ({ ...prev, body: e.target.value }))}
+                            className="rounded-xl min-h-[200px] resize-none"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor={`signature-${template.id}`}>Email Signature</Label>
+                          <Textarea
+                            id={`signature-${template.id}`}
+                            value={editData.signature}
+                            onChange={(e) => setEditData(prev => ({ ...prev, signature: e.target.value }))}
+                            className="rounded-xl min-h-[100px] resize-none"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            📝 Professional signature that will be appended to your email
+                          </p>
+                        </div>
+
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            onClick={cancelEditing}
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl border-primary/20 hover:border-primary"
+                          >
+                            <X className="w-4 h-4 mr-2" />
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={() => saveChanges(template.id)}
+                            size="sm"
+                            className="gradient-primary text-white rounded-xl shadow-luxury"
+                          >
+                            <Save className="w-4 h-4 mr-2" />
+                            Save Changes
+                          </Button>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="viewing"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="space-y-3"
+                      >
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Subject:</Label>
+                          <div className="text-sm bg-muted/30 rounded-lg p-3 mt-1">
+                            {template.subject}
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Body:</Label>
+                          <div className="text-sm text-muted-foreground bg-muted/30 rounded-lg p-3 mt-1 whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">
+                            {template.body}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              ))}
             </div>
           </ScrollArea>
         </div>

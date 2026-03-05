@@ -22,7 +22,7 @@ const TemplatesPage = () => {
   const [newTemplate, setNewTemplate] = useState({ name: '', subject: '', body: '', signature: '' });
 
   // Default professional signature
-  const defaultSignature = `--\nBest regards,\nArnav Sales Company\nEmpowering Businesses with ERP, SaaS & App Solutions`;
+  const defaultSignature = `--\nBest regards,\nBoostNow Sales Company\nEmpowering Businesses with ERP, SaaS & App Solutions`;
 
   // Fetch custom templates from API
   const fetchCustomTemplates = async () => {
@@ -107,10 +107,10 @@ const TemplatesPage = () => {
       // Combine body and signature before saving
       const fullBody = combineBodyAndSignature(editData.body, editData.signature);
       const updates = { subject: editData.subject, body: fullBody };
-      
+
       // Check if this is a custom template (from API)
       const isCustomTemplate = customTemplates.some(t => t.id === templateId);
-      
+
       if (isCustomTemplate) {
         // Update custom template via API
         await api.updateTemplate(templateId, updates);
@@ -121,7 +121,7 @@ const TemplatesPage = () => {
         toast.error('Default templates cannot be modified. Create a custom template instead.');
         return;
       }
-      
+
       setEditingTemplate(null);
       setEditData({ subject: '', body: '', signature: '' });
     } catch (error) {
@@ -144,14 +144,14 @@ const TemplatesPage = () => {
         body: fullBody,
         isActive: true
       };
-      
+
       await api.createTemplate(templateData);
       await fetchCustomTemplates(); // Refresh custom templates
-      
+
       // Reset form
       setNewTemplate({ name: '', subject: '', body: '', signature: '' });
       setShowCreateForm(false);
-      
+
       toast.success('Template created successfully ✅');
     } catch (error) {
       console.error('Error creating template:', error);
@@ -177,7 +177,7 @@ const TemplatesPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       <Navbar />
-      
+
       <div className="pt-18 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
@@ -253,7 +253,7 @@ const TemplatesPage = () => {
                           />
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label htmlFor="template-body">Email Body</Label>
                         <Textarea
@@ -263,8 +263,21 @@ const TemplatesPage = () => {
                           placeholder="Enter your email content...\n\nTip: You can use {{firstName}}, {{lastName}}, {{companyName}} for personalization"
                           className="rounded-xl min-h-[150px] resize-none"
                         />
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          <span className="text-xs text-gray-500 font-medium flex items-center mr-1">Insert Variable:</span>
+                          {['{{firstName}}', '{{lastName}}', '{{email}}', '{{companyName}}'].map(tag => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => setNewTemplate(prev => ({ ...prev, body: prev.body + (prev.body.endsWith(' ') ? '' : ' ') + tag }))}
+                              className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1 rounded-md hover:bg-blue-100 transition-colors border border-blue-200"
+                            >
+                              {tag.replace(/[{}]/g, '')}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label htmlFor="template-signature">Email Signature</Label>
                         <Textarea
@@ -278,7 +291,7 @@ const TemplatesPage = () => {
                           📝 Professional signature that will be appended to your email
                         </p>
                       </div>
-                      
+
                       <div className="flex gap-2 justify-end">
                         <Button
                           onClick={() => {
@@ -342,7 +355,7 @@ const TemplatesPage = () => {
                               </Badge>
                             </div>
                           </div>
-                          
+
                           {editingTemplate !== template.id && (
                             <div className="flex gap-2">
                               <Button
@@ -378,7 +391,7 @@ const TemplatesPage = () => {
                                 className="rounded-xl"
                               />
                             </div>
-                            
+
                             <div className="space-y-2">
                               <Label htmlFor={`body-${template.id}`}>Email Body</Label>
                               <Textarea
@@ -387,8 +400,21 @@ const TemplatesPage = () => {
                                 onChange={(e) => setEditData(prev => ({ ...prev, body: e.target.value }))}
                                 className="rounded-xl min-h-[200px] resize-none"
                               />
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                <span className="text-xs text-gray-500 font-medium flex items-center mr-1">Insert Variable:</span>
+                                {['{{firstName}}', '{{lastName}}', '{{email}}', '{{companyName}}'].map(tag => (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => setEditData(prev => ({ ...prev, body: prev.body + (prev.body.endsWith(' ') ? '' : ' ') + tag }))}
+                                    className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1 rounded-md hover:bg-blue-100 transition-colors border border-blue-200"
+                                  >
+                                    {tag.replace(/[{}]/g, '')}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            
+
                             <div className="space-y-2">
                               <Label htmlFor={`signature-${template.id}`}>Email Signature</Label>
                               <Textarea
@@ -398,7 +424,7 @@ const TemplatesPage = () => {
                                 className="rounded-xl min-h-[100px] resize-none"
                               />
                             </div>
-                            
+
                             <div className="flex gap-2 justify-end">
                               <Button
                                 onClick={cancelEditing}
@@ -427,7 +453,7 @@ const TemplatesPage = () => {
                                 {template.subject}
                               </div>
                             </div>
-                            
+
                             <div>
                               <Label className="text-sm font-medium text-gray-600">Body:</Label>
                               <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 mt-1 whitespace-pre-wrap leading-relaxed max-h-[200px] overflow-y-auto">
@@ -477,7 +503,7 @@ const TemplatesPage = () => {
                             </Badge>
                           </div>
                         </div>
-                        
+
                         <Badge className="text-xs bg-gray-100 text-gray-600">
                           Read Only
                         </Badge>
@@ -490,14 +516,14 @@ const TemplatesPage = () => {
                             {template.subject}
                           </div>
                         </div>
-                        
+
                         <div>
                           <Label className="text-sm font-medium text-gray-600">Body:</Label>
                           <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 mt-1 whitespace-pre-wrap leading-relaxed max-h-[200px] overflow-y-auto">
                             {template.body}
                           </div>
                         </div>
-                        
+
                         <div>
                           <Label className="text-sm font-medium text-gray-600">Description:</Label>
                           <p className="text-sm text-gray-600 mt-1 italic">{template.description}</p>
