@@ -137,7 +137,7 @@ class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const token = this.getAuthToken();
-    
+
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
@@ -149,9 +149,19 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+
+        if (response.status === 401) {
+          localStorage.removeItem('auth_token');
+          if (typeof window !== 'undefined' &&
+            window.location.pathname !== '/login' &&
+            window.location.pathname !== '/signup') {
+            window.location.href = '/login';
+          }
+        }
+
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
@@ -168,10 +178,27 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    
+
     // Store token in localStorage
     localStorage.setItem('auth_token', response.token);
-    
+
+    return response;
+  }
+
+  async signup(userData: {
+    email: string;
+    password: string;
+    firstName?: string;
+    lastName?: string;
+  }): Promise<LoginResponse> {
+    const response = await this.request<LoginResponse>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+
+    // Store token in localStorage
+    localStorage.setItem('auth_token', response.token);
+
     return response;
   }
 
@@ -271,11 +298,11 @@ class ApiClient {
   }
 
   async bulkDeleteContacts(ids: string[]) {
-  return this.request<{ message: string; deleted: number }>('/contacts/bulk-delete', {
-    method: 'POST',
-    body: JSON.stringify({ ids }),
-  });
-}
+    return this.request<{ message: string; deleted: number }>('/contacts/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+  }
 
 
   // Templates API
@@ -320,9 +347,9 @@ class ApiClient {
     return this.request<{ sequences: Sequence[]; pagination: any }>(`/sequences${query ? `?${query}` : ''}`);
   }
 
-  async createSequence(sequence: { 
-    name: string; 
-    description?: string; 
+  async createSequence(sequence: {
+    name: string;
+    description?: string;
     steps?: Array<{
       stepOrder: number;
       subject?: string;
@@ -340,9 +367,9 @@ class ApiClient {
     });
   }
 
-  async updateSequence(id: string, updates: { 
-    name?: string; 
-    description?: string; 
+  async updateSequence(id: string, updates: {
+    name?: string;
+    description?: string;
     steps?: Array<{
       stepOrder: number;
       subject?: string;
@@ -401,11 +428,11 @@ class ApiClient {
   }
 
   // Events API
-  async getEvents(params?: { 
-    page?: number; 
-    limit?: number; 
-    type?: string; 
-    enrollmentId?: string; 
+  async getEvents(params?: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    enrollmentId?: string;
     contactId?: string;
     startDate?: string;
     endDate?: string;

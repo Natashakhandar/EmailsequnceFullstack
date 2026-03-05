@@ -1,6 +1,10 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
+
+// Apply authentication middleware to all contact routes
+router.use(authenticateToken);
 
 // GET /api/contacts - Get all contacts with pagination
 router.get('/', async (req, res) => {
@@ -8,7 +12,9 @@ router.get('/', async (req, res) => {
     const { page = 1, limit = 50, status, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {};
+    const where = {
+      userId: req.user.id
+    };
     if (status) where.status = status;
     if (search) {
       where.OR = [
@@ -57,8 +63,11 @@ router.get('/', async (req, res) => {
 // GET /api/contacts/:id - Get single contact
 router.get('/:id', async (req, res) => {
   try {
-    const contact = await prisma.contact.findUnique({
-      where: { id: req.params.id },
+    const contact = await prisma.contact.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user.id
+      },
       include: {
         enrollments: {
           include: {
@@ -96,9 +105,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    // Check if contact already exists
-    const existingContact = await prisma.contact.findUnique({
-      where: { email }
+    // Check if contact already exists for this user
+    const existingContact = await prisma.contact.findFirst({
+      where: {
+        email,
+        userId: req.user.id
+      }
     });
 
     if (existingContact) {
@@ -107,6 +119,7 @@ router.post('/', async (req, res) => {
 
     const contact = await prisma.contact.create({
       data: {
+        userId: req.user.id,
         email: email.toLowerCase().trim(),
         firstName: firstName?.trim(),
         lastName: lastName?.trim(),
@@ -126,6 +139,15 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { firstName, lastName, company, timezone, status } = req.body;
+
+    // First verify ownership
+    const existing = await prisma.contact.findFirst({
+      where: { id: req.params.id, userId: req.user.id }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
 
     const contact = await prisma.contact.update({
       where: { id: req.params.id },
@@ -155,9 +177,12 @@ router.delete('/:id', async (req, res) => {
 
     console.log('🗑️ Deleting lead/contact:', { contactId: id });
 
-    // Verify contact exists and get detailed information
-    const existingContact = await prisma.contact.findUnique({
-      where: { id },
+    // Verify contact exists and belongs to user
+    const existingContact = await prisma.contact.findFirst({
+      where: {
+        id,
+        userId: req.user.id
+      },
       include: {
         _count: {
           select: {
@@ -170,7 +195,7 @@ router.delete('/:id', async (req, res) => {
     });
 
     if (!existingContact) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Lead not found',
         contactId: id
       });
@@ -263,14 +288,14 @@ router.delete('/:id', async (req, res) => {
 
   } catch (error) {
     if (error.code === 'P2025') {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
         error: 'Lead not found',
         contactId: req.params.id
       });
     }
     console.error('❌ Error deleting lead:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Failed to delete lead',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -300,9 +325,12 @@ router.post('/bulk', async (req, res) => {
           continue;
         }
 
-        // Check if contact exists
-        const existing = await prisma.contact.findUnique({
-          where: { email: contactData.email.toLowerCase().trim() }
+        // Check if contact exists for this user
+        const existing = await prisma.contact.findFirst({
+          where: {
+            email: contactData.email.toLowerCase().trim(),
+            userId: req.user.id
+          }
         });
 
         if (existing) {
@@ -312,6 +340,7 @@ router.post('/bulk', async (req, res) => {
 
         await prisma.contact.create({
           data: {
+            userId: req.user.id,
             email: contactData.email.toLowerCase().trim(),
             firstName: contactData.firstName?.trim(),
             lastName: contactData.lastName?.trim(),
@@ -343,11 +372,26 @@ router.post('/bulk-delete', async (req, res) => {
       return res.status(400).json({ message: 'No contact IDs provided' });
     }
 
+    // Verify contacts belong to user before deleting
+    const existingContacts = await prisma.contact.findMany({
+      where: {
+        id: { in: ids },
+        userId: req.user.id
+      },
+      select: { id: true }
+    });
+
+    const validIds = existingContacts.map(c => c.id);
+
+    if (validIds.length === 0) {
+      return res.status(404).json({ message: 'No valid contacts found to delete' });
+    }
+
     // Delete contacts using deleteMany
     const result = await prisma.contact.deleteMany({
       where: {
         id: {
-          in: ids
+          in: validIds
         }
       }
     });

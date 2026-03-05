@@ -67,7 +67,7 @@ const SimplifiedSequences = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      
+
       // Try to load from backend first
       try {
         const [templatesResponse, sequencesResponse, signatureResponse] = await Promise.allSettled([
@@ -75,35 +75,35 @@ const SimplifiedSequences = () => {
           api.getSequences({ limit: 50 }),
           api.getProfileSignature()
         ]);
-        
+
         if (templatesResponse.status === 'fulfilled') {
           setTemplates(templatesResponse.value.templates);
         }
-        
+
         if (sequencesResponse.status === 'fulfilled') {
           // Combine backend sequences with localStorage sequences
           const localSequences = JSON.parse(localStorage.getItem('emailSequences') || '[]');
           const allSequences = [...sequencesResponse.value.sequences, ...localSequences.filter((seq: any) => !seq.backendSaved)];
           setSequences(allSequences);
         }
-        
+
         if (signatureResponse.status === 'fulfilled') {
           setUserSignature(signatureResponse.value.signature || "");
         }
-        
+
       } catch (backendError) {
         console.error("Backend loading failed, using localStorage:", backendError);
-        
+
         // Fallback to localStorage only
         const localSequences = JSON.parse(localStorage.getItem('emailSequences') || '[]');
         setSequences(localSequences);
         setTemplates([]); // No custom templates available offline
-        
+
         if (localSequences.length > 0) {
           toast.success("Loaded sequences from local storage");
         }
       }
-      
+
     } catch (error) {
       console.error("Error loading data:", error);
       toast.error("Failed to load data");
@@ -114,9 +114,9 @@ const SimplifiedSequences = () => {
 
   const handleTemplateSelect = (stepId: string, templateId: string) => {
     const selectedTemplate = localDefaultTemplates.find(t => t.id === templateId);
-    
-    setSteps(prev => prev.map(step => 
-      step.id === stepId 
+
+    setSteps(prev => prev.map(step =>
+      step.id === stepId
         ? { ...step, templateId, selectedTemplate }
         : step
     ));
@@ -125,27 +125,27 @@ const SimplifiedSequences = () => {
   // Add signature to template body
   const addSignatureToBody = (body: string): string => {
     if (!userSignature) return body;
-    
+
     // Check if signature already exists (avoid duplicates)
     if (body.includes(userSignature)) {
       return body;
     }
-    
+
     return body + `\n\n${userSignature}`;
   };
 
   const handleTemplateUpdate = (templateId: string, updates: { subject: string; body: string }) => {
-    setLocalDefaultTemplates(prev => 
-      prev.map(template => 
-        template.id === templateId 
+    setLocalDefaultTemplates(prev =>
+      prev.map(template =>
+        template.id === templateId
           ? { ...template, ...updates }
           : template
       )
     );
-    
+
     // Update selected templates in steps
-    setSteps(prev => prev.map(step => 
-      step.selectedTemplate?.id === templateId 
+    setSteps(prev => prev.map(step =>
+      step.selectedTemplate?.id === templateId
         ? { ...step, selectedTemplate: { ...step.selectedTemplate, ...updates } }
         : step
     ));
@@ -190,7 +190,7 @@ const SimplifiedSequences = () => {
     try {
       // Try to save to backend first
       const processedSteps = [];
-      
+
       for (let i = 0; i < stepsWithTemplates.length; i++) {
         const step = stepsWithTemplates[i];
         if (step.selectedTemplate) {
@@ -200,7 +200,7 @@ const SimplifiedSequences = () => {
             body: addSignatureToBody(step.selectedTemplate.body),
             isActive: true
           });
-          
+
           processedSteps.push({
             templateId: customTemplate.id,
             stepOrder: i + 1,
@@ -218,26 +218,26 @@ const SimplifiedSequences = () => {
       });
 
       setSequences([sequence, ...sequences]);
-      
+
       // Also save to localStorage as backup
       const savedSequences = JSON.parse(localStorage.getItem('emailSequences') || '[]');
       savedSequences.push({ ...sequenceData, id: sequence.id, backendSaved: true });
       localStorage.setItem('emailSequences', JSON.stringify(savedSequences));
-      
+
       // Reset form
       setSequenceName("");
-      setSteps(prev => prev.map(step => ({ 
-        ...step, 
-        templateId: "", 
-        selectedTemplate: undefined 
+      setSteps(prev => prev.map(step => ({
+        ...step,
+        templateId: "",
+        selectedTemplate: undefined
       })));
-      
+
       toast.success("✅ Sequence saved successfully");
       loadData();
-      
+
     } catch (error: any) {
       console.error("Backend save failed, falling back to localStorage:", error);
-      
+
       // Fallback to localStorage if backend fails
       try {
         const savedSequences = JSON.parse(localStorage.getItem('emailSequences') || '[]');
@@ -246,23 +246,23 @@ const SimplifiedSequences = () => {
           id: `local_${Date.now()}`,
           backendSaved: false
         };
-        
+
         savedSequences.push(localSequence);
         localStorage.setItem('emailSequences', JSON.stringify(savedSequences));
-        
+
         // Add to local state
         setSequences([localSequence as any, ...sequences]);
-        
+
         // Reset form
         setSequenceName("");
-        setSteps(prev => prev.map(step => ({ 
-          ...step, 
-          templateId: "", 
-          selectedTemplate: undefined 
+        setSteps(prev => prev.map(step => ({
+          ...step,
+          templateId: "",
+          selectedTemplate: undefined
         })));
-        
+
         toast.success("✅ Sequence saved successfully (stored locally)");
-        
+
       } catch (localError) {
         console.error("localStorage save also failed:", localError);
         toast.error("Failed to save sequence. Please try again.");
@@ -298,7 +298,7 @@ const SimplifiedSequences = () => {
                 Create a 4-step automated email sequence
               </p>
             </div>
-            
+
             <Button
               onClick={() => setIsEditTemplatesOpen(true)}
               variant="outline"
@@ -371,7 +371,7 @@ const SimplifiedSequences = () => {
                       <Label className="text-sm font-medium text-gray-700">Subject:</Label>
                       <p className="text-sm text-gray-900 mt-1">{step.selectedTemplate.subject}</p>
                     </div>
-                    
+
                     <div>
                       <Label className="text-sm font-medium text-gray-700">Body:</Label>
                       <p className="text-sm text-gray-900 mt-1">{step.selectedTemplate.body}</p>
@@ -387,7 +387,6 @@ const SimplifiedSequences = () => {
         <div className="flex justify-center">
           <Button
             onClick={saveSequence}
-            disabled={!sequenceName.trim()}
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2"
           >
             Save Sequence

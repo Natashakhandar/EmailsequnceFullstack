@@ -16,7 +16,7 @@ const generateToken = (userId) => {
 router.post('/login', async (req, res) => {
   try {
     console.log('🔐 Login attempt received:', { email: req.body?.email, hasPassword: !!req.body?.password });
-    
+
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -31,7 +31,7 @@ router.post('/login', async (req, res) => {
     }
 
     console.log('🔍 Looking for user:', email.toLowerCase());
-    
+
     // Find user by email
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() }
@@ -58,15 +58,15 @@ router.post('/login', async (req, res) => {
     }
 
     console.log('✅ Password valid, generating token...');
-    
+
     // Generate token
     const token = generateToken(user.id);
 
     // Return user data (without password) and token
     const { password: _, ...userWithoutPassword } = user;
-    
+
     console.log('✅ Login successful for:', user.email);
-    
+
     res.json({
       message: 'Login successful',
       user: userWithoutPassword,
@@ -117,13 +117,64 @@ router.post('/register', authenticateToken, requireSuperAdmin, async (req, res) 
 
     // Return user data (without password)
     const { password: _, ...userWithoutPassword } = user;
-    
+
     res.status(201).json({
       message: 'User created successfully',
       user: userWithoutPassword
     });
   } catch (error) {
     console.error('Registration error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/auth/signup - Open registration for users
+router.post('/signup', async (req, res) => {
+  try {
+    const { email, password, firstName, lastName } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    // Hash password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Create user
+    const user = await prisma.user.create({
+      data: {
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        firstName: firstName || '',
+        lastName: lastName || '',
+        role: 'USER',
+        isActive: true
+      }
+    });
+
+    // Generate token
+    const token = generateToken(user.id);
+
+    // Return user data (without password) and token
+    const { password: _, ...userWithoutPassword } = user;
+
+    res.status(201).json({
+      message: 'User created successfully',
+      user: userWithoutPassword,
+      token
+    });
+  } catch (error) {
+    console.error('Signup error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

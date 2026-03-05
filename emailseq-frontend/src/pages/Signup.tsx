@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
-import { Mail, Lock, User, ArrowRight } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { api } from "@/lib/api";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -12,10 +14,33 @@ const Signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSignup = (e: React.FormEvent) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Bypass authentication for now
-    navigate("/dashboard");
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const nameParts = name.trim().split(" ");
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(" ");
+
+      const response = await api.signup({
+        email,
+        password,
+        firstName,
+        lastName
+      });
+      console.log('Signup successful:', response);
+      navigate("/dashboard");
+    } catch (error) {
+      console.error('Signup failed:', error);
+      setError(error instanceof Error ? error.message : 'Signup failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -47,6 +72,13 @@ const Signup = () => {
           className="glass rounded-3xl p-8 shadow-luxury"
         >
           <h2 className="text-2xl font-semibold mb-6 text-center">Create Account</h2>
+
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
           <form onSubmit={handleSignup} className="space-y-5">
             <div className="space-y-2">
@@ -106,9 +138,10 @@ const Signup = () => {
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Button
                 type="submit"
+                disabled={isLoading}
                 className="w-full h-12 rounded-xl gradient-primary text-white font-medium shadow-luxury group"
               >
-                Get Started
+                {isLoading ? 'Creating Account...' : 'Get Started'}
                 <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-smooth" />
               </Button>
             </motion.div>

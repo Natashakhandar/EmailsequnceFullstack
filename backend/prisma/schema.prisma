@@ -24,13 +24,15 @@ model User {
 
   // Relations
   sequences Sequence[]
+  contacts  Contact[]
 
   @@map("users")
 }
 
 model Contact {
   id        String        @id @default(cuid())
-  email     String        @unique
+  userId    String?       // Owner of the contact/lead
+  email     String
   firstName String?
   lastName  String?
   company   String?
@@ -43,7 +45,9 @@ model Contact {
   enrollments   Enrollment[]
   events        Event[]
   campaignLeads CampaignLead[]
+  user          User?          @relation(fields: [userId], references: [id])
 
+  @@unique([email, userId])
   @@map("contacts")
 }
 
