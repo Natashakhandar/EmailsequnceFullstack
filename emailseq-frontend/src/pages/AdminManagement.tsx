@@ -9,15 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  Crown, 
-  Shield, 
-  User as UserIcon, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  AlertCircle, 
-  Eye, 
+import {
+  Crown,
+  Shield,
+  User as UserIcon,
+  Plus,
+  Edit,
+  Trash2,
+  AlertCircle,
+  Eye,
   EyeOff,
   UserCheck,
   UserX
@@ -41,7 +41,7 @@ const AdminManagement = () => {
     password: "",
     firstName: "",
     lastName: "",
-    role: "ADMIN" as "USER" | "ADMIN" | "SUPERADMIN"
+    role: "USER" as "USER" | "ADMIN" | "SUPERADMIN"
   });
 
   // Check if current user is superadmin
@@ -50,12 +50,12 @@ const AdminManagement = () => {
       try {
         const response = await api.getCurrentUser();
         setCurrentUser(response.user);
-        
+
         if (response.user.role !== 'SUPERADMIN') {
           setError('Access denied. Only superadmins can view this page.');
           return;
         }
-        
+
         await fetchUsers();
       } catch (error) {
         console.error('Failed to check user role:', error);
@@ -71,14 +71,10 @@ const AdminManagement = () => {
   const fetchUsers = async () => {
     try {
       const response = await api.getUsers();
-      // Filter to show only admins and superadmins
-      const adminUsers = response.users.filter(user => 
-        user.role === 'ADMIN' || user.role === 'SUPERADMIN'
-      );
-      setUsers(adminUsers);
+      setUsers(response.users);
     } catch (error) {
       console.error('Failed to fetch users:', error);
-      setError('Failed to load admin users');
+      setError('Failed to load users');
     }
   };
 
@@ -129,7 +125,7 @@ const AdminManagement = () => {
     if (confirm(`Are you sure you want to delete ${userEmail}? This action cannot be undone.`)) {
       try {
         await api.deleteUser(userId);
-        toast.success('Admin user deleted successfully');
+        toast.success('User deleted successfully');
         await fetchUsers();
       } catch (error) {
         console.error('Failed to delete user:', error);
@@ -160,7 +156,7 @@ const AdminManagement = () => {
       password: "",
       firstName: "",
       lastName: "",
-      role: "ADMIN"
+      role: "USER"
     });
     setShowPassword(false);
   };
@@ -249,19 +245,19 @@ const AdminManagement = () => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold mb-2">Admin Management</h1>
-              <p className="text-muted-foreground">Manage administrator accounts and permissions</p>
+              <h1 className="text-4xl font-bold mb-2">User Management</h1>
+              <p className="text-muted-foreground">Manage user accounts and permissions</p>
             </div>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gradient-primary text-white rounded-xl shadow-luxury">
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Admin
+                  Add User
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Create New Admin</DialogTitle>
+                  <DialogTitle>Create New User</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleCreateUser} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -322,12 +318,13 @@ const AdminManagement = () => {
                       onChange={(e) => setFormData({ ...formData, role: e.target.value as "USER" | "ADMIN" | "SUPERADMIN" })}
                       className="w-full p-2 border border-border rounded-md bg-background"
                     >
+                      <option value="USER">User</option>
                       <option value="ADMIN">Admin</option>
                       <option value="SUPERADMIN">Super Admin</option>
                     </select>
                   </div>
                   <div className="flex gap-2 pt-4">
-                    <Button type="submit" className="flex-1">Create Admin</Button>
+                    <Button type="submit" className="flex-1">Create User</Button>
                     <Button type="button" variant="outline" onClick={() => {
                       setIsCreateDialogOpen(false);
                       resetForm();
@@ -358,7 +355,7 @@ const AdminManagement = () => {
           {users.map((user) => {
             const roleInfo = getRoleInfo(user.role);
             const IconComponent = roleInfo.icon;
-            
+
             return (
               <Card key={user.id} className="glass hover-lift">
                 <CardHeader className="pb-3">
@@ -392,7 +389,7 @@ const AdminManagement = () => {
                         </span>
                       </div>
                     </div>
-                    
+
                     <div className="text-xs text-muted-foreground">
                       <p>Created: {new Date(user.createdAt).toLocaleDateString()}</p>
                       <p>Updated: {new Date(user.updatedAt).toLocaleDateString()}</p>
@@ -435,11 +432,11 @@ const AdminManagement = () => {
         {users.length === 0 && !loading && (
           <div className="text-center py-12">
             <UserIcon className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No Admin Users Found</h3>
-            <p className="text-muted-foreground mb-4">Get started by creating your first admin user.</p>
+            <h3 className="text-xl font-semibold mb-2">No Users Found</h3>
+            <p className="text-muted-foreground mb-4">Get started by creating your first user.</p>
             <Button onClick={() => setIsCreateDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
-              Add First Admin
+              Add First User
             </Button>
           </div>
         )}
@@ -448,7 +445,7 @@ const AdminManagement = () => {
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Edit Admin User</DialogTitle>
+              <DialogTitle>Edit User</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleUpdateUser} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -490,6 +487,7 @@ const AdminManagement = () => {
                   className="w-full p-2 border border-border rounded-md bg-background"
                   disabled={editingUser?.id === currentUser?.id}
                 >
+                  <option value="USER">User</option>
                   <option value="ADMIN">Admin</option>
                   <option value="SUPERADMIN">Super Admin</option>
                 </select>
@@ -498,7 +496,7 @@ const AdminManagement = () => {
                 )}
               </div>
               <div className="flex gap-2 pt-4">
-                <Button type="submit" className="flex-1">Update Admin</Button>
+                <Button type="submit" className="flex-1">Update User</Button>
                 <Button type="button" variant="outline" onClick={() => {
                   setIsEditDialogOpen(false);
                   setEditingUser(null);

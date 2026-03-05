@@ -19,7 +19,16 @@ import SmtpSettings from "./pages/SmtpSettings";
 import CampaignCreate from "./pages/CampaignCreate";
 import Campaigns from "./pages/Campaigns";
 
+import { api } from "@/lib/api";
+
 const queryClient = new QueryClient();
+
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  if (!api.isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -28,23 +37,26 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/sequences" element={<SequencesNEW />} />
-          <Route path="/templates" element={<TemplatesPage />} />
-          <Route path="/leads" element={<Leads />} />
-          <Route path="/campaigns" element={<Campaigns />} />
-          <Route path="/campaigns/create" element={<CampaignCreate />} />
-          <Route path="/email-activity" element={<EmailActivity />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/smtp-settings" element={<SmtpSettings />} />
-          <Route path="/sequences-simplified" element={<SimplifiedSequences />} />
-          <Route path="/admin-management" element={<AdminManagement />} />
-          <Route path="/reports" element={<Reports />} />
+
+          {/* Protected Routes */}
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/sequences" element={<ProtectedRoute><SequencesNEW /></ProtectedRoute>} />
+          <Route path="/templates" element={<ProtectedRoute><TemplatesPage /></ProtectedRoute>} />
+          <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
+          <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
+          <Route path="/campaigns/create" element={<ProtectedRoute><CampaignCreate /></ProtectedRoute>} />
+          <Route path="/email-activity" element={<ProtectedRoute><EmailActivity /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/smtp-settings" element={<ProtectedRoute><SmtpSettings /></ProtectedRoute>} />
+          <Route path="/sequences-simplified" element={<ProtectedRoute><SimplifiedSequences /></ProtectedRoute>} />
+          <Route path="/admin-management" element={<ProtectedRoute><AdminManagement /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
