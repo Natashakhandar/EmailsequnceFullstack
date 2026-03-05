@@ -97,7 +97,10 @@ function generateTextFromHtml(htmlContent) {
 // Create reusable transporter object using SMTP transport
 let transporter = null;
 
-function createTransporter() {
+function createTransporter(customConfig = null) {
+  if (customConfig) {
+    return nodemailer.createTransport(customConfig);
+  }
   if (!transporter) {
     transporter = nodemailer.createTransport(smtpConfig);
   }
@@ -217,10 +220,15 @@ async function sendEmail({
   enrollmentId = null,
   contactId = null,
   signature = null,
-  campaignId = null
+  campaignId = null,
+  userSmtpConfig = null
 }) {
   try {
-    const transport = createTransporter();
+    const transport = createTransporter(userSmtpConfig);
+
+    // Default email from info
+    const fromName = userSmtpConfig?.fromName || emailConfig.from.name;
+    const fromAddress = userSmtpConfig?.fromAddress || emailConfig.from.address;
 
     // CRITICAL LOGGING: Input validation
     console.log('📧 SENDMAIL INPUT VALIDATION');
@@ -263,7 +271,8 @@ async function sendEmail({
       generateTextFromHtml(processedHtmlBody);
 
     // Generate unique Message-ID for tracking
-    const messageId = `<${uuidv4()}@${emailConfig.from.address.split('@')[1]}>`;
+    const fromDomain = fromAddress.split('@')[1] || 'boostnow.in';
+    const messageId = `<${uuidv4()}@${fromDomain}>`;
 
     // Add tracking pixel to HTML body if enrollmentId is provided
     if (enrollmentId && processedHtmlBody) {
@@ -286,14 +295,14 @@ async function sendEmail({
     // Prepare email options
     const mailOptions = {
       from: {
-        name: emailConfig.from.name,
-        address: emailConfig.from.address
+        name: fromName,
+        address: fromAddress
       },
       to: to,
       subject: processedSubject,
       html: processedHtmlBody,
       text: processedTextBody,
-      replyTo: emailConfig.replyTo,
+      replyTo: userSmtpConfig?.fromAddress || emailConfig.replyTo,
       headers: {
         'Message-ID': messageId,
         'List-Unsubscribe': `<${unsubscribeUrl}>`,
@@ -428,7 +437,14 @@ async function sendSequenceEmail(enrollment) {
                 signature: true,
                 firstName: true,
                 lastName: true,
-                email: true
+                email: true,
+                smtpHost: true,
+                smtpPort: true,
+                smtpSecure: true,
+                smtpUser: true,
+                smtpPass: true,
+                fromEmail: true,
+                fromName: true
               }
             }
           }
@@ -525,7 +541,19 @@ async function sendSequenceEmail(enrollment) {
       enrollmentId: enrollment.id,
       contactId: contact.id,
       signature: userSignature,
-      campaignId: fullEnrollment.campaignId // Pass campaign ID for tracking
+      campaignId: fullEnrollment.campaignId, // Pass campaign ID for tracking
+      userSmtpConfig: sequence.user?.smtpHost ? {
+        host: sequence.user.smtpHost,
+        port: sequence.user.smtpPort,
+        secure: sequence.user.smtpSecure,
+        auth: {
+          user: sequence.user.smtpUser,
+          pass: sequence.user.smtpPass
+        },
+        fromName: sequence.user.fromName,
+        fromAddress: sequence.user.fromEmail,
+        tls: { rejectUnauthorized: false }
+      } : null
     });
 
     if (result.success) {

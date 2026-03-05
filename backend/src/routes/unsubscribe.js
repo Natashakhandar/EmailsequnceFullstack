@@ -1,6 +1,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../db/prismaClient');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
 // GET /api/unsubscribe/:token - Handle unsubscribe via token
@@ -22,7 +23,7 @@ router.get('/:token', async (req, res) => {
 
     // Check if token was already used
     if (unsubscribeToken.usedAt) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'This unsubscribe link has already been used',
         contact: unsubscribeToken.contact
       });
@@ -31,7 +32,7 @@ router.get('/:token', async (req, res) => {
     // Check if token is expired (optional - you can set expiration logic)
     const tokenAge = Date.now() - unsubscribeToken.createdAt.getTime();
     const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
-    
+
     if (tokenAge > maxAge) {
       return res.status(400).json({ error: 'Unsubscribe token has expired' });
     }
@@ -44,11 +45,11 @@ router.get('/:token', async (req, res) => {
 
     // Stop all active enrollments for this contact
     await prisma.enrollment.updateMany({
-      where: { 
+      where: {
         contactId: unsubscribeToken.contactId,
         status: 'ACTIVE'
       },
-      data: { 
+      data: {
         status: 'UNSUBSCRIBED',
         completedAt: new Date(),
         nextSendAt: null
@@ -63,7 +64,7 @@ router.get('/:token', async (req, res) => {
 
     // Log unsubscribe events for all enrollments
     const enrollments = await prisma.enrollment.findMany({
-      where: { 
+      where: {
         contactId: unsubscribeToken.contactId,
         status: 'UNSUBSCRIBED'
       }
@@ -75,7 +76,7 @@ router.get('/:token', async (req, res) => {
           enrollmentId: enrollment.id,
           contactId: unsubscribeToken.contactId,
           type: 'UNSUBSCRIBED',
-          details: JSON.stringify({ 
+          details: JSON.stringify({
             method: 'token',
             token: token,
             userAgent: req.get('User-Agent'),
@@ -121,7 +122,7 @@ router.post('/email', async (req, res) => {
     }
 
     if (contact.status === 'UNSUBSCRIBED') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Contact is already unsubscribed',
         contact
       });
@@ -135,11 +136,11 @@ router.post('/email', async (req, res) => {
 
     // Stop all active enrollments
     await prisma.enrollment.updateMany({
-      where: { 
+      where: {
         contactId: contact.id,
         status: 'ACTIVE'
       },
-      data: { 
+      data: {
         status: 'UNSUBSCRIBED',
         completedAt: new Date(),
         nextSendAt: null
@@ -148,7 +149,7 @@ router.post('/email', async (req, res) => {
 
     // Log unsubscribe events
     const enrollments = await prisma.enrollment.findMany({
-      where: { 
+      where: {
         contactId: contact.id,
         status: 'UNSUBSCRIBED'
       }
@@ -160,7 +161,7 @@ router.post('/email', async (req, res) => {
           enrollmentId: enrollment.id,
           contactId: contact.id,
           type: 'UNSUBSCRIBED',
-          details: JSON.stringify({ 
+          details: JSON.stringify({
             method: 'email',
             userAgent: req.get('User-Agent'),
             ip: req.ip
@@ -186,7 +187,7 @@ router.post('/email', async (req, res) => {
 });
 
 // POST /api/unsubscribe/generate-token - Generate unsubscribe token for contact
-router.post('/generate-token', async (req, res) => {
+router.post('/generate-token', authenticateToken, async (req, res) => {
   try {
     const { contactId } = req.body;
 
@@ -194,9 +195,9 @@ router.post('/generate-token', async (req, res) => {
       return res.status(400).json({ error: 'contactId is required' });
     }
 
-    // Check if contact exists
-    const contact = await prisma.contact.findUnique({
-      where: { id: contactId }
+    // Check if contact exists and belongs to user
+    const contact = await prisma.contact.findFirst({
+      where: { id: contactId, userId: req.user.id }
     });
 
     if (!contact) {

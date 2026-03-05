@@ -22,16 +22,31 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // SMTP Settings (User-specific)
+  smtpHost   String?
+  smtpPort   Int?
+  smtpSecure Boolean @default(true)
+  smtpUser   String?
+  smtpPass   String?
+  fromEmail  String?
+  fromName   String?
+  
+  // IMAP Settings (User-specific)
+  imapHost   String?
+  imapPort   Int?     @default(993)
+
   // Relations
   sequences Sequence[]
   contacts  Contact[]
+  templates Template[]
+  campaigns Campaign[]
 
   @@map("users")
 }
 
 model Contact {
   id        String        @id @default(cuid())
-  userId    String?       // Owner of the contact/lead
+  userId    String? // Owner of the contact/lead
   email     String
   firstName String?
   lastName  String?
@@ -57,11 +72,13 @@ model Template {
   subject   String
   body      String   @db.LongText // HTML or plain text - supports very long content
   isActive  Boolean  @default(true)
+  userId    String? // Owner of the template
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   sequenceSteps SequenceStep[]
+  user          User?          @relation(fields: [userId], references: [id])
 
   @@map("templates")
 }
@@ -184,6 +201,7 @@ model Campaign {
   campaignName String
   description  String?   @db.Text
   sequenceId   String
+  userId       String? // Owner of the campaign
   startDate    DateTime?
   endDate      DateTime?
   isActive     Boolean   @default(true)
@@ -195,6 +213,7 @@ model Campaign {
   campaignLeads CampaignLead[]
   enrollments   Enrollment[]
   events        Event[]
+  user          User?          @relation(fields: [userId], references: [id])
 
   @@map("campaigns")
 }
