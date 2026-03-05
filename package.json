@@ -1,0 +1,15 @@
+{
+    "name": "emailsequncefullstack",
+    "version": "1.0.0",
+    "description": "Root package to run both frontend and backend concurrently",
+    "main": "index.js",
+    "scripts": {
+        "dev": "npm run install:all && concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+        "dev:backend": "cd backend && npm run dev",
+        "dev:frontend": "cd emailseq-frontend && npm run dev",
+        "install:all": "cd backend && npm install && cd ../emailseq-frontend && npm install"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}
