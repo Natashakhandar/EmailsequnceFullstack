@@ -26,8 +26,11 @@ const smtpRouter = require('./routes/smtp');
 // Import scheduler and email monitor
 const { startScheduler } = require('./jobs/scheduler');
 const { startEmailMonitoring } = require('./jobs/emailMonitorJob');
+const { initializeSocket } = require('./services/socketService');
 
 const app = express();
+const http = require('http');
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
 
 // Security middleware
@@ -146,7 +149,9 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+initializeSocket(server);
+
+server.listen(PORT, () => {
   console.log(`🚀 Email Sequencing Backend running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -160,14 +165,15 @@ app.listen(PORT, () => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  process.exit(0);
-});
+const shutdown = () => {
+  console.log('Stopping server gracefully...');
+  server.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
+};
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  process.exit(0);
-});
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 module.exports = app;

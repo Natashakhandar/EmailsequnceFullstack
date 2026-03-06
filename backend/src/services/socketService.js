@@ -8,21 +8,21 @@ let io = null;
  * @param {Object} server - HTTP server instance
  */
 function initializeSocket(server) {
-  // Uncomment when socket.io is installed
-  /*
   const { Server } = require('socket.io');
-  
+
   io = new Server(server, {
     cors: {
       origin: [
         'http://localhost:3000',
-        'http://localhost:8080', 
+        'http://localhost:8080',
         'http://localhost:5173',
         'http://localhost:8081',
         'http://127.0.0.1:3000',
         'http://127.0.0.1:8080',
         'http://127.0.0.1:5173',
-        'http://127.0.0.1:8081'
+        'http://127.0.0.1:8081',
+        'https://email.boostnow.in',
+        'https://www.email.boostnow.in'
       ],
       methods: ['GET', 'POST']
     }
@@ -55,9 +55,6 @@ function initializeSocket(server) {
   });
 
   console.log('✅ Socket.io server initialized');
-  */
-  
-  console.log('⚠️ Socket.io not installed. Install with: npm install socket.io');
 }
 
 /**
@@ -80,7 +77,7 @@ function broadcastCampaignStats(campaignId, stats) {
 
   // Broadcast to campaign-specific room
   io.to(`campaign_${campaignId}`).emit('campaignStatsUpdate', updateData);
-  
+
   // Also broadcast to general stats room
   io.to('general_stats').emit('campaignStatsUpdate', updateData);
 
