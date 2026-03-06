@@ -151,7 +151,7 @@ class ApiClient {
       const response = await fetch(url, config);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const errorData = await response.json().catch(() => ({}));
 
         if (response.status === 401) {
           localStorage.removeItem('auth_token');
@@ -162,7 +162,8 @@ class ApiClient {
           }
         }
 
-        throw new Error(errorData.error || `HTTP ${response.status}`);
+        const errorMessage = errorData.error || errorData.message || `HTTP ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       return await response.json();
@@ -251,6 +252,36 @@ class ApiClient {
     return this.request<{ message: string }>(`/auth/users/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  async impersonateUser(userId: string): Promise<LoginResponse> {
+    // Store current token as original before switching
+    const currentToken = this.getAuthToken();
+    if (currentToken && !localStorage.getItem('original_auth_token')) {
+      localStorage.setItem('original_auth_token', currentToken);
+    }
+
+    const response = await this.request<LoginResponse>(`/auth/impersonate/${userId}`, {
+      method: 'POST',
+    });
+
+    if (response.token) {
+      localStorage.setItem('auth_token', response.token);
+    }
+
+    return response;
+  }
+
+  stopImpersonating(): void {
+    const originalToken = localStorage.getItem('original_auth_token');
+    if (originalToken) {
+      localStorage.setItem('auth_token', originalToken);
+      localStorage.removeItem('original_auth_token');
+    }
+  }
+
+  isImpersonating(): boolean {
+    return !!localStorage.getItem('original_auth_token');
   }
 
   // Helper method to check if user is authenticated
@@ -486,13 +517,40 @@ class ApiClient {
     return this.request<any>('/scheduler/smtp-status');
   }
 
+  async saveSmtpConfig(data: any) {
+    return this.request<any>('/scheduler/smtp-config', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async testImapConnection() {
+    return this.request<any>('/scheduler/imap-test', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async testImapWithConfig(config: any) {
+    return this.request<any>('/scheduler/imap-test', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async testSmtpConnection(config: any) {
+    return this.request<any>('/scheduler/smtp-test', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
   async sendTestEmail(data: { to: string; subject?: string; body?: string }) {
     return this.request<any>('/scheduler/test-email', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
-
 
   // Profile Signature API
   async getProfileSignature(): Promise<{ signature: string }> {
@@ -507,10 +565,6 @@ class ApiClient {
   }
 
   // Email Monitoring API
-  async testImapConnection() {
-    return this.request<any>('/email-monitoring/test');
-  }
-
   async checkForReplies() {
     return this.request<any>('/email-monitoring/check-replies', {
       method: 'POST',

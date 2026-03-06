@@ -1,6 +1,9 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
+
+router.use(authenticateToken);
 
 // GET /api/templates - Get all templates
 router.get('/', async (req, res) => {
@@ -8,7 +11,9 @@ router.get('/', async (req, res) => {
     const { page = 1, limit = 50, isActive } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {};
+    const where = {
+      userId: req.user.id
+    };
     if (isActive !== undefined) where.isActive = isActive === 'true';
 
     const [templates, total] = await Promise.all([
@@ -44,8 +49,11 @@ router.get('/', async (req, res) => {
 // GET /api/templates/:id - Get single template
 router.get('/:id', async (req, res) => {
   try {
-    const template = await prisma.template.findUnique({
-      where: { id: req.params.id },
+    const template = await prisma.template.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user.id
+      },
       include: {
         sequenceSteps: {
           include: {
@@ -72,8 +80,8 @@ router.post('/', async (req, res) => {
     const { name, subject, body, isActive = true } = req.body;
 
     if (!name || !subject || !body) {
-      return res.status(400).json({ 
-        error: 'Name, subject, and body are required' 
+      return res.status(400).json({
+        error: 'Name, subject, and body are required'
       });
     }
 
@@ -82,7 +90,8 @@ router.post('/', async (req, res) => {
         name: name.trim(),
         subject: subject.trim(),
         body: body.trim(),
-        isActive
+        isActive,
+        userId: req.user.id
       }
     });
 
@@ -103,6 +112,14 @@ router.put('/:id', async (req, res) => {
     if (subject !== undefined) updateData.subject = subject.trim();
     if (body !== undefined) updateData.body = body.trim();
     if (isActive !== undefined) updateData.isActive = isActive;
+
+    const existingTemplate = await prisma.template.findFirst({
+      where: { id: req.params.id, userId: req.user.id }
+    });
+
+    if (!existingTemplate) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
 
     const template = await prisma.template.update({
       where: { id: req.params.id },
@@ -128,9 +145,18 @@ router.delete('/:id', async (req, res) => {
     });
 
     if (sequenceSteps.length > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete template that is used in sequences' 
+      return res.status(400).json({
+        error: 'Cannot delete template that is used in sequences'
       });
+    }
+
+    // Check if template exists and belongs to user
+    const template = await prisma.template.findFirst({
+      where: { id: req.params.id, userId: req.user.id }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
     }
 
     await prisma.template.delete({
@@ -151,9 +177,12 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/preview', async (req, res) => {
   try {
     const { sampleData = {} } = req.body;
-    
-    const template = await prisma.template.findUnique({
-      where: { id: req.params.id }
+
+    const template = await prisma.template.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user.id
+      }
     });
 
     if (!template) {

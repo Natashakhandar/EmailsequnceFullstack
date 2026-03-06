@@ -1,6 +1,9 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
+
+router.use(authenticateToken);
 
 /**
  * GET /api/reports/analytics
@@ -21,7 +24,8 @@ router.get('/analytics', async (req, res) => {
     }
 
     // Build where clause for filtering events
-    const eventWhere = {};
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const eventWhere = isAdmin ? {} : { contact: { userId: req.user.id } };
     if (startDate || endDate) {
       eventWhere.timestamp = {};
       if (startDate) eventWhere.timestamp.gte = new Date(startDate);
@@ -88,8 +92,9 @@ router.get('/analytics', async (req, res) => {
 
     // Step 1: Get campaign basic info
     const campaignBreakdown = await prisma.campaign.findMany({
-      where: { 
+      where: {
         isActive: true,
+        ...(isAdmin ? {} : { userId: req.user.id }),
         ...(campaignId ? { id: campaignId } : {})
       },
       select: {
@@ -146,7 +151,7 @@ router.get('/analytics', async (req, res) => {
     const campaignStats = campaignBreakdown.map(campaign => {
       // Get events for this specific campaign
       const campaignEvents = campaignEventStats.filter(stat => stat.campaignId === campaign.id);
-      
+
       const eventCounts = campaignEvents.reduce((acc, stat) => {
         const type = stat.type.toLowerCase();
         acc[type] = stat._count.type;
@@ -218,7 +223,10 @@ router.get('/analytics', async (req, res) => {
 
     // Get total leads (contacts)
     const totalLeads = await prisma.contact.count({
-      where: { status: 'ACTIVE' }
+      where: {
+        status: 'ACTIVE',
+        ...(isAdmin ? {} : { userId: req.user.id })
+      }
     });
 
     // Email Status Distribution
@@ -237,7 +245,10 @@ router.get('/analytics', async (req, res) => {
       repliedLeads: totalReplied,
       replyRate: totalLeads > 0 ? ((totalReplied / totalLeads) * 100) : 0,
       activeEnrollments: await prisma.enrollment.count({
-        where: { status: 'ACTIVE' }
+        where: {
+          status: 'ACTIVE',
+          ...(isAdmin ? {} : { contact: { userId: req.user.id } })
+        }
       })
     };
 
@@ -250,7 +261,8 @@ router.get('/analytics', async (req, res) => {
       where: {
         timestamp: {
           gte: thirtyDaysAgo
-        }
+        },
+        ...(isAdmin ? {} : { contact: { userId: req.user.id } })
       },
       _count: {
         type: true
@@ -276,23 +288,23 @@ router.get('/analytics', async (req, res) => {
       totalLeads,
       avgResponseRate: Math.round(avgResponseRate * 100) / 100,
       bounceRate: Math.round(bounceRate * 100) / 100,
-      
+
       // Additional metrics
       avgOpenRate: Math.round(avgOpenRate * 100) / 100,
       totalEmailsSent,
-      
+
       // Email Status Distribution
       emailStatusDistribution,
-      
+
       // Lead Performance (replaced "Converted" with "Replied")
       leadPerformance,
-      
+
       // Monthly Summary
       monthlySummary,
-      
+
       // Campaign breakdown with actual names
       campaignBreakdown: campaignStats,
-      
+
       // Metadata
       dateRange: {
         startDate: startDate || 'All time',
@@ -300,10 +312,10 @@ router.get('/analytics', async (req, res) => {
         sequenceId: sequenceId || 'All sequences',
         campaignId: campaignId || 'All campaigns'
       },
-      
+
       // Raw event breakdown for debugging
       eventBreakdown: eventCounts,
-      
+
       // Uncategorized events (without campaignId)
       uncategorizedEvents: {
         sent: uncategorizedEventCounts.sent || 0,
@@ -313,7 +325,7 @@ router.get('/analytics', async (req, res) => {
         clicked: uncategorizedEventCounts.clicked || 0,
         delivered: uncategorizedEventCounts.delivered || 0
       },
-      
+
       // Timestamp for real-time updates
       lastUpdated: new Date().toISOString()
     };
@@ -385,14 +397,15 @@ router.get('/analytics', async (req, res) => {
 router.get('/performance-trends', async (req, res) => {
   try {
     const { days = 30, sequenceId } = req.query;
-    
+
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
 
     const where = {
       timestamp: {
         gte: startDate
-      }
+      },
+      ...(isAdmin ? {} : { contact: { userId: req.user.id } })
     };
 
     if (sequenceId) {
@@ -475,7 +488,10 @@ router.get('/campaign-performance', async (req, res) => {
 
     // Get all active campaigns with their performance metrics
     const campaigns = await prisma.campaign.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(req.user.role === 'SUPERADMIN' ? {} : { userId: req.user.id })
+      },
       select: {
         id: true,
         campaignName: true,
@@ -534,7 +550,7 @@ router.get('/campaign-performance', async (req, res) => {
 
       // Get active enrollments count for this campaign
       const activeEnrollments = await prisma.enrollment.count({
-        where: { 
+        where: {
           campaignId: campaign.id,
           status: 'ACTIVE'
         }
@@ -619,7 +635,8 @@ router.get('/real-time-stats', async (req, res) => {
       where: {
         timestamp: {
           gte: twentyFourHoursAgo
-        }
+        },
+        ...(isAdmin ? {} : { contact: { userId: req.user.id } })
       },
       _count: {
         type: true
@@ -633,11 +650,15 @@ router.get('/real-time-stats', async (req, res) => {
 
     // Get active enrollments count
     const activeEnrollments = await prisma.enrollment.count({
-      where: { status: 'ACTIVE' }
+      where: {
+        status: 'ACTIVE',
+        ...(isAdmin ? {} : { contact: { userId: req.user.id } })
+      }
     });
 
     // Get recent activity (last 10 events)
     const recentActivity = await prisma.event.findMany({
+      where: req.user.role === 'SUPERADMIN' ? {} : { contact: { userId: req.user.id } },
       take: 10,
       orderBy: {
         timestamp: 'desc'
@@ -711,7 +732,7 @@ router.get('/campaign-analytics', async (req, res) => {
     }
 
     // Build where clause for filtering
-    const where = {};
+    const where = req.user.role === 'SUPERADMIN' ? {} : { userId: req.user.id };
     if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) where.createdAt.gte = new Date(startDate);
@@ -744,7 +765,7 @@ router.get('/campaign-analytics', async (req, res) => {
         // Get event stats for this campaign
         const eventStats = await prisma.event.groupBy({
           by: ['type'],
-          where: { 
+          where: {
             campaignId: campaign.id,
             ...(startDate || endDate ? {
               timestamp: {
@@ -871,10 +892,10 @@ router.get('/campaign-analytics', async (req, res) => {
       totalEmailsSent: response.summary.totalEmailsSent,
       avgReplyRate: response.summary.avgReplyRate,
       campaignsWithNames: campaignStats.filter(c => c.campaignName !== 'Unknown Campaign').length,
-      topCampaigns: campaignStats.slice(0, 3).map(c => ({ 
-        name: c.campaignName, 
+      topCampaigns: campaignStats.slice(0, 3).map(c => ({
+        name: c.campaignName,
         sent: c.stats.totalSent,
-        replyRate: c.stats.replyRate 
+        replyRate: c.stats.replyRate
       }))
     });
 

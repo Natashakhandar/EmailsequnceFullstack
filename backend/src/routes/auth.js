@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requireSuperAdmin } = require('../middleware/auth');
+const { authenticateToken, requireSuperAdmin, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -82,8 +82,8 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/register (only for superadmin to create users)
-router.post('/register', authenticateToken, requireSuperAdmin, async (req, res) => {
+// POST /api/auth/register (only for superadmin/admin to create users)
+router.post('/register', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { email, password, firstName, lastName, role = 'USER' } = req.body;
 
@@ -181,8 +181,8 @@ router.get('/users', authenticateToken, requireSuperAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/auth/users/:id - Update user (superadmin only)
-router.put('/users/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
+// PUT /api/auth/users/:id - Update user (superadmin/admin only)
+router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { email, firstName, lastName, role, isActive } = req.body;
@@ -221,8 +221,8 @@ router.put('/users/:id', authenticateToken, requireSuperAdmin, async (req, res) 
   }
 });
 
-// DELETE /api/auth/users/:id - Delete user (superadmin only)
-router.delete('/users/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
+// DELETE /api/auth/users/:id - Delete user (superadmin/admin only)
+router.delete('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -241,6 +241,54 @@ router.delete('/users/:id', authenticateToken, requireSuperAdmin, async (req, re
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'User not found' });
     }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/auth/impersonate/:userId - Impersonate another user (superadmin only)
+router.post('/impersonate/:userId', authenticateToken, requireSuperAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log(`👤 Impersonation request: ${req.user.email} -> ${userId}`);
+
+    // Prevent impersonating yourself (waste of time)
+    if (userId === req.user.id) {
+      return res.status(400).json({ error: 'Cannot impersonate yourself' });
+    }
+
+    // Find target user
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Target user not found' });
+    }
+
+    if (!targetUser.isActive) {
+      return res.status(400).json({ error: 'Cannot impersonate an inactive user' });
+    }
+
+    // Generate token for target user
+    const token = generateToken(targetUser.id);
+    const { password: _, ...userWithoutPassword } = targetUser;
+
+    console.log(`✅ Impersonation successful: Logged in as ${targetUser.email}`);
+
+    res.json({
+      message: `Impersonating ${targetUser.email}`,
+      user: userWithoutPassword,
+      token,
+      isImpersonating: true,
+      originalUser: {
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role
+      }
+    });
+  } catch (error) {
+    console.error('Impersonation error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

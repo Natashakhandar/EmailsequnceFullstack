@@ -130,14 +130,14 @@ router.post('/', async (req, res) => {
       lead_count: lead_ids.length
     });
 
-    // Verify sequence exists
-    const sequence = await prisma.sequence.findUnique({
-      where: { id: sequence_id.trim() },
+    // Verify sequence exists and belongs to user
+    const sequence = await prisma.sequence.findFirst({
+      where: { id: sequence_id.trim(), userId: req.user.id },
       include: { steps: true }
     });
 
     if (!sequence) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Sequence not found',
         sequenceId: sequence_id.trim()
       });
@@ -171,7 +171,8 @@ router.post('/', async (req, res) => {
         description: description && description.trim() ? description.trim() : null,
         sequenceId: sequence_id.trim(),
         startDate: (start_date && start_date !== '') ? new Date(start_date) : null,
-        endDate: (end_date && end_date !== '') ? new Date(end_date) : null
+        endDate: (end_date && end_date !== '') ? new Date(end_date) : null,
+        userId: req.user.id
       };
 
       console.log('📊 Creating campaign with Prisma data:', {
@@ -203,6 +204,19 @@ router.post('/', async (req, res) => {
           }))
         });
 
+        // Delete any existing enrollments for these contacts in this sequence 
+        // to allow them to re-start the sequence in the new campaign.
+        // This solves the issue where leads wouldn't send if they were previously enrolled.
+        const contactIds = lead_ids;
+        await tx.enrollment.deleteMany({
+          where: {
+            contactId: { in: contactIds },
+            sequenceId: sequence_id
+          }
+        });
+
+        console.log(`📊 Cleared ${contactIds.length} potentially existing enrollments for sequence ${sequence_id}`);
+
         // Create enrollments for all leads in this campaign
         const enrollmentData = lead_ids.map(contactId => ({
           contactId,
@@ -212,10 +226,12 @@ router.post('/', async (req, res) => {
           nextSendAt: campaign.startDate || new Date()
         }));
 
-        await tx.enrollment.createMany({
+        const resultEnrollments = await tx.enrollment.createMany({
           data: enrollmentData,
-          skipDuplicates: true // Prevent duplicate enrollments
+          skipDuplicates: true // Extra safety
         });
+
+        console.log(`✅ Created ${resultEnrollments.count} new enrollments for campaign: ${campaign.id}`);
       }
 
       return campaign;
@@ -228,11 +244,11 @@ router.post('/', async (req, res) => {
     });
 
     // Fetch complete campaign data with stats
-    const campaignWithStats = await getCampaignWithStats(result.id);
+    const campaignWithStats = await getCampaignWithStats(result.id, req.user.id);
 
     // Broadcast campaign stats update via socket
     broadcastCampaignStats(result.id, campaignWithStats.stats);
-    
+
     // Broadcast general stats update
     broadcastGeneralStats({
       totalCampaigns: await prisma.campaign.count({ where: { isActive: true } }),
@@ -270,7 +286,10 @@ router.get('/', async (req, res) => {
     });
 
     // Build where clause
-    const where = {};
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : {
+      userId: req.user.id
+    };
     if (isActive !== undefined) where.isActive = isActive === 'true';
     if (sequenceId) where.sequenceId = sequenceId;
 
@@ -344,7 +363,7 @@ router.get('/:id', async (req, res) => {
 
     console.log('📊 Fetching campaign details:', { campaignId: id });
 
-    const campaign = await getCampaignWithStats(id);
+    const campaign = await getCampaignWithStats(id, req.user.id);
 
     if (!campaign) {
       return res.status(404).json({ error: 'Campaign not found' });
@@ -410,9 +429,9 @@ router.patch('/:id', async (req, res) => {
       remove_lead_ids: remove_lead_ids.length
     });
 
-    // Verify campaign exists
-    const existingCampaign = await prisma.campaign.findUnique({
-      where: { id },
+    // Verify campaign exists and belongs to user
+    const existingCampaign = await prisma.campaign.findFirst({
+      where: { id, userId: req.user.id },
       include: { sequence: true }
     });
 
@@ -509,7 +528,7 @@ router.patch('/:id', async (req, res) => {
     });
 
     // Fetch updated campaign with stats
-    const updatedCampaign = await getCampaignWithStats(id);
+    const updatedCampaign = await getCampaignWithStats(id, req.user.id);
 
     // Broadcast campaign stats update via socket
     broadcastCampaignStats(id, updatedCampaign.stats);
@@ -548,8 +567,8 @@ router.delete('/:id', async (req, res) => {
     console.log('🗑️ Deleting campaign:', { campaignId: id });
 
     // Verify campaign exists and get detailed counts
-    const existingCampaign = await prisma.campaign.findUnique({
-      where: { id },
+    const existingCampaign = await prisma.campaign.findFirst({
+      where: { id, userId: req.user.id },
       include: {
         sequence: { select: { id: true, name: true } },
         _count: {
@@ -563,7 +582,7 @@ router.delete('/:id', async (req, res) => {
     });
 
     if (!existingCampaign) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Campaign not found',
         campaignId: id
       });
@@ -650,9 +669,13 @@ router.delete('/:id', async (req, res) => {
 /**
  * Helper function to get campaign with complete stats
  */
-async function getCampaignWithStats(campaignId) {
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
+async function getCampaignWithStats(campaignId, user) {
+  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+  const campaign = await prisma.campaign.findFirst({
+    where: {
+      id: campaignId,
+      ...(isAdmin ? {} : { userId: user.id })
+    },
     include: {
       sequence: {
         include: { steps: true }
@@ -704,7 +727,7 @@ async function getCampaignWithStats(campaignId) {
  */
 function calculateCampaignStatus(campaign) {
   const now = new Date();
-  
+
   if (!campaign.isActive) {
     return 'Inactive';
   } else if (campaign.endDate && now > new Date(campaign.endDate)) {

@@ -1,27 +1,34 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
+
+router.use(authenticateToken);
 
 // GET /api/events - Get all events with pagination
 router.get('/', async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 50, 
-      type, 
-      enrollmentId, 
+    const {
+      page = 1,
+      limit = 50,
+      type,
+      enrollmentId,
       contactId,
       startDate,
-      endDate 
+      endDate
     } = req.query;
-    
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {};
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : {
+      contact: { userId: req.user.id }
+    };
+
     if (type) where.type = type;
     if (enrollmentId) where.enrollmentId = enrollmentId;
     if (contactId) where.contactId = contactId;
-    
+
     if (startDate || endDate) {
       where.timestamp = {};
       if (startDate) where.timestamp.gte = new Date(startDate);
@@ -64,8 +71,12 @@ router.get('/', async (req, res) => {
 // GET /api/events/:id - Get single event
 router.get('/:id', async (req, res) => {
   try {
-    const event = await prisma.event.findUnique({
-      where: { id: req.params.id },
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const event = await prisma.event.findFirst({
+      where: {
+        id: req.params.id,
+        ...(isAdmin ? {} : { contact: { userId: req.user.id } })
+      },
       include: {
         contact: true,
         enrollment: {
@@ -102,16 +113,16 @@ router.post('/', async (req, res) => {
     const { enrollmentId, contactId, type, details, emailId } = req.body;
 
     if (!enrollmentId || !contactId || !type) {
-      return res.status(400).json({ 
-        error: 'enrollmentId, contactId, and type are required' 
+      return res.status(400).json({
+        error: 'enrollmentId, contactId, and type are required'
       });
     }
 
     // Validate event type
     const validTypes = ['SENT', 'DELIVERED', 'OPENED', 'CLICKED', 'REPLIED', 'BOUNCED', 'UNSUBSCRIBED', 'FAILED'];
     if (!validTypes.includes(type)) {
-      return res.status(400).json({ 
-        error: `Invalid event type. Must be one of: ${validTypes.join(', ')}` 
+      return res.status(400).json({
+        error: `Invalid event type. Must be one of: ${validTypes.join(', ')}`
       });
     }
 
@@ -146,7 +157,7 @@ router.post('/', async (req, res) => {
     if (type === 'REPLIED' || type === 'UNSUBSCRIBED') {
       await prisma.enrollment.update({
         where: { id: enrollmentId },
-        data: { 
+        data: {
           status: type === 'REPLIED' ? 'STOPPED' : 'UNSUBSCRIBED',
           completedAt: new Date(),
           nextSendAt: null
@@ -172,9 +183,10 @@ router.post('/', async (req, res) => {
 // GET /api/events/analytics/summary - Get events analytics summary
 router.get('/analytics/summary', async (req, res) => {
   try {
-    const { startDate, endDate, sequenceId } = req.query;
-
-    const where = {};
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : {
+      contact: { userId: req.user.id }
+    };
     if (startDate || endDate) {
       where.timestamp = {};
       if (startDate) where.timestamp.gte = new Date(startDate);
@@ -224,9 +236,10 @@ router.get('/analytics/summary', async (req, res) => {
 // GET /api/events/analytics/timeline - Get events timeline
 router.get('/analytics/timeline', async (req, res) => {
   try {
-    const { startDate, endDate, sequenceId, groupBy = 'day' } = req.query;
-
-    const where = {};
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : {
+      contact: { userId: req.user.id }
+    };
     if (startDate || endDate) {
       where.timestamp = {};
       if (startDate) where.timestamp.gte = new Date(startDate);
@@ -280,6 +293,18 @@ router.get('/analytics/timeline', async (req, res) => {
 // DELETE /api/events/:id - Delete event (admin only)
 router.delete('/:id', async (req, res) => {
   try {
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const event = await prisma.event.findFirst({
+      where: {
+        id: req.params.id,
+        ...(isAdmin ? {} : { contact: { userId: req.user.id } })
+      }
+    });
+
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
     await prisma.event.delete({
       where: { id: req.params.id }
     });

@@ -1,6 +1,7 @@
 const express = require('express');
 const EmailMonitorService = require('../services/emailMonitor');
 const { authenticateToken } = require('../middleware/auth');
+const prisma = require('../db/prismaClient');
 
 const router = express.Router();
 
@@ -10,7 +11,11 @@ const router = express.Router();
  */
 router.get('/test', authenticateToken, async (req, res) => {
   try {
-    const monitor = new EmailMonitorService();
+    const userConfig = await prisma.emailConfig.findUnique({
+      where: { userId: req.user.id }
+    });
+
+    const monitor = new EmailMonitorService(userConfig);
     const isConnected = await monitor.testConnection();
 
     if (isConnected) {
@@ -44,7 +49,11 @@ router.post('/check-replies', authenticateToken, async (req, res) => {
   try {
     console.log('📧 Manual reply check triggered by user');
 
-    const monitor = new EmailMonitorService();
+    const userConfig = await prisma.emailConfig.findUnique({
+      where: { userId: req.user.id }
+    });
+
+    const monitor = new EmailMonitorService(userConfig);
     const processedCount = await monitor.processReplyEmails();
 
     res.json({
@@ -69,13 +78,17 @@ router.post('/check-replies', authenticateToken, async (req, res) => {
  */
 router.get('/status', authenticateToken, async (req, res) => {
   try {
+    const userConfig = await prisma.emailConfig.findUnique({
+      where: { userId: req.user.id }
+    });
+
     const config = {
-      imapHost: process.env.IMAP_HOST || process.env.SMTP_HOST || 'Not configured',
-      imapPort: process.env.IMAP_PORT || '993',
-      imapUser: process.env.IMAP_USER || process.env.SMTP_USER || 'Not configured',
-      isConfigured: !!(process.env.IMAP_HOST || process.env.SMTP_HOST) &&
-        !!(process.env.IMAP_USER || process.env.SMTP_USER) &&
-        !!(process.env.IMAP_PASSWORD || process.env.SMTP_PASS)
+      imapHost: userConfig?.imapHost || process.env.IMAP_HOST || process.env.SMTP_HOST || 'Not configured',
+      imapPort: userConfig?.imapPort || process.env.IMAP_PORT || '993',
+      imapUser: userConfig?.imapUser || userConfig?.smtpUser || process.env.IMAP_USER || process.env.SMTP_USER || 'Not configured',
+      isConfigured: !!(userConfig?.imapHost || process.env.IMAP_HOST || process.env.SMTP_HOST) &&
+        !!(userConfig?.imapUser || userConfig?.smtpUser || process.env.IMAP_USER || process.env.SMTP_USER) &&
+        !!(userConfig?.imapPassword || userConfig?.smtpPassword || process.env.IMAP_PASSWORD || process.env.SMTP_PASS)
     };
 
     res.json({
@@ -101,7 +114,10 @@ router.get('/status', authenticateToken, async (req, res) => {
 router.get('/recent-emails', authenticateToken, async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 7;
-    const monitor = new EmailMonitorService();
+    const userConfig = await prisma.emailConfig.findUnique({
+      where: { userId: req.user.id }
+    });
+    const monitor = new EmailMonitorService(userConfig);
 
     const emails = await monitor.fetchRecentEmails(days);
 

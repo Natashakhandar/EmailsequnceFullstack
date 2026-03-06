@@ -1,6 +1,9 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
+
+router.use(authenticateToken);
 
 /**
  * DELETE /api/email-activity/:id
@@ -11,8 +14,8 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
 
     if (!id) {
-      return res.status(400).json({ 
-        message: "Email activity ID is required" 
+      return res.status(400).json({
+        message: "Email activity ID is required"
       });
     }
 
@@ -21,7 +24,7 @@ router.delete('/:id', async (req, res) => {
     // Try to delete from emailActivity table first (if it exists)
     // If it doesn't exist, fall back to events table
     let deletedRecord = null;
-    
+
     try {
       // First attempt: Try emailActivity table
       if (prisma.emailActivity) {
@@ -35,6 +38,12 @@ router.delete('/:id', async (req, res) => {
     } catch (emailActivityError) {
       // Fallback: Try events table (which represents email activities in current schema)
       try {
+        const eventToDel = await prisma.event.findFirst({
+          where: { id, contact: { userId: req.user.id } }
+        });
+        if (!eventToDel) {
+          throw Object.assign(new Error('Event not found'), { code: 'P2025' });
+        }
         deletedRecord = await prisma.event.delete({
           where: { id }
         });
@@ -44,19 +53,19 @@ router.delete('/:id', async (req, res) => {
           emailActivityError: emailActivityError.message,
           eventError: eventError.message
         });
-        
+
         // Check if record was not found
         if (eventError.code === 'P2025' || emailActivityError.code === 'P2025') {
-          return res.status(404).json({ 
-            message: "Email activity not found" 
+          return res.status(404).json({
+            message: "Email activity not found"
           });
         }
-        
+
         throw eventError;
       }
     }
 
-    res.json({ 
+    res.json({
       message: "Email activity deleted successfully",
       deletedId: id
     });
@@ -71,18 +80,18 @@ router.delete('/:id', async (req, res) => {
 
     // Handle specific Prisma errors
     if (error.code === 'P2025') {
-      return res.status(404).json({ 
-        message: "Email activity not found" 
+      return res.status(404).json({
+        message: "Email activity not found"
       });
     }
 
     if (error.code === 'P2003') {
-      return res.status(400).json({ 
-        message: "Cannot delete email activity due to related records" 
+      return res.status(400).json({
+        message: "Cannot delete email activity due to related records"
       });
     }
 
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Failed to delete email activity",
       ...(process.env.NODE_ENV !== 'production' && { error: error.message })
     });
@@ -96,7 +105,7 @@ router.delete('/:id', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     let activities = [];
-    
+
     // Try emailActivity table first, fallback to events
     try {
       if (prisma.emailActivity) {
@@ -109,7 +118,9 @@ router.get('/', async (req, res) => {
       }
     } catch (emailActivityError) {
       // Fallback to events table
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
       activities = await prisma.event.findMany({
+        where: isAdmin ? {} : { contact: { userId: req.user.id } },
         orderBy: { timestamp: 'desc' },
         take: 100,
         include: {
@@ -142,7 +153,7 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error retrieving email activities:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Failed to retrieve email activities",
       ...(process.env.NODE_ENV !== 'production' && { error: error.message })
     });
@@ -158,13 +169,13 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     if (!id) {
-      return res.status(400).json({ 
-        message: "Email activity ID is required" 
+      return res.status(400).json({
+        message: "Email activity ID is required"
       });
     }
 
     let activity = null;
-    
+
     // Try emailActivity table first, fallback to events
     try {
       if (prisma.emailActivity) {
@@ -176,8 +187,12 @@ router.get('/:id', async (req, res) => {
       }
     } catch (emailActivityError) {
       // Fallback to events table
-      activity = await prisma.event.findUnique({
-        where: { id },
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+      activity = await prisma.event.findFirst({
+        where: {
+          id,
+          ...(isAdmin ? {} : { contact: { userId: req.user.id } })
+        },
         include: {
           contact: {
             select: {
@@ -201,8 +216,8 @@ router.get('/:id', async (req, res) => {
     }
 
     if (!activity) {
-      return res.status(404).json({ 
-        message: "Email activity not found" 
+      return res.status(404).json({
+        message: "Email activity not found"
       });
     }
 
@@ -213,7 +228,7 @@ router.get('/:id', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error retrieving email activity:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Failed to retrieve email activity",
       ...(process.env.NODE_ENV !== 'production' && { error: error.message })
     });

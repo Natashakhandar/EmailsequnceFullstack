@@ -16,7 +16,7 @@ const normalizeSequenceStep = (step) => {
     triggerType: step.triggerType || 'delay',
     triggerStepId: step.triggerStepId || null,
     delayMinutes: step.delayMinutes || 0,
-    
+
     // Legacy support: if no trigger type is set, default to 'delay'
     // This ensures old sequences without trigger logic still work
     ...((!step.triggerType || step.triggerType === 'delay') && {
@@ -40,7 +40,10 @@ router.get('/', async (req, res) => {
     const { page = 1, limit = 50, isActive } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {};
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : {
+      userId: req.user.id
+    };
     if (isActive !== undefined) where.isActive = isActive === 'true';
 
     const [sequences, total] = await Promise.all([
@@ -57,7 +60,7 @@ router.get('/', async (req, res) => {
             }
           },
           _count: {
-            select: { 
+            select: {
               enrollments: true,
               steps: true
             }
@@ -88,8 +91,12 @@ router.get('/', async (req, res) => {
 // GET /api/sequences/:id - Get single sequence
 router.get('/:id', async (req, res) => {
   try {
-    const sequence = await prisma.sequence.findUnique({
-      where: { id: req.params.id },
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const sequence = await prisma.sequence.findFirst({
+      where: {
+        id: req.params.id,
+        ...(isAdmin ? {} : { userId: req.user.id })
+      },
       include: {
         steps: {
           orderBy: { stepOrder: 'asc' },
@@ -127,7 +134,7 @@ router.get('/:id', async (req, res) => {
     console.log('📖 SEQUENCE RETRIEVAL VALIDATION');
     console.log('Sequence ID:', sequence.id);
     console.log('Step count:', sequence.steps?.length || 0);
-    
+
     sequence.steps?.forEach((step, index) => {
       if (step.body) {
         console.log(`Step ${step.stepOrder} body length:`, step.body?.length || 0);
@@ -175,9 +182,9 @@ router.post('/', async (req, res) => {
 
         // Basic validation
         if (step.stepOrder === undefined) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} must have stepOrder` 
+            message: `Step ${i + 1} must have stepOrder`
           });
         }
 
@@ -188,25 +195,25 @@ router.post('/', async (req, res) => {
               where: { id: step.templateId }
             });
             if (!template) {
-              return res.status(400).json({ 
+              return res.status(400).json({
                 success: false,
-                message: `Template with ID "${step.templateId}" not found for step ${i + 1}` 
+                message: `Template with ID "${step.templateId}" not found for step ${i + 1}`
               });
             }
           } catch (error) {
             console.error(`❌ Error validating template for step ${i + 1}:`, error);
-            return res.status(400).json({ 
+            return res.status(400).json({
               success: false,
-              message: `Invalid template ID for step ${i + 1}` 
+              message: `Invalid template ID for step ${i + 1}`
             });
           }
         }
 
         // For custom emails (no templateId), ensure subject and body are provided
         if (!step.templateId && (!step.subject || !step.body)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} must have either a templateId or both subject and body for custom email` 
+            message: `Step ${i + 1} must have either a templateId or both subject and body for custom email`
           });
         }
 
@@ -214,31 +221,31 @@ router.post('/', async (req, res) => {
         // The trigger step system is handled separately via the /trigger endpoint after creation
         // We only validate that triggerType is a valid value if provided
         if (step.triggerType && !['delay', 'opened', 'not_opened', 'replied', 'skip'].includes(step.triggerType)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} triggerType must be one of: delay, opened, not_opened, replied, skip` 
+            message: `Step ${i + 1} triggerType must be one of: delay, opened, not_opened, replied, skip`
           });
         }
 
         // Validate delay formatting
         if (step.delayHours !== undefined && (isNaN(step.delayHours) || step.delayHours < 0)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} delayHours must be a non-negative number` 
+            message: `Step ${i + 1} delayHours must be a non-negative number`
           });
         }
 
         if (step.delayDays !== undefined && (isNaN(step.delayDays) || step.delayDays < 0)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} delayDays must be a non-negative number` 
+            message: `Step ${i + 1} delayDays must be a non-negative number`
           });
         }
 
         if (step.delayMinutes !== undefined && (isNaN(step.delayMinutes) || step.delayMinutes < 0)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} delayMinutes must be a non-negative number` 
+            message: `Step ${i + 1} delayMinutes must be a non-negative number`
           });
         }
       }
@@ -251,7 +258,7 @@ router.post('/', async (req, res) => {
         name: name.trim(),
         description: description?.trim(),
         isActive,
-        // Note: userId field temporarily removed due to Prisma client sync issue
+        userId: req.user.id,
         steps: {
           create: steps.map(step => {
             // CRITICAL LOGGING: Track body integrity during database save
@@ -261,20 +268,20 @@ router.post('/', async (req, res) => {
               console.log('Frontend body type:', typeof step.body);
               console.log('Body preview (first 50 chars):', step.body?.substring(0, 50) + '...');
             }
-            
+
             return {
               templateId: step.templateId || null,
               stepOrder: step.stepOrder,
               delayDays: step.delayDays || 0,
               delayHours: step.delayHours || 0,
               delayMinutes: step.delayMinutes || 0,
-              
+
               // NEW: Trigger and content fields
               subject: step.subject || null,
               body: step.body || null,
               triggerType: step.triggerType || 'delay',
               triggerStepId: step.triggerStepId || null,
-              
+
               isActive: step.isActive !== false
             };
           })
@@ -290,10 +297,10 @@ router.post('/', async (req, res) => {
       }
     });
 
-    console.log('🎉 Sequence created successfully:', { 
-      id: sequence.id, 
-      name: sequence.name, 
-      stepCount: sequence.steps.length 
+    console.log('🎉 Sequence created successfully:', {
+      id: sequence.id,
+      name: sequence.name,
+      stepCount: sequence.steps.length
     });
 
     res.status(201).json({
@@ -303,33 +310,33 @@ router.post('/', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error creating sequence:', error);
-    
+
     // Provide more specific error messages based on error type
     if (error.code === 'P2002') {
-      return res.status(409).json({ 
+      return res.status(409).json({
         success: false,
-        message: 'A sequence with this name already exists or duplicate step order detected' 
+        message: 'A sequence with this name already exists or duplicate step order detected'
       });
     }
-    
+
     if (error.code === 'P2003') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'Invalid template reference in one of the steps' 
+        message: 'Invalid template reference in one of the steps'
       });
     }
-    
+
     if (error.code === 'P2025') {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Referenced template not found' 
+        message: 'Referenced template not found'
       });
     }
-    
+
     // Generic error with more helpful message
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to save sequence. Please check your data and try again.' 
+      message: 'Failed to save sequence. Please check your data and try again.'
     });
   }
 });
@@ -339,12 +346,12 @@ router.put('/:id', async (req, res) => {
   try {
     const { name, description, isActive, steps } = req.body;
 
-    console.log('🔄 Updating sequence:', { 
-      id: req.params.id, 
-      name, 
-      description, 
-      isActive, 
-      stepCount: steps?.length 
+    console.log('🔄 Updating sequence:', {
+      id: req.params.id,
+      name,
+      description,
+      isActive,
+      stepCount: steps?.length
     });
 
     const updateData = {};
@@ -355,7 +362,7 @@ router.put('/:id', async (req, res) => {
     // If steps are provided, validate and update them
     if (steps && Array.isArray(steps)) {
       console.log('📝 Updating sequence steps...');
-      
+
       // Enhanced validation for steps with trigger logic
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
@@ -373,9 +380,9 @@ router.put('/:id', async (req, res) => {
 
         // Basic validation
         if (step.stepOrder === undefined) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} must have stepOrder` 
+            message: `Step ${i + 1} must have stepOrder`
           });
         }
 
@@ -386,25 +393,25 @@ router.put('/:id', async (req, res) => {
               where: { id: step.templateId }
             });
             if (!template) {
-              return res.status(400).json({ 
+              return res.status(400).json({
                 success: false,
-                message: `Template with ID "${step.templateId}" not found for step ${i + 1}` 
+                message: `Template with ID "${step.templateId}" not found for step ${i + 1}`
               });
             }
           } catch (error) {
             console.error(`❌ Error validating template for step ${i + 1}:`, error);
-            return res.status(400).json({ 
+            return res.status(400).json({
               success: false,
-              message: `Invalid template ID for step ${i + 1}` 
+              message: `Invalid template ID for step ${i + 1}`
             });
           }
         }
 
         // For custom emails (no templateId), ensure subject and body are provided
         if (!step.templateId && (!step.subject || !step.body)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} must have either a templateId or both subject and body for custom email` 
+            message: `Step ${i + 1} must have either a templateId or both subject and body for custom email`
           });
         }
 
@@ -412,31 +419,31 @@ router.put('/:id', async (req, res) => {
         // The trigger step system is handled separately via the /trigger endpoint
         // We only validate that triggerType is a valid value if provided
         if (step.triggerType && !['delay', 'opened', 'not_opened', 'replied', 'skip'].includes(step.triggerType)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} triggerType must be one of: delay, opened, not_opened, replied, skip` 
+            message: `Step ${i + 1} triggerType must be one of: delay, opened, not_opened, replied, skip`
           });
         }
 
         // Validate delay formatting
         if (step.delayHours !== undefined && (isNaN(step.delayHours) || step.delayHours < 0)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} delayHours must be a non-negative number` 
+            message: `Step ${i + 1} delayHours must be a non-negative number`
           });
         }
 
         if (step.delayDays !== undefined && (isNaN(step.delayDays) || step.delayDays < 0)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} delayDays must be a non-negative number` 
+            message: `Step ${i + 1} delayDays must be a non-negative number`
           });
         }
 
         if (step.delayMinutes !== undefined && (isNaN(step.delayMinutes) || step.delayMinutes < 0)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: `Step ${i + 1} delayMinutes must be a non-negative number` 
+            message: `Step ${i + 1} delayMinutes must be a non-negative number`
           });
         }
       }
@@ -455,20 +462,20 @@ router.put('/:id', async (req, res) => {
             console.log('Frontend body type:', typeof step.body);
             console.log('Body preview (first 50 chars):', step.body?.substring(0, 50) + '...');
           }
-          
+
           return {
             templateId: step.templateId || null,
             stepOrder: step.stepOrder,
             delayDays: step.delayDays || 0,
             delayHours: step.delayHours || 0,
             delayMinutes: step.delayMinutes || 0,
-            
+
             // NEW: Trigger and content fields
             subject: step.subject || null,
             body: step.body || null,
             triggerType: step.triggerType || 'delay',
             triggerStepId: step.triggerStepId || null,
-            
+
             isActive: step.isActive !== false
           };
         })
@@ -476,6 +483,14 @@ router.put('/:id', async (req, res) => {
     }
 
     console.log('✅ All validations passed, updating sequence...');
+
+    const existingSequence = await prisma.sequence.findFirst({
+      where: { id: req.params.id, userId: req.user.id }
+    });
+
+    if (!existingSequence) {
+      return res.status(404).json({ error: 'Sequence not found' });
+    }
 
     const sequence = await prisma.sequence.update({
       where: { id: req.params.id },
@@ -490,10 +505,10 @@ router.put('/:id', async (req, res) => {
       }
     });
 
-    console.log('🎉 Sequence updated successfully:', { 
-      id: sequence.id, 
-      name: sequence.name, 
-      stepCount: sequence.steps.length 
+    console.log('🎉 Sequence updated successfully:', {
+      id: sequence.id,
+      name: sequence.name,
+      stepCount: sequence.steps.length
     });
 
     res.json({
@@ -503,33 +518,33 @@ router.put('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error updating sequence:', error);
-    
+
     // Provide more specific error messages based on error type
     if (error.code === 'P2025') {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Sequence not found' 
+        message: 'Sequence not found'
       });
     }
-    
+
     if (error.code === 'P2002') {
-      return res.status(409).json({ 
+      return res.status(409).json({
         success: false,
-        message: 'Duplicate step order detected or sequence name already exists' 
+        message: 'Duplicate step order detected or sequence name already exists'
       });
     }
-    
+
     if (error.code === 'P2003') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'Invalid template reference in one of the steps' 
+        message: 'Invalid template reference in one of the steps'
       });
     }
-    
+
     // Generic error with more helpful message
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to update sequence. Please check your data and try again.' 
+      message: 'Failed to update sequence. Please check your data and try again.'
     });
   }
 });
@@ -539,16 +554,26 @@ router.delete('/:id', async (req, res) => {
   try {
     // Check if sequence has active enrollments
     const activeEnrollments = await prisma.enrollment.findMany({
-      where: { 
+      where: {
         sequenceId: req.params.id,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        sequence: { userId: req.user.id }
       }
     });
 
     if (activeEnrollments.length > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete sequence with active enrollments' 
+      return res.status(400).json({
+        error: 'Cannot delete sequence with active enrollments'
       });
+    }
+
+    // First check ownership
+    const sequence = await prisma.sequence.findFirst({
+      where: { id: req.params.id, userId: req.user.id }
+    });
+
+    if (!sequence) {
+      return res.status(404).json({ error: 'Sequence not found' });
     }
 
     await prisma.sequence.delete({
@@ -568,44 +593,47 @@ router.delete('/:id', async (req, res) => {
 // POST /api/sequences/:id/steps - Add step to sequence
 router.post('/:id/steps', async (req, res) => {
   try {
-    const { 
-      templateId, 
-      stepOrder, 
-      delayDays = 0, 
-      delayHours = 0, 
+    const {
+      templateId,
+      stepOrder,
+      delayDays = 0,
+      delayHours = 0,
       delayMinutes = 0,
       subject,
       body,
       triggerType = 'delay',
       triggerStepId,
-      isActive = true 
+      isActive = true
     } = req.body;
 
-    console.log('➕ Adding step to sequence:', { 
-      sequenceId: req.params.id, 
-      stepOrder, 
-      triggerType, 
-      triggerStepId 
+    console.log('➕ Adding step to sequence:', {
+      sequenceId: req.params.id,
+      stepOrder,
+      triggerType,
+      triggerStepId
     });
 
     if (stepOrder === undefined) {
-      return res.status(400).json({ 
-        error: 'stepOrder is required' 
+      return res.status(400).json({
+        error: 'stepOrder is required'
       });
     }
 
     // Validate trigger conditions
     if (triggerType && ['opened', 'not_opened', 'replied'].includes(triggerType)) {
       if (!triggerStepId) {
-        return res.status(400).json({ 
-          error: `Step with triggerType "${triggerType}" must have a valid triggerStepId` 
+        return res.status(400).json({
+          error: `Step with triggerType "${triggerType}" must have a valid triggerStepId`
         });
       }
     }
 
-    // Check if sequence exists
-    const sequence = await prisma.sequence.findUnique({
-      where: { id: req.params.id }
+    // Check if sequence exists and belongs to user
+    const sequence = await prisma.sequence.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user.id
+      }
     });
 
     if (!sequence) {
@@ -647,8 +675,8 @@ router.post('/:id/steps', async (req, res) => {
     res.status(201).json(step);
   } catch (error) {
     if (error.code === 'P2002') {
-      return res.status(409).json({ 
-        error: 'Step order already exists in this sequence' 
+      return res.status(409).json({
+        error: 'Step order already exists in this sequence'
       });
     }
     console.error('❌ Error adding step to sequence:', error);
@@ -659,31 +687,31 @@ router.post('/:id/steps', async (req, res) => {
 // PUT /api/sequences/:id/steps/:stepId - Update sequence step
 router.put('/:id/steps/:stepId', async (req, res) => {
   try {
-    const { 
-      templateId, 
-      stepOrder, 
-      delayDays, 
-      delayHours, 
+    const {
+      templateId,
+      stepOrder,
+      delayDays,
+      delayHours,
       delayMinutes,
       subject,
       body,
       triggerType,
       triggerStepId,
-      isActive 
+      isActive
     } = req.body;
 
-    console.log('🔄 Updating sequence step:', { 
-      stepId: req.params.stepId, 
-      stepOrder, 
-      triggerType, 
-      triggerStepId 
+    console.log('🔄 Updating sequence step:', {
+      stepId: req.params.stepId,
+      stepOrder,
+      triggerType,
+      triggerStepId
     });
 
     // Validate trigger conditions
     if (triggerType && ['opened', 'not_opened', 'replied'].includes(triggerType)) {
       if (!triggerStepId) {
-        return res.status(400).json({ 
-          error: `Step with triggerType "${triggerType}" must have a valid triggerStepId` 
+        return res.status(400).json({
+          error: `Step with triggerType "${triggerType}" must have a valid triggerStepId`
         });
       }
     }
@@ -701,7 +729,7 @@ router.put('/:id/steps/:stepId', async (req, res) => {
     if (isActive !== undefined) updateData.isActive = isActive;
 
     const step = await prisma.sequenceStep.update({
-      where: { 
+      where: {
         id: req.params.stepId,
         sequenceId: req.params.id
       },
@@ -719,8 +747,8 @@ router.put('/:id/steps/:stepId', async (req, res) => {
       return res.status(404).json({ error: 'Step not found' });
     }
     if (error.code === 'P2002') {
-      return res.status(409).json({ 
-        error: 'Step order already exists in this sequence' 
+      return res.status(409).json({
+        error: 'Step order already exists in this sequence'
       });
     }
     console.error('❌ Error updating sequence step:', error);
@@ -732,7 +760,7 @@ router.put('/:id/steps/:stepId', async (req, res) => {
 router.delete('/:id/steps/:stepId', async (req, res) => {
   try {
     await prisma.sequenceStep.delete({
-      where: { 
+      where: {
         id: req.params.stepId,
         sequenceId: req.params.id
       }
@@ -757,15 +785,18 @@ router.put('/:id/trigger', async (req, res) => {
     console.log('🎯 Setting trigger step:', { sequenceId, triggerStepId });
 
     if (!triggerStepId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'triggerStepId is required' 
+        error: 'triggerStepId is required'
       });
     }
 
-    // Verify sequence exists
-    const sequence = await prisma.sequence.findUnique({
-      where: { id: sequenceId },
+    // Verify sequence exists and belongs to user
+    const sequence = await prisma.sequence.findFirst({
+      where: {
+        id: sequenceId,
+        userId: req.user.id
+      },
       include: {
         steps: {
           orderBy: { stepOrder: 'asc' }
@@ -774,18 +805,18 @@ router.put('/:id/trigger', async (req, res) => {
     });
 
     if (!sequence) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: 'Sequence not found' 
+        error: 'Sequence not found'
       });
     }
 
     // Verify the trigger step exists in this sequence
     const triggerStep = sequence.steps.find(step => step.id === triggerStepId);
     if (!triggerStep) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Trigger step not found in this sequence' 
+        error: 'Trigger step not found in this sequence'
       });
     }
 
@@ -793,7 +824,7 @@ router.put('/:id/trigger', async (req, res) => {
     // We'll add a triggerStepId field to the sequence table
     const updatedSequence = await prisma.sequence.update({
       where: { id: sequenceId },
-      data: { 
+      data: {
         updatedAt: new Date() // Update timestamp to track changes
       },
       include: {
@@ -810,9 +841,9 @@ router.put('/:id/trigger', async (req, res) => {
     await prisma.sequenceTrigger.upsert({
       where: { sequenceId },
       update: { triggerStepId },
-      create: { 
-        sequenceId, 
-        triggerStepId 
+      create: {
+        sequenceId,
+        triggerStepId
       }
     });
 
@@ -831,17 +862,17 @@ router.put('/:id/trigger', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error setting trigger step:', error);
-    
+
     if (error.code === 'P2025') {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: 'Sequence not found' 
+        error: 'Sequence not found'
       });
     }
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       success: false,
-      error: 'Failed to set trigger step' 
+      error: 'Failed to set trigger step'
     });
   }
 });
@@ -890,9 +921,9 @@ router.get('/:id/trigger', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error getting trigger step:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: 'Failed to get trigger step' 
+      error: 'Failed to get trigger step'
     });
   }
 });

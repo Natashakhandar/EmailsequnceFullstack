@@ -3,21 +3,33 @@ const { simpleParser } = require('mailparser');
 const prisma = require('../db/prismaClient');
 
 class EmailMonitorService {
-  constructor() {
+  constructor(userConfig = null) {
     this.imap = null;
     this.isConnected = false;
+
+    // Config derivation
+    const host = userConfig?.imapHost || process.env.IMAP_HOST || process.env.SMTP_HOST;
+    const user = userConfig?.imapUser || userConfig?.smtpUser || process.env.IMAP_USER || process.env.SMTP_USER;
+    const password = userConfig?.imapPassword || userConfig?.smtpPassword || process.env.IMAP_PASSWORD || process.env.SMTP_PASS;
+    const port = (userConfig && userConfig.imapPort) ? userConfig.imapPort : (parseInt(process.env.IMAP_PORT) || 993);
+    const tls = userConfig?.imapTls !== undefined ? userConfig.imapTls : (process.env.IMAP_TLS !== 'false');
+
     this.config = {
-      user: process.env.IMAP_USER || process.env.SMTP_USER,
-      password: process.env.IMAP_PASSWORD || process.env.SMTP_PASS,
-      host: process.env.IMAP_HOST || process.env.SMTP_HOST,
-      port: parseInt(process.env.IMAP_PORT) || 993,
-      tls: process.env.IMAP_TLS !== 'false',
-      authTimeout: 3000,
-      connTimeout: 10000,
+      user,
+      password,
+      host,
+      port,
+      tls,
+      authTimeout: 15000,
+      connTimeout: 20000,
       tlsOptions: {
-        rejectUnauthorized: false
-      }
+        rejectUnauthorized: false,
+        servername: host
+      },
+      debug: console.log // Temporary debug logging
     };
+
+    console.log(`📡 IMAP Service config for user: ${user} on host: ${host}:${port} (TLS: ${tls})`);
   }
 
   // Connect to IMAP server
@@ -143,26 +155,35 @@ class EmailMonitorService {
   async isReplyToOurEmail(email) {
     try {
       const parsed = email.parsed;
+      const subject = (parsed.subject || '').toLowerCase();
+      const fromEmail = (parsed.from?.value?.[0]?.address || parsed.from?.text || '').toLowerCase();
 
-      // Check various reply indicators
-      const subject = parsed.subject || '';
+      // 1. FILTER: Ignore common automated/system emails that are NOT replies
+      const ignorePrefixes = [
+        'read:', 'delivered:', 'undeliverable:', 'auto:', 'out of office',
+        'automatic reply', 'failure notice', 'delivery status notification'
+      ];
+
+      if (ignorePrefixes.some(prefix => subject.startsWith(prefix))) {
+        // console.log(`ℹ️ Ignoring automated system email: "${subject}" from ${fromEmail}`);
+        return { isReply: false, reason: 'automated_system_email' };
+      }
+
       const inReplyTo = parsed.inReplyTo || '';
-      const references = parsed.references || [];
+      const references = Array.isArray(parsed.references) ? parsed.references : (parsed.references ? [parsed.references] : []);
 
-      // Look for our email IDs in the references or in-reply-to headers
-      if (inReplyTo) {
+      // 2. HEADER MATCH: Look for our email Message-IDs
+      const allHeaders = [inReplyTo, ...references].filter(Boolean);
+
+      if (allHeaders.length > 0) {
         const sentEvent = await prisma.event.findFirst({
           where: {
-            emailId: inReplyTo,
+            emailId: { in: allHeaders },
             type: 'SENT'
           },
           include: {
             contact: true,
-            enrollment: {
-              include: {
-                sequence: true
-              }
-            }
+            enrollment: { include: { sequence: true } }
           }
         });
 
@@ -171,59 +192,38 @@ class EmailMonitorService {
         }
       }
 
-      // Check references array
-      for (const ref of references) {
-        const sentEvent = await prisma.event.findFirst({
-          where: {
-            emailId: ref,
-            type: 'SENT'
-          },
-          include: {
-            contact: true,
-            enrollment: {
-              include: {
-                sequence: true
-              }
-            }
-          }
-        });
-
-        if (sentEvent) {
-          return { isReply: true, originalEvent: sentEvent };
-        }
-      }
-
-      // Check if sender email matches any of our contacts
-      const fromEmail = parsed.from?.value?.[0]?.address || parsed.from?.text;
+      // 3. FALLBACK: Match by contact and timing if it LOOKS like a reply
       if (fromEmail) {
+        // Only consider it a reply if it has "Re:" or "Fwd:" or is a standard thread
+        const looksLikeReply = subject.startsWith('re:') || subject.startsWith('fwd:') || subject.startsWith('aw:');
+
         const contact = await prisma.contact.findFirst({
-          where: {
-            email: fromEmail
-          }
+          where: { email: fromEmail }
         });
 
         if (contact) {
-          // Find the most recent sent email to this contact
           const recentSentEvent = await prisma.event.findFirst({
             where: {
               contactId: contact.id,
               type: 'SENT'
             },
-            orderBy: {
-              timestamp: 'desc'
-            },
+            orderBy: { timestamp: 'desc' },
             include: {
               contact: true,
-              enrollment: {
-                include: {
-                  sequence: true
-                }
-              }
+              enrollment: { include: { sequence: true } }
             }
           });
 
           if (recentSentEvent) {
-            return { isReply: true, originalEvent: recentSentEvent };
+            const replyDate = parsed.date ? new Date(parsed.date) : new Date();
+            const sentDate = new Date(recentSentEvent.timestamp);
+
+            // Must be after sent date AND must look like a reply (or have threading headers we missed)
+            if (replyDate > sentDate && looksLikeReply) {
+              return { isReply: true, originalEvent: recentSentEvent };
+            } else if (replyDate > sentDate && !looksLikeReply) {
+              // console.log(`ℹ️ Email from ${fromEmail} is newer but lacks reply markers (Subject: "${subject}")`);
+            }
           }
         }
       }
@@ -292,6 +292,22 @@ class EmailMonitorService {
           });
 
           if (!existingReply) {
+            // Also check if this specific reply message has already been processed (using messageId)
+            const replyMessageId = parsed.messageId || '';
+            const duplicateReply = await prisma.event.findFirst({
+              where: {
+                type: 'REPLIED',
+                details: {
+                  contains: replyMessageId
+                }
+              }
+            });
+
+            if (duplicateReply && replyMessageId !== '') {
+              console.log(`ℹ️ Reply ${replyMessageId} already processed for another event, skipping.`);
+              continue;
+            }
+
             // Sanitize email content before storing
             const replyBody = this.sanitizeForJson(parsed.text || parsed.html || 'No content');
             const replySubject = this.sanitizeForJson(parsed.subject || 'No Subject');

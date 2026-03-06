@@ -3,27 +3,69 @@ import Navbar from "@/components/Navbar";
 import { api } from "@/lib/api";
 
 const SmtpSettings = () => {
-  const [smtpConfig, setSmtpConfig] = useState<any>(null);
-  const [imapConfig, setImapConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [smtpConnected, setSmtpConnected] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Save status states
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Connection mapping state
+  const [smtpConnected, setSmtpConnected] = useState<boolean | null>(null);
   const [imapConnected, setImapConnected] = useState<boolean | null>(null);
+
   const [verifying, setVerifying] = useState(false);
   const [verifyingImap, setVerifyingImap] = useState(false);
   const [testing, setTesting] = useState(false);
+
   const [testEmail, setTestEmail] = useState("");
   const [testResult, setTestResult] = useState<null | { success: boolean; message?: string; error?: string }>(null);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    smtpHost: '',
+    smtpPort: '',
+    smtpSecure: true,
+    smtpUser: '',
+    smtpPassword: '',
+    fromEmail: '',
+    fromName: '',
+    imapHost: '',
+    imapPort: '',
+    imapTls: true,
+    imapUser: '',
+    imapPassword: '',
+  });
 
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         const res = await api.getSmtpStatus();
         if (res.smtp) {
-          setSmtpConfig(res.smtp);
           setSmtpConnected(!!res.connected);
+
+          setFormData(prev => ({
+            ...prev,
+            smtpHost: res.smtp.host || '',
+            smtpPort: res.smtp.port ? res.smtp.port.toString() : '',
+            smtpSecure: res.smtp.secure ?? true,
+            smtpUser: res.smtp.user || '',
+            smtpPassword: res.smtp.password || '',
+            fromEmail: res.smtp.fromEmail || '',
+            fromName: res.smtp.fromName || '',
+          }));
         }
         if (res.imap) {
-          setImapConfig(res.imap);
+          setImapConnected(!!res.imapConnected);
+
+          setFormData(prev => ({
+            ...prev,
+            imapHost: res.imap.host || '',
+            imapPort: res.imap.port ? res.imap.port.toString() : '',
+            imapTls: res.imap.tls ?? true,
+            imapUser: res.imap.user || '',
+            imapPassword: res.imap.password || '',
+          }));
         }
       } catch (e) {
         console.error("Failed to fetch config:", e);
@@ -34,13 +76,43 @@ const SmtpSettings = () => {
     fetchConfig();
   }, []);
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveSuccess(null);
+    setSaveError(null);
+    try {
+      await api.saveSmtpConfig(formData);
+      setSaveSuccess("Settings saved successfully!");
+      // reverify
+      handleVerifySmtp();
+    } catch (e: any) {
+      setSaveError(e?.message || "Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleVerifySmtp = async () => {
     setVerifying(true);
+    setSaveError(null);
     try {
-      const res = await api.getSmtpStatus();
-      setSmtpConnected(!!res.connected);
-    } catch {
+      // Test with CURRENT form data
+      const res = await api.testSmtpConnection(formData);
+      setSmtpConnected(!!res.success);
+      if (res.success) {
+        setSaveSuccess("SMTP connection verified successfully!");
+      }
+    } catch (e: any) {
       setSmtpConnected(false);
+      setSaveError(e?.message || "SMTP connection failed. Check your host, port, and credentials.");
     } finally {
       setVerifying(false);
     }
@@ -48,23 +120,35 @@ const SmtpSettings = () => {
 
   const handleVerifyImap = async () => {
     setVerifyingImap(true);
+    setSaveError(null);
     try {
-      const res = await api.testImapConnection();
+      // Test with CURRENT form data
+      const res = await api.testImapWithConfig(formData);
       setImapConnected(!!res.success);
-    } catch {
+      if (res.success) {
+        setSaveSuccess("IMAP connection verified successfully!");
+      }
+    } catch (e: any) {
       setImapConnected(false);
+      setSaveError(e?.message || "IMAP connection failed. Check your host, port, and credentials.");
     } finally {
       setVerifyingImap(false);
     }
   };
 
   const handleTest = async () => {
-    if (!testEmail) return;
+    const trimmedEmail = testEmail.trim();
+    if (!trimmedEmail) return;
+
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await api.sendTestEmail({ to: testEmail });
-      setTestResult({ success: true, message: res?.message || "Test email sent!" });
+      // Pass the CURRENT form data + the recipient email
+      const res = await api.sendTestEmail({
+        to: trimmedEmail,
+        ...formData
+      });
+      setTestResult({ success: true, message: `Test email sent to ${trimmedEmail} using current form settings!` });
     } catch (e: any) {
       setTestResult({ success: false, error: e?.message || "Failed to send test email" });
     } finally {
@@ -91,10 +175,31 @@ const SmtpSettings = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       <Navbar />
       <main className="container mx-auto px-6 pt-20 pb-12 max-w-4xl">
-        <h1 className="text-3xl font-bold mb-2">Email Configuration</h1>
-        <p className="text-muted-foreground mb-6">
-          Configured via backend <code className="bg-muted px-1.5 py-0.5 rounded text-xs">.env</code> file. Restart server after changes.
-        </p>
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Email Configuration</h1>
+            <p className="text-muted-foreground">
+              Configure your specific SMTP and IMAP settings to send and monitor emails.
+            </p>
+          </div>
+          <div>
+            <button onClick={handleSave} disabled={saving} className="px-6 py-2 rounded-md bg-primary text-primary-foreground disabled:opacity-50 text-sm font-medium">
+              {saving ? "Saving..." : "Save Settings"}
+            </button>
+          </div>
+        </div>
+
+        {saveSuccess && (
+          <div className="mb-4 rounded-md px-4 py-3 bg-emerald-500/10 text-emerald-600 font-medium">
+            {saveSuccess}
+          </div>
+        )}
+
+        {saveError && (
+          <div className="mb-4 rounded-md px-4 py-3 bg-red-500/10 text-red-600 font-medium">
+            {saveError}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Outgoing (SMTP) */}
@@ -117,33 +222,39 @@ const SmtpSettings = () => {
             <div className="space-y-3">
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">Host</label>
-                <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm">{smtpConfig?.host || '—'}</div>
+                <input name="smtpHost" value={formData.smtpHost} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="smtp.example.com" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-muted-foreground uppercase tracking-wide">Port</label>
-                  <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm">{smtpConfig?.port || '—'}</div>
+                  <input name="smtpPort" value={formData.smtpPort} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="465" />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Encryption</label>
-                  <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm">{smtpConfig?.secure ? 'SSL/TLS' : 'None'}</div>
+                <div className="flex flex-col gap-1 justify-center pt-5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="smtpSecure" checked={formData.smtpSecure} onChange={handleInputChange} className="rounded border-border" />
+                    <span className="text-sm font-medium">SSL/TLS</span>
+                  </label>
                 </div>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">Username</label>
-                <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm">{smtpConfig?.user || '—'}</div>
+                <input name="smtpUser" value={formData.smtpUser} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="you@example.com" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground uppercase tracking-wide">Password</label>
+                <input name="smtpPassword" type="password" value={formData.smtpPassword} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="••••••••" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">From Email</label>
-                <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm">{smtpConfig?.fromEmail || '—'}</div>
+                <input name="fromEmail" value={formData.fromEmail} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="you@example.com" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">From Name</label>
-                <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm">{smtpConfig?.fromName || '—'}</div>
+                <input name="fromName" value={formData.fromName} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="Your Name" />
               </div>
             </div>
 
-            <button onClick={handleVerifySmtp} disabled={verifying} className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground disabled:opacity-50 text-sm font-medium">
+            <button onClick={handleVerifySmtp} disabled={verifying} className="w-full px-4 py-2 mt-4 rounded-md bg-muted text-foreground border border-border disabled:opacity-50 text-sm font-medium hover:bg-muted/80">
               {verifying ? "Verifying..." : "Verify SMTP Connection"}
             </button>
           </div>
@@ -158,40 +269,39 @@ const SmtpSettings = () => {
                 <h2 className="text-lg font-semibold">Incoming (IMAP)</h2>
               </div>
               <div className="flex items-center gap-1.5">
-                {imapConfig?.configured ? (
-                  <>
-                    <div className={`w-2.5 h-2.5 rounded-full ${imapConnected === true ? 'bg-emerald-500' : imapConnected === false ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
-                    <span className={`text-xs font-medium ${imapConnected === true ? 'text-emerald-600' : imapConnected === false ? 'text-red-600' : 'text-yellow-600'}`}>
-                      {imapConnected === true ? 'Connected' : imapConnected === false ? 'Failed' : 'Not tested'}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-2.5 h-2.5 rounded-full bg-gray-400"></div>
-                    <span className="text-xs font-medium text-gray-500">Not configured</span>
-                  </>
-                )}
+                <>
+                  <div className={`w-2.5 h-2.5 rounded-full ${imapConnected === true ? 'bg-emerald-500' : imapConnected === false ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
+                  <span className={`text-xs font-medium ${imapConnected === true ? 'text-emerald-600' : imapConnected === false ? 'text-red-600' : 'text-yellow-600'}`}>
+                    {imapConnected === true ? 'Connected' : imapConnected === false ? 'Failed' : 'Not tested'}
+                  </span>
+                </>
               </div>
             </div>
 
             <div className="space-y-3">
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">Host</label>
-                <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm">{imapConfig?.host || '—'}</div>
+                <input name="imapHost" value={formData.imapHost} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="imap.example.com" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-muted-foreground uppercase tracking-wide">Port</label>
-                  <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm">{imapConfig?.port || '—'}</div>
+                  <input name="imapPort" value={formData.imapPort} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="993" />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Encryption</label>
-                  <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm">{imapConfig?.tls ? 'SSL/TLS' : 'None'}</div>
+                <div className="flex flex-col gap-1 justify-center pt-5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="imapTls" checked={formData.imapTls} onChange={handleInputChange} className="rounded border-border" />
+                    <span className="text-sm font-medium">SSL/TLS</span>
+                  </label>
                 </div>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">Username</label>
-                <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm">{imapConfig?.user || '—'}</div>
+                <input name="imapUser" value={formData.imapUser} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="you@example.com" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground uppercase tracking-wide">Password</label>
+                <input name="imapPassword" type="password" value={formData.imapPassword} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="••••••••" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">Purpose</label>
@@ -199,7 +309,7 @@ const SmtpSettings = () => {
               </div>
             </div>
 
-            <button onClick={handleVerifyImap} disabled={verifyingImap || !imapConfig?.configured} className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground disabled:opacity-50 text-sm font-medium">
+            <button onClick={handleVerifyImap} disabled={verifyingImap} className="w-full px-4 py-2 mt-4 rounded-md bg-muted text-foreground border border-border disabled:opacity-50 text-sm font-medium hover:bg-muted/80">
               {verifyingImap ? "Verifying..." : "Verify IMAP Connection"}
             </button>
           </div>
@@ -222,7 +332,7 @@ const SmtpSettings = () => {
             <button
               onClick={handleTest}
               disabled={testing || !testEmail}
-              className="px-6 py-2 rounded-md bg-blue-600 text-white disabled:opacity-50 font-medium"
+              className="px-6 py-2 rounded-md bg-blue-600 text-white disabled:opacity-50 font-medium hover:bg-blue-700 transition-colors"
             >
               {testing ? "Sending..." : "Send Test"}
             </button>
@@ -233,56 +343,6 @@ const SmtpSettings = () => {
               <div className="font-medium">{testResult.success ? testResult.message : testResult.error}</div>
             </div>
           )}
-        </div>
-
-        {/* Server Info Table */}
-        <div className="glass rounded-2xl p-6 shadow-card mt-6">
-          <h2 className="text-lg font-semibold mb-4">Server Overview</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-2 px-3 text-muted-foreground font-medium">Protocol</th>
-                  <th className="text-left py-2 px-3 text-muted-foreground font-medium">Host</th>
-                  <th className="text-left py-2 px-3 text-muted-foreground font-medium">Port</th>
-                  <th className="text-left py-2 px-3 text-muted-foreground font-medium">Encryption</th>
-                  <th className="text-left py-2 px-3 text-muted-foreground font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-border/50">
-                  <td className="py-2.5 px-3 font-medium">Outgoing (SMTP)</td>
-                  <td className="py-2.5 px-3">{smtpConfig?.host || '—'}</td>
-                  <td className="py-2.5 px-3">{smtpConfig?.port || '—'}</td>
-                  <td className="py-2.5 px-3">{smtpConfig?.secure ? 'SSL' : '—'}</td>
-                  <td className="py-2.5 px-3">
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${smtpConnected ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${smtpConnected ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-                      {smtpConnected ? 'Connected' : 'Disconnected'}
-                    </span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-3 font-medium">Incoming (IMAP)</td>
-                  <td className="py-2.5 px-3">{imapConfig?.host || '—'}</td>
-                  <td className="py-2.5 px-3">{imapConfig?.port || '—'}</td>
-                  <td className="py-2.5 px-3">{imapConfig?.tls ? 'SSL' : '—'}</td>
-                  <td className="py-2.5 px-3">
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${imapConnected === true ? 'bg-emerald-500/10 text-emerald-600' :
-                      imapConnected === false ? 'bg-red-500/10 text-red-600' :
-                        imapConfig?.configured ? 'bg-yellow-500/10 text-yellow-600' : 'bg-gray-500/10 text-gray-500'
-                      }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${imapConnected === true ? 'bg-emerald-500' :
-                        imapConnected === false ? 'bg-red-500' :
-                          imapConfig?.configured ? 'bg-yellow-500' : 'bg-gray-400'
-                        }`}></span>
-                      {imapConnected === true ? 'Connected' : imapConnected === false ? 'Failed' : imapConfig?.configured ? 'Not tested' : 'Not configured'}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </div>
       </main>
     </div>

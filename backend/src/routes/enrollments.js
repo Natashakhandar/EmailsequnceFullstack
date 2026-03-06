@@ -1,6 +1,9 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
+
+router.use(authenticateToken);
 
 // GET /api/enrollments - Get all enrollments with pagination
 router.get('/', async (req, res) => {
@@ -8,7 +11,7 @@ router.get('/', async (req, res) => {
     const { page = 1, limit = 50, status, sequenceId, contactId } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {};
+    const where = { contact: { userId: req.user.id } };
     if (status) where.status = status;
     if (sequenceId) where.sequenceId = sequenceId;
     if (contactId) where.contactId = contactId;
@@ -58,8 +61,11 @@ router.get('/', async (req, res) => {
 // GET /api/enrollments/:id - Get single enrollment
 router.get('/:id', async (req, res) => {
   try {
-    const enrollment = await prisma.enrollment.findUnique({
-      where: { id: req.params.id },
+    const enrollment = await prisma.enrollment.findFirst({
+      where: {
+        id: req.params.id,
+        contact: { userId: req.user.id }
+      },
       include: {
         contact: true,
         sequence: {
@@ -93,8 +99,9 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/events', async (req, res) => {
   try {
     const events = await prisma.event.findMany({
-      where: { 
-        enrollmentId: req.params.id 
+      where: {
+        enrollmentId: req.params.id,
+        contact: { userId: req.user.id }
       },
       orderBy: { timestamp: 'desc' },
       include: {
@@ -121,14 +128,14 @@ router.post('/', async (req, res) => {
     const { contactId, sequenceId, startImmediately = false } = req.body;
 
     if (!contactId || !sequenceId) {
-      return res.status(400).json({ 
-        error: 'contactId and sequenceId are required' 
+      return res.status(400).json({
+        error: 'contactId and sequenceId are required'
       });
     }
 
-    // Check if contact exists and is not unsubscribed
-    const contact = await prisma.contact.findUnique({
-      where: { id: contactId }
+    // Check if contact exists and belongs to the user
+    const contact = await prisma.contact.findFirst({
+      where: { id: contactId, userId: req.user.id }
     });
 
     if (!contact) {
@@ -136,8 +143,8 @@ router.post('/', async (req, res) => {
     }
 
     if (contact.status === 'UNSUBSCRIBED') {
-      return res.status(400).json({ 
-        error: 'Cannot enroll unsubscribed contact' 
+      return res.status(400).json({
+        error: 'Cannot enroll unsubscribed contact'
       });
     }
 
@@ -175,15 +182,15 @@ router.post('/', async (req, res) => {
     });
 
     if (existingEnrollment) {
-      return res.status(409).json({ 
-        error: 'Contact is already enrolled in this sequence' 
+      return res.status(409).json({
+        error: 'Contact is already enrolled in this sequence'
       });
     }
 
     // Calculate next send time for first step
     const firstStep = sequence.steps[0];
     let nextSendAt = null;
-    
+
     if (startImmediately) {
       nextSendAt = new Date();
     } else {
@@ -235,21 +242,21 @@ router.post('/', async (req, res) => {
     res.status(201).json(enrollment);
   } catch (error) {
     console.error('❌ Error creating enrollment:', error);
-    
+
     // Provide more specific error messages
     if (error.code === 'P2002') {
-      return res.status(409).json({ 
-        error: 'Contact is already enrolled in this sequence' 
+      return res.status(409).json({
+        error: 'Contact is already enrolled in this sequence'
       });
     }
-    
+
     if (error.code === 'P2003') {
-      return res.status(400).json({ 
-        error: 'Invalid contact or sequence reference' 
+      return res.status(400).json({
+        error: 'Invalid contact or sequence reference'
       });
     }
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       error: 'Failed to create enrollment',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -265,11 +272,17 @@ router.put('/:id', async (req, res) => {
     if (status) updateData.status = status;
     if (currentStep !== undefined) updateData.currentStep = currentStep;
     if (nextSendAt) updateData.nextSendAt = new Date(nextSendAt);
-    
+
     if (status === 'COMPLETED' || status === 'STOPPED') {
       updateData.completedAt = new Date();
       updateData.nextSendAt = null;
     }
+
+    // Verify ownership
+    const existing = await prisma.enrollment.findFirst({
+      where: { id: req.params.id, contact: { userId: req.user.id } }
+    });
+    if (!existing) return res.status(404).json({ error: 'Enrollment not found' });
 
     const enrollment = await prisma.enrollment.update({
       where: { id: req.params.id },
@@ -293,6 +306,12 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/enrollments/:id - Delete enrollment
 router.delete('/:id', async (req, res) => {
   try {
+    // Verify ownership
+    const existing = await prisma.enrollment.findFirst({
+      where: { id: req.params.id, contact: { userId: req.user.id } }
+    });
+    if (!existing) return res.status(404).json({ error: 'Enrollment not found' });
+
     await prisma.enrollment.delete({
       where: { id: req.params.id }
     });
@@ -310,9 +329,15 @@ router.delete('/:id', async (req, res) => {
 // POST /api/enrollments/:id/pause - Pause enrollment
 router.post('/:id/pause', async (req, res) => {
   try {
+    // Verify ownership
+    const existing = await prisma.enrollment.findFirst({
+      where: { id: req.params.id, contact: { userId: req.user.id } }
+    });
+    if (!existing) return res.status(404).json({ error: 'Enrollment not found' });
+
     const enrollment = await prisma.enrollment.update({
       where: { id: req.params.id },
-      data: { 
+      data: {
         status: 'PAUSED',
         nextSendAt: null
       },
@@ -342,9 +367,15 @@ router.post('/:id/resume', async (req, res) => {
     nextSendAt.setDate(nextSendAt.getDate() + delayDays);
     nextSendAt.setHours(nextSendAt.getHours() + delayHours);
 
+    // Verify ownership
+    const existing = await prisma.enrollment.findFirst({
+      where: { id: req.params.id, contact: { userId: req.user.id } }
+    });
+    if (!existing) return res.status(404).json({ error: 'Enrollment not found' });
+
     const enrollment = await prisma.enrollment.update({
       where: { id: req.params.id },
-      data: { 
+      data: {
         status: 'ACTIVE',
         nextSendAt
       },
@@ -367,9 +398,15 @@ router.post('/:id/resume', async (req, res) => {
 // POST /api/enrollments/:id/stop - Stop enrollment
 router.post('/:id/stop', async (req, res) => {
   try {
+    // Verify ownership
+    const existing = await prisma.enrollment.findFirst({
+      where: { id: req.params.id, contact: { userId: req.user.id } }
+    });
+    if (!existing) return res.status(404).json({ error: 'Enrollment not found' });
+
     const enrollment = await prisma.enrollment.update({
       where: { id: req.params.id },
-      data: { 
+      data: {
         status: 'STOPPED',
         completedAt: new Date(),
         nextSendAt: null
@@ -434,9 +471,9 @@ router.post('/bulk', async (req, res) => {
 
     for (const contactId of contactIds) {
       try {
-        // Check if contact exists and is not unsubscribed
-        const contact = await prisma.contact.findUnique({
-          where: { id: contactId }
+        // Check if contact exists and belongs to user
+        const contact = await prisma.contact.findFirst({
+          where: { id: contactId, userId: req.user.id }
         });
 
         if (!contact) {

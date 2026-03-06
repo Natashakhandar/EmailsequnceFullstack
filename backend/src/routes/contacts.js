@@ -12,7 +12,8 @@ router.get('/', async (req, res) => {
     const { page = 1, limit = 50, status, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : {
       userId: req.user.id
     };
     if (status) where.status = status;
@@ -63,10 +64,11 @@ router.get('/', async (req, res) => {
 // GET /api/contacts/:id - Get single contact
 router.get('/:id', async (req, res) => {
   try {
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
     const contact = await prisma.contact.findFirst({
       where: {
         id: req.params.id,
-        userId: req.user.id
+        ...(isAdmin ? {} : { userId: req.user.id })
       },
       include: {
         enrollments: {
@@ -140,9 +142,13 @@ router.put('/:id', async (req, res) => {
   try {
     const { firstName, lastName, company, timezone, status } = req.body;
 
-    // First verify ownership
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    // First verify ownership or admin role
     const existing = await prisma.contact.findFirst({
-      where: { id: req.params.id, userId: req.user.id }
+      where: {
+        id: req.params.id,
+        ...(isAdmin ? {} : { userId: req.user.id })
+      }
     });
 
     if (!existing) {
@@ -177,11 +183,12 @@ router.delete('/:id', async (req, res) => {
 
     console.log('🗑️ Deleting lead/contact:', { contactId: id });
 
-    // Verify contact exists and belongs to user
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    // Verify contact exists and belongs to user (or user is admin)
     const existingContact = await prisma.contact.findFirst({
       where: {
         id,
-        userId: req.user.id
+        ...(isAdmin ? {} : { userId: req.user.id })
       },
       include: {
         _count: {
@@ -372,11 +379,12 @@ router.post('/bulk-delete', async (req, res) => {
       return res.status(400).json({ message: 'No contact IDs provided' });
     }
 
-    // Verify contacts belong to user before deleting
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    // Verify contacts belong to user before deleting (unless admin)
     const existingContacts = await prisma.contact.findMany({
       where: {
         id: { in: ids },
-        userId: req.user.id
+        ...(isAdmin ? {} : { userId: req.user.id })
       },
       select: { id: true }
     });
