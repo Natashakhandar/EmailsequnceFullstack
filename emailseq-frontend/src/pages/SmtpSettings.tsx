@@ -150,9 +150,9 @@ const SmtpSettings = () => {
       });
       setTestResult({ success: true, message: `Test email sent to ${trimmedEmail} using current form settings!` });
     } catch (e: any) {
-      setStatus({ success: false, error: e.message || "SMTP verification failed" });
+      setTestResult({ success: false, error: e.message || "Failed to send test email" });
     } finally {
-      setVerifying(false);
+      setTesting(false);
     }
   };
 
@@ -198,11 +198,18 @@ const SmtpSettings = () => {
           </div>
         )}
 
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground uppercase opacity-70">SMTP Host</label>
-                  <input name="smtpHost" value={config.smtpHost} onChange={handleChange} placeholder="smtp.hostinger.com" className="w-full bg-muted/30 border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
-                </div>
+        <div className="space-y-8">
+          {/* SMTP (Outgoing) Section */}
+          <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold">Outgoing (SMTP)</h2>
+              <div className="flex items-center gap-1.5">
+                <div className={`w-2.5 h-2.5 rounded-full ${smtpConnected === true ? 'bg-emerald-500' : smtpConnected === false ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
+                <span className={`text-xs font-medium ${smtpConnected === true ? 'text-emerald-600' : smtpConnected === false ? 'text-red-600' : 'text-yellow-600'}`}>
+                  {smtpConnected === true ? 'Connected' : smtpConnected === false ? 'Failed' : 'Not tested'}
+                </span>
+              </div>
+            </div>
 
             <div className="space-y-3">
               <div className="flex flex-col gap-1">
@@ -244,20 +251,15 @@ const SmtpSettings = () => {
             </button>
           </div>
 
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground uppercase opacity-70">From Name</label>
-                  <input name="fromName" value={config.fromName} onChange={handleChange} placeholder="John Doe" className="w-full bg-muted/30 border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
-                </div>
-                <h2 className="text-lg font-semibold">Incoming (IMAP)</h2>
-              </div>
+          {/* IMAP (Incoming) Section */}
+          <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold">Incoming (IMAP)</h2>
               <div className="flex items-center gap-1.5">
-                <>
-                  <div className={`w-2.5 h-2.5 rounded-full ${imapConnected === true ? 'bg-emerald-500' : imapConnected === false ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
-                  <span className={`text-xs font-medium ${imapConnected === true ? 'text-emerald-600' : imapConnected === false ? 'text-red-600' : 'text-yellow-600'}`}>
-                    {imapConnected === true ? 'Connected' : imapConnected === false ? 'Failed' : 'Not tested'}
-                  </span>
-                </>
+                <div className={`w-2.5 h-2.5 rounded-full ${imapConnected === true ? 'bg-emerald-500' : imapConnected === false ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
+                <span className={`text-xs font-medium ${imapConnected === true ? 'text-emerald-600' : imapConnected === false ? 'text-red-600' : 'text-yellow-600'}`}>
+                  {imapConnected === true ? 'Connected' : imapConnected === false ? 'Failed' : 'Not tested'}
+                </span>
               </div>
             </div>
 
@@ -297,23 +299,21 @@ const SmtpSettings = () => {
             </button>
           </div>
 
+          {/* Test Email Section */}
           <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-muted/10 p-6 rounded-2xl border border-border/50">
             <div className="flex-1 w-full max-w-sm">
-              <label className="text-xs font-medium text-muted-foreground uppercase opacity-70 block mb-1">Verify with Test Recipient</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase opacity-70 block mb-1">Send Test Email (uses current form settings)</label>
               <div className="flex gap-2">
-                <input value={testRecipient} onChange={(e) => setTestRecipient(e.target.value)} placeholder="someone@example.com" className="flex-1 bg-background border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
-                <button type="button" onClick={handleVerify} disabled={verifying} className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-secondary/80 transition-colors disabled:opacity-50">
-                  {verifying ? "Verifying..." : "Verify Connection"}
+                <input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="recipient@example.com" className="flex-1 bg-background border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
+                <button
+                  onClick={handleTest}
+                  disabled={testing || !testEmail}
+                  className="px-6 py-2 rounded-md bg-blue-600 text-white disabled:opacity-50 font-medium hover:bg-blue-700 transition-colors"
+                >
+                  {testing ? "Sending..." : "Send Test"}
                 </button>
               </div>
             </div>
-            <button
-              onClick={handleTest}
-              disabled={testing || !testEmail}
-              className="px-6 py-2 rounded-md bg-blue-600 text-white disabled:opacity-50 font-medium hover:bg-blue-700 transition-colors"
-            >
-              {testing ? "Sending..." : "Send Test"}
-            </button>
           </div>
 
           {testResult && (
@@ -325,6 +325,7 @@ const SmtpSettings = () => {
       </main>
     </div>
   );
+
 };
 
 export default SmtpSettings;
