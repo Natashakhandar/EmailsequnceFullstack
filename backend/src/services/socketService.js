@@ -8,54 +8,41 @@ let io = null;
  * @param {Object} server - HTTP server instance
  */
 function initializeSocket(server) {
-  const { Server } = require('socket.io');
+  try {
+    const { Server } = require('socket.io');
 
-  io = new Server(server, {
-    cors: {
-      origin: [
-        'http://localhost:3000',
-        'http://localhost:8080',
-        'http://localhost:5173',
-        'http://localhost:8081',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:8080',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:8081',
-        'https://email.boostnow.in',
-        'https://www.email.boostnow.in'
-      ],
-      methods: ['GET', 'POST']
-    }
-  });
-
-  io.on('connection', (socket) => {
-    console.log('📡 Client connected to socket:', socket.id);
-
-    // Join campaign-specific rooms
-    socket.on('joinCampaign', (campaignId) => {
-      socket.join(`campaign_${campaignId}`);
-      console.log(`Client ${socket.id} joined campaign room: campaign_${campaignId}`);
+    io = new Server(server, {
+      cors: {
+        origin: [
+          'http://localhost:3000',
+          'http://localhost:8080',
+          'http://localhost:5173',
+          'http://localhost:8081',
+          'http://127.0.0.1:3000',
+          'http://127.0.0.1:8080',
+          'http://127.0.0.1:5173',
+          'http://127.0.0.1:8081',
+          'https://email.boostnow.in',
+          'https://www.email.boostnow.in'
+        ],
+        methods: ['GET', 'POST']
+      }
     });
 
-    // Leave campaign-specific rooms
-    socket.on('leaveCampaign', (campaignId) => {
-      socket.leave(`campaign_${campaignId}`);
-      console.log(`Client ${socket.id} left campaign room: campaign_${campaignId}`);
+    io.on('connection', (socket) => {
+      console.log('📡 Client connected:', socket.id);
+      socket.on('joinCampaign', (campaignId) => socket.join(`campaign_${campaignId}`));
+      socket.on('leaveCampaign', (campaignId) => socket.leave(`campaign_${campaignId}`));
+      socket.on('joinStats', () => socket.join('general_stats'));
+      socket.on('disconnect', () => console.log('📡 Client disconnected:', socket.id));
     });
 
-    // Join general stats room
-    socket.on('joinStats', () => {
-      socket.join('general_stats');
-      console.log(`Client ${socket.id} joined general stats room`);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('📡 Client disconnected:', socket.id);
-    });
-  });
-
-  console.log('✅ Socket.io server initialized');
+    console.log('✅ Socket.io server initialized');
+  } catch (err) {
+    console.log('⚠️ Socket.io not available, skipping real-time updates:', err.message);
+  }
 }
+
 
 /**
  * Broadcast campaign stats update to specific campaign room
