@@ -21,6 +21,7 @@ const dashboardRouter = require('./routes/dashboard');
 const reportsRouter = require('./routes/reports');
 const campaignsRouter = require('./routes/campaigns');
 const fixEventDetailsRouter = require('./routes/fixEventDetails');
+const smtpRouter = require('./routes/smtp');
 
 // Import scheduler and email monitor
 const { startScheduler } = require('./jobs/scheduler');
@@ -96,6 +97,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/fix-event-details', fixEventDetailsRouter);
+app.use('/api/smtp', smtpRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -119,7 +121,8 @@ app.get('/', (req, res) => {
       profile: '/api/profile',
       dashboard: '/api/dashboard',
       reports: '/api/reports',
-      campaigns: '/api/campaigns'
+      campaigns: '/api/campaigns',
+      smtp: '/api/smtp'
     }
   });
 });

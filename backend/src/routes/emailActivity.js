@@ -29,7 +29,7 @@ router.delete('/:id', async (req, res) => {
       // First attempt: Try emailActivity table
       if (prisma.emailActivity) {
         deletedRecord = await prisma.emailActivity.delete({
-          where: { id }
+          where: { id, userId: req.user.id }
         });
         console.log(`✅ Email activity deleted from emailActivity table: ${id}`);
       } else {
@@ -45,7 +45,14 @@ router.delete('/:id', async (req, res) => {
           throw Object.assign(new Error('Event not found'), { code: 'P2025' });
         }
         deletedRecord = await prisma.event.delete({
-          where: { id }
+          where: {
+            id,
+            enrollment: {
+              sequence: {
+                userId: req.user.id
+              }
+            }
+          }
         });
         console.log(`✅ Email activity deleted from events table: ${id}`);
       } catch (eventError) {
@@ -110,6 +117,7 @@ router.get('/', async (req, res) => {
     try {
       if (prisma.emailActivity) {
         activities = await prisma.emailActivity.findMany({
+          where: { userId: req.user.id },
           orderBy: { createdAt: 'desc' },
           take: 100 // Limit to prevent large responses
         });
@@ -179,8 +187,8 @@ router.get('/:id', async (req, res) => {
     // Try emailActivity table first, fallback to events
     try {
       if (prisma.emailActivity) {
-        activity = await prisma.emailActivity.findUnique({
-          where: { id }
+        activity = await prisma.emailActivity.findFirst({
+          where: { id, userId: req.user.id }
         });
       } else {
         throw new Error('emailActivity table not found');

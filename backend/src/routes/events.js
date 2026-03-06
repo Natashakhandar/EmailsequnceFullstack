@@ -126,9 +126,14 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Check if enrollment exists
-    const enrollment = await prisma.enrollment.findUnique({
-      where: { id: enrollmentId }
+    // Check if enrollment exists and belongs to user
+    const enrollment = await prisma.enrollment.findFirst({
+      where: {
+        id: enrollmentId,
+        sequence: {
+          userId: req.user.id
+        }
+      }
     });
 
     if (!enrollment) {
@@ -306,7 +311,14 @@ router.delete('/:id', async (req, res) => {
     }
 
     await prisma.event.delete({
-      where: { id: req.params.id }
+      where: {
+        id: req.params.id,
+        enrollment: {
+          sequence: {
+            userId: req.user.id
+          }
+        }
+      }
     });
 
     res.status(204).send();

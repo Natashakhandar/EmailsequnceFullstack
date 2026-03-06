@@ -25,9 +25,7 @@ router.get('/stats', async (req, res) => {
     }
 
     if (sequenceId) {
-      where.enrollment = {
-        sequenceId
-      };
+      where.enrollment.sequenceId = sequenceId;
     }
 
     console.log('📊 Fetching dashboard statistics with filters:', {
@@ -132,14 +130,12 @@ router.get('/stats', async (req, res) => {
         ...(isAdmin ? {} : { userId: req.user.id })
       }
     });
-
     const totalContacts = await prisma.contact.count({
       where: {
         status: 'ACTIVE',
         ...(isAdmin ? {} : { userId: req.user.id })
       }
     });
-
     const activeEnrollments = await prisma.enrollment.count({
       where: {
         status: 'ACTIVE',
@@ -272,9 +268,7 @@ router.get('/performance-trends', async (req, res) => {
     };
 
     if (sequenceId) {
-      where.enrollment = {
-        sequenceId
-      };
+      where.enrollment.sequenceId = sequenceId;
     }
 
     const events = await prisma.event.findMany({

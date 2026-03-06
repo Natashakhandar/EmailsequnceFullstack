@@ -40,6 +40,8 @@ router.get('/analytics', async (req, res) => {
 
     if (campaignId) {
       eventWhere.campaignId = campaignId;
+      // Note: campaignId is already verified via campaignBreakdown query later if needed, 
+      // but eventWhere.enrollment.sequence.userId already enforces user isolation
     }
 
     // Get event counts grouped by type (only events with campaignId for consistency)
@@ -131,7 +133,8 @@ router.get('/analytics', async (req, res) => {
       by: ['campaignId', 'type'],
       where: {
         campaignId: { in: campaignBreakdown.map(c => c.id) },
-        ...eventWhere
+        ...eventWhere,
+        enrollment: { sequence: { userId: req.user.id } }
       },
       _count: {
         type: true
@@ -221,7 +224,7 @@ router.get('/analytics', async (req, res) => {
       });
     }
 
-    // Get total leads (contacts)
+    // Get total leads (contacts) for the user
     const totalLeads = await prisma.contact.count({
       where: {
         status: 'ACTIVE',
@@ -486,7 +489,7 @@ router.get('/campaign-performance', async (req, res) => {
       console.log('📊 Fetching campaign performance data with limit:', limit);
     }
 
-    // Get all active campaigns with their performance metrics
+    // Get all active campaigns with their performance metrics for this user
     const campaigns = await prisma.campaign.findMany({
       where: {
         isActive: true,
@@ -532,7 +535,7 @@ router.get('/campaign-performance', async (req, res) => {
       // Get event stats for this specific campaign
       const eventStats = await prisma.event.groupBy({
         by: ['type'],
-        where: { campaignId: campaign.id },
+        where: { campaignId: campaign.id, campaign: { userId: req.user.id } },
         _count: { type: true }
       });
 
@@ -552,7 +555,8 @@ router.get('/campaign-performance', async (req, res) => {
       const activeEnrollments = await prisma.enrollment.count({
         where: {
           campaignId: campaign.id,
-          status: 'ACTIVE'
+          status: 'ACTIVE',
+          campaign: { userId: req.user.id }
         }
       });
 
@@ -742,6 +746,7 @@ router.get('/campaign-analytics', async (req, res) => {
     // Get all campaigns with their stats
     const campaigns = await prisma.campaign.findMany({
       where: {
+        userId: req.user.id,
         ...where,
         isActive: true
       },
@@ -767,6 +772,7 @@ router.get('/campaign-analytics', async (req, res) => {
           by: ['type'],
           where: {
             campaignId: campaign.id,
+            campaign: { userId: req.user.id },
             ...(startDate || endDate ? {
               timestamp: {
                 ...(startDate && { gte: new Date(startDate) }),

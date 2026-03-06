@@ -2,6 +2,7 @@ const express = require('express');
 const prisma = require('../db/prismaClient');
 const { broadcastRealTimeEvent } = require('../services/socketService');
 const router = express.Router();
+const { authenticateToken } = require('../middleware/auth');
 
 // Create a 1x1 transparent PNG buffer
 const transparentPixel = Buffer.from([
@@ -54,7 +55,7 @@ router.get('/track/open', async (req, res) => {
       return sendPixel();
     }
 
-    // UNIQUE OPEN CHECK: Check if this specific email was already marked as opened
+    // UNIQUE OPEN CHECK: Only record first open per emailId
     const alreadyOpened = await prisma.event.findFirst({
       where: {
         emailId: emailId,
@@ -64,7 +65,7 @@ router.get('/track/open', async (req, res) => {
 
     if (!alreadyOpened) {
       // Create OPENED event - ONLY ONCE per emailId
-      const newEvent = await prisma.event.create({
+      await prisma.event.create({
         data: {
           enrollmentId: existingEvent.enrollmentId,
           contactId: existingEvent.contactId,
@@ -91,8 +92,6 @@ router.get('/track/open', async (req, res) => {
         to: existingEvent.contact.email,
         timestamp: new Date().toISOString()
       });
-    } else {
-      // console.log(`📧 REPEAT OPEN: Email ${emailId} already opened. Skipping stat recording.`);
     }
 
     return sendPixel();
@@ -127,6 +126,9 @@ router.post('/track/reply', async (req, res) => {
       where: {
         emailId: emailId,
         type: 'SENT'
+      },
+      include: {
+        contact: true
       }
     });
 
@@ -142,27 +144,30 @@ router.post('/track/reply', async (req, res) => {
       }
     });
 
-    if (!alreadyReplied) {
-      // Create REPLIED event with content
-      await prisma.event.create({
-        data: {
-          enrollmentId: existingEvent.enrollmentId,
-          contactId: existingEvent.contactId,
-          campaignId: existingEvent.campaignId,
-          type: 'REPLIED',
-          emailId: emailId,
-          details: JSON.stringify({
-            repliedAt: new Date().toISOString(),
-            replySubject: replySubject || 'Re: Your Email',
-            replyBody: replyBody || 'Thank you for your email. I am interested in learning more.',
-            replyFrom: replyFrom || existingEvent.contact?.email || 'client@example.com',
-            source: 'manual_tracking'
-          })
-        }
-      });
-
-      console.log(`✅ Reply tracking: Marked email as replied with content for emailId: ${emailId}`);
+    if (alreadyReplied) {
+      console.log(`📧 Reply tracking: Duplicate reply detected for emailId: ${emailId}. Skipping.`);
+      return res.json({ success: true, message: 'Reply already tracked' });
     }
+
+    // Create REPLIED event with content
+    await prisma.event.create({
+      data: {
+        enrollmentId: existingEvent.enrollmentId,
+        contactId: existingEvent.contactId,
+        campaignId: existingEvent.campaignId,
+        type: 'REPLIED',
+        emailId: emailId,
+        details: JSON.stringify({
+          repliedAt: new Date().toISOString(),
+          replySubject: replySubject || 'Re: Your Email',
+          replyBody: replyBody || 'Thank you for your email. I am interested in learning more.',
+          replyFrom: replyFrom || existingEvent.contact?.email || 'client@example.com',
+          source: 'manual_tracking'
+        })
+      }
+    });
+
+    console.log(`✅ Reply tracking: Recorded new reply for emailId: ${emailId}`);
 
     res.json({
       success: true,
@@ -243,13 +248,18 @@ router.get('/track/reply', async (req, res) => {
  * GET /api/track/stats/:emailId
  * Get tracking statistics for a specific email
  */
-router.get('/track/stats/:emailId', async (req, res) => {
+router.get('/track/stats/:emailId', authenticateToken, async (req, res) => {
   try {
     const { emailId } = req.params;
 
     const events = await prisma.event.findMany({
       where: {
-        emailId: emailId
+        emailId: emailId,
+        enrollment: {
+          sequence: {
+            userId: req.user.id
+          }
+        }
       },
       orderBy: {
         timestamp: 'asc'
