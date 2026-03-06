@@ -493,7 +493,7 @@ router.put('/:id', async (req, res) => {
     }
 
     const sequence = await prisma.sequence.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id, userId: req.user.id },
       data: updateData,
       include: {
         steps: {
@@ -552,7 +552,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/sequences/:id - Delete sequence
 router.delete('/:id', async (req, res) => {
   try {
-    // Check if sequence has active enrollments
+    // Check if sequence has active enrollments and belongs to user
     const activeEnrollments = await prisma.enrollment.findMany({
       where: {
         sequenceId: req.params.id,
@@ -577,7 +577,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await prisma.sequence.delete({
-      where: { id: req.params.id }
+      where: { id: req.params.id, userId: req.user.id }
     });
 
     res.status(204).send();
@@ -654,6 +654,7 @@ router.post('/:id/steps', async (req, res) => {
     const step = await prisma.sequenceStep.create({
       data: {
         sequenceId: req.params.id,
+        // we already verified sequence belongs to user
         templateId: templateId || null,
         stepOrder,
         delayDays,
@@ -731,7 +732,8 @@ router.put('/:id/steps/:stepId', async (req, res) => {
     const step = await prisma.sequenceStep.update({
       where: {
         id: req.params.stepId,
-        sequenceId: req.params.id
+        sequenceId: req.params.id,
+        sequence: { userId: req.user.id }
       },
       data: updateData,
       include: {
@@ -762,7 +764,8 @@ router.delete('/:id/steps/:stepId', async (req, res) => {
     await prisma.sequenceStep.delete({
       where: {
         id: req.params.stepId,
-        sequenceId: req.params.id
+        sequenceId: req.params.id,
+        sequence: { userId: req.user.id }
       }
     });
 

@@ -148,9 +148,9 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Check if sequence exists and is active
-    const sequence = await prisma.sequence.findUnique({
-      where: { id: sequenceId },
+    // Check if sequence exists and is active and belongs to user
+    const sequence = await prisma.sequence.findFirst({
+      where: { id: sequenceId, userId: req.user.id },
       include: {
         steps: {
           orderBy: { stepOrder: 'asc' },
@@ -285,7 +285,12 @@ router.put('/:id', async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Enrollment not found' });
 
     const enrollment = await prisma.enrollment.update({
-      where: { id: req.params.id },
+      where: {
+        id: req.params.id,
+        sequence: {
+          userId: req.user.id
+        }
+      },
       data: updateData,
       include: {
         contact: true,
@@ -313,7 +318,12 @@ router.delete('/:id', async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Enrollment not found' });
 
     await prisma.enrollment.delete({
-      where: { id: req.params.id }
+      where: {
+        id: req.params.id,
+        sequence: {
+          userId: req.user.id
+        }
+      }
     });
 
     res.status(204).send();
@@ -440,9 +450,9 @@ router.post('/bulk', async (req, res) => {
       return res.status(400).json({ error: 'sequenceId is required' });
     }
 
-    // Check sequence exists and is active
-    const sequence = await prisma.sequence.findUnique({
-      where: { id: sequenceId },
+    // Check sequence exists and is active and belongs to user
+    const sequence = await prisma.sequence.findFirst({
+      where: { id: sequenceId, userId: req.user.id },
       include: {
         steps: {
           orderBy: { stepOrder: 'asc' },

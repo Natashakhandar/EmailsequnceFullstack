@@ -68,7 +68,7 @@ const SmtpSettings = () => {
           }));
         }
       } catch (e) {
-        console.error("Failed to fetch config:", e);
+        console.error("Failed to fetch SMTP settings:", e);
       } finally {
         setLoading(false);
       }
@@ -132,7 +132,7 @@ const SmtpSettings = () => {
       setImapConnected(false);
       setSaveError(e?.message || "IMAP connection failed. Check your host, port, and credentials.");
     } finally {
-      setVerifyingImap(false);
+      setSaving(false);
     }
   };
 
@@ -150,9 +150,9 @@ const SmtpSettings = () => {
       });
       setTestResult({ success: true, message: `Test email sent to ${trimmedEmail} using current form settings!` });
     } catch (e: any) {
-      setTestResult({ success: false, error: e?.message || "Failed to send test email" });
+      setStatus({ success: false, error: e.message || "SMTP verification failed" });
     } finally {
-      setTesting(false);
+      setVerifying(false);
     }
   };
 
@@ -160,12 +160,9 @@ const SmtpSettings = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
         <Navbar />
-        <main className="container mx-auto px-6 pt-20 pb-12 max-w-4xl">
-          <h1 className="text-3xl font-bold mb-6">Email Configuration</h1>
-          <div className="glass rounded-2xl p-6 shadow-card flex items-center justify-center h-48">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            <span className="ml-3 text-muted-foreground">Loading configuration...</span>
-          </div>
+        <main className="container mx-auto px-6 pt-20 pb-12 max-w-4xl text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading SMTP settings...</p>
         </main>
       </div>
     );
@@ -201,23 +198,11 @@ const SmtpSettings = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Outgoing (SMTP) */}
-          <div className="glass rounded-2xl p-6 shadow-card space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground uppercase opacity-70">SMTP Host</label>
+                  <input name="smtpHost" value={config.smtpHost} onChange={handleChange} placeholder="smtp.hostinger.com" className="w-full bg-muted/30 border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
                 </div>
-                <h2 className="text-lg font-semibold">Outgoing (SMTP)</h2>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className={`w-2.5 h-2.5 rounded-full ${smtpConnected ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                <span className={`text-xs font-medium ${smtpConnected ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {smtpConnected ? 'Connected' : 'Disconnected'}
-                </span>
-              </div>
-            </div>
 
             <div className="space-y-3">
               <div className="flex flex-col gap-1">
@@ -259,12 +244,10 @@ const SmtpSettings = () => {
             </button>
           </div>
 
-          {/* Incoming (IMAP) */}
-          <div className="glass rounded-2xl p-6 shadow-card space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></svg>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground uppercase opacity-70">From Name</label>
+                  <input name="fromName" value={config.fromName} onChange={handleChange} placeholder="John Doe" className="w-full bg-muted/30 border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
                 </div>
                 <h2 className="text-lg font-semibold">Incoming (IMAP)</h2>
               </div>
@@ -313,21 +296,16 @@ const SmtpSettings = () => {
               {verifyingImap ? "Verifying..." : "Verify IMAP Connection"}
             </button>
           </div>
-        </div>
 
-        {/* Test Email Section */}
-        <div className="glass rounded-2xl p-6 shadow-card mt-6 space-y-4">
-          <h2 className="text-lg font-semibold">Send Test Email</h2>
-          <p className="text-sm text-muted-foreground">Send a test email to verify your outgoing SMTP configuration is working correctly.</p>
-          <div className="flex gap-3 items-end">
-            <div className="flex-1 flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground uppercase tracking-wide">Recipient Email</label>
-              <input
-                value={testEmail}
-                onChange={(e) => setTestEmail(e.target.value)}
-                placeholder="recipient@example.com"
-                className="input bg-background border border-border rounded-md px-3 py-2"
-              />
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-muted/10 p-6 rounded-2xl border border-border/50">
+            <div className="flex-1 w-full max-w-sm">
+              <label className="text-xs font-medium text-muted-foreground uppercase opacity-70 block mb-1">Verify with Test Recipient</label>
+              <div className="flex gap-2">
+                <input value={testRecipient} onChange={(e) => setTestRecipient(e.target.value)} placeholder="someone@example.com" className="flex-1 bg-background border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
+                <button type="button" onClick={handleVerify} disabled={verifying} className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-secondary/80 transition-colors disabled:opacity-50">
+                  {verifying ? "Verifying..." : "Verify Connection"}
+                </button>
+              </div>
             </div>
             <button
               onClick={handleTest}
@@ -350,3 +328,4 @@ const SmtpSettings = () => {
 };
 
 export default SmtpSettings;
+

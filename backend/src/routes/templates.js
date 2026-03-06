@@ -122,7 +122,7 @@ router.put('/:id', async (req, res) => {
     }
 
     const template = await prisma.template.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id, userId: req.user.id },
       data: updateData
     });
 
@@ -160,7 +160,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await prisma.template.delete({
-      where: { id: req.params.id }
+      where: { id: req.params.id, userId: req.user.id }
     });
 
     res.status(204).send();

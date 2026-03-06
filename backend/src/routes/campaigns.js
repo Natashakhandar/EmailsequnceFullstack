@@ -187,7 +187,10 @@ router.post('/', async (req, res) => {
 
       // Create campaign with enhanced data validation
       const campaign = await tx.campaign.create({
-        data: campaignData,
+        data: {
+          ...campaignData,
+          userId: req.user.id // Link campaign to the logged-in user
+        },
         include: {
           sequence: {
             include: { steps: true }
@@ -251,8 +254,8 @@ router.post('/', async (req, res) => {
 
     // Broadcast general stats update
     broadcastGeneralStats({
-      totalCampaigns: await prisma.campaign.count({ where: { isActive: true } }),
-      totalLeads: await prisma.contact.count({ where: { status: 'ACTIVE' } }),
+      totalCampaigns: await prisma.campaign.count({ where: { userId: req.user.id, isActive: true } }),
+      totalLeads: await prisma.contact.count({ where: { userId: req.user.id, status: 'ACTIVE' } }),
       event: 'campaign_created'
     });
 
@@ -318,7 +321,7 @@ router.get('/', async (req, res) => {
     // Get stats for each campaign
     const campaignsWithStats = await Promise.all(
       campaigns.map(async (campaign) => {
-        const stats = await getCampaignStats(campaign.id);
+        const stats = await getCampaignStats(campaign.id, req.user.id);
         return {
           ...campaign,
           stats
@@ -361,7 +364,7 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    console.log('📊 Fetching campaign details:', { campaignId: id });
+    console.log('📊 Fetching campaign details:', { campaignId: id, userId: req.user.id });
 
     const campaign = await getCampaignWithStats(id, req.user.id);
 
@@ -439,10 +442,10 @@ router.patch('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Campaign not found' });
     }
 
-    // Verify contacts exist if adding leads
+    // Verify contacts exist if adding leads and belong to user
     if (add_lead_ids.length > 0) {
       const existingContacts = await prisma.contact.findMany({
-        where: { id: { in: add_lead_ids } },
+        where: { id: { in: add_lead_ids }, userId: req.user.id },
         select: { id: true }
       });
 
@@ -645,8 +648,8 @@ router.delete('/:id', async (req, res) => {
 
     // Broadcast stats update
     broadcastGeneralStats({
-      totalCampaigns: await prisma.campaign.count({ where: { isActive: true } }),
-      totalLeads: await prisma.contact.count({ where: { status: 'ACTIVE' } }),
+      totalCampaigns: await prisma.campaign.count({ where: { userId: req.user.id, isActive: true } }),
+      totalLeads: await prisma.contact.count({ where: { userId: req.user.id, status: 'ACTIVE' } }),
       event: 'campaign_deleted'
     });
 
@@ -711,7 +714,7 @@ async function getCampaignWithStats(campaignId, user) {
 
   if (!campaign) return null;
 
-  const stats = await getCampaignStats(campaignId);
+  const stats = await getCampaignStats(campaignId, userId);
 
   return {
     ...campaign,
@@ -742,11 +745,11 @@ function calculateCampaignStatus(campaign) {
 /**
  * Helper function to get campaign statistics
  */
-async function getCampaignStats(campaignId) {
+async function getCampaignStats(campaignId, userId) {
   // Get event counts for this campaign
   const eventStats = await prisma.event.groupBy({
     by: ['type'],
-    where: { campaignId },
+    where: { campaignId, campaign: { userId } },
     _count: { type: true }
   });
 
@@ -758,7 +761,7 @@ async function getCampaignStats(campaignId) {
   // Get enrollment stats
   const enrollmentStats = await prisma.enrollment.groupBy({
     by: ['status'],
-    where: { campaignId },
+    where: { campaignId, campaign: { userId } },
     _count: { status: true }
   });
 

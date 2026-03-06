@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
 const router = express.Router();
+const { authenticateToken } = require('../middleware/auth');
 
 // Create a 1x1 transparent PNG buffer
 const transparentPixel = Buffer.from([
@@ -68,7 +69,7 @@ router.get('/track/open', async (req, res) => {
       return res.send(transparentPixel);
     }
 
-    // Check if this email was already marked as opened
+    // Check if this email was already marked as opened to prevent duplicate counts
     const alreadyOpened = await prisma.event.findFirst({
       where: {
         emailId: emailId,
@@ -76,28 +77,37 @@ router.get('/track/open', async (req, res) => {
       }
     });
 
-    if (!alreadyOpened) {
-      // Create OPENED event
-      await prisma.event.create({
-        data: {
-          enrollmentId: existingEvent.enrollmentId,
-          contactId: existingEvent.contactId,
-          campaignId: existingEvent.campaignId,
-          type: 'OPENED',
-          emailId: emailId,
-          details: JSON.stringify({
-            openedAt: new Date().toISOString(),
-            userAgent: req.get('User-Agent') || '',
-            ip: req.ip || req.connection.remoteAddress || '',
-            referer: req.get('Referer') || ''
-          })
-        }
+    if (alreadyOpened) {
+      console.log(`📧 Open tracking: Duplicate open detected for emailId: ${emailId}. Skipping.`);
+      // Still return the pixel
+      res.set({
+        'Content-Type': 'image/png',
+        'Content-Length': transparentPixel.length,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       });
-
-      console.log(`✅ Open tracking: Marked email as opened for contact ${existingEvent.contact.email}`);
-    } else {
-      console.log(`📧 Open tracking: Email already marked as opened for emailId: ${emailId}`);
+      return res.send(transparentPixel);
     }
+
+    // Create OPENED event only if it doesn't exist
+    await prisma.event.create({
+      data: {
+        enrollmentId: existingEvent.enrollmentId,
+        contactId: existingEvent.contactId,
+        campaignId: existingEvent.campaignId,
+        type: 'OPENED',
+        emailId: emailId,
+        details: JSON.stringify({
+          openedAt: new Date().toISOString(),
+          userAgent: req.get('User-Agent') || '',
+          ip: req.ip || req.connection.remoteAddress || '',
+          referer: req.get('Referer') || ''
+        })
+      }
+    });
+
+    console.log(`✅ Open tracking: First-time open recorded for emailId: ${emailId} (Contact: ${existingEvent.contact.email})`);
 
     // Return the 1x1 transparent PNG
     res.set({
@@ -141,6 +151,9 @@ router.post('/track/reply', async (req, res) => {
       where: {
         emailId: emailId,
         type: 'SENT'
+      },
+      include: {
+        contact: true
       }
     });
 
@@ -156,27 +169,30 @@ router.post('/track/reply', async (req, res) => {
       }
     });
 
-    if (!alreadyReplied) {
-      // Create REPLIED event with content
-      await prisma.event.create({
-        data: {
-          enrollmentId: existingEvent.enrollmentId,
-          contactId: existingEvent.contactId,
-          campaignId: existingEvent.campaignId,
-          type: 'REPLIED',
-          emailId: emailId,
-          details: JSON.stringify({
-            repliedAt: new Date().toISOString(),
-            replySubject: replySubject || 'Re: Your Email',
-            replyBody: replyBody || 'Thank you for your email. I am interested in learning more.',
-            replyFrom: replyFrom || existingEvent.contact?.email || 'client@example.com',
-            source: 'manual_tracking'
-          })
-        }
-      });
-
-      console.log(`✅ Reply tracking: Marked email as replied with content for emailId: ${emailId}`);
+    if (alreadyReplied) {
+      console.log(`📧 Reply tracking: Duplicate reply detected for emailId: ${emailId}. Skipping.`);
+      return res.json({ success: true, message: 'Reply already tracked' });
     }
+
+    // Create REPLIED event with content
+    await prisma.event.create({
+      data: {
+        enrollmentId: existingEvent.enrollmentId,
+        contactId: existingEvent.contactId,
+        campaignId: existingEvent.campaignId,
+        type: 'REPLIED',
+        emailId: emailId,
+        details: JSON.stringify({
+          repliedAt: new Date().toISOString(),
+          replySubject: replySubject || 'Re: Your Email',
+          replyBody: replyBody || 'Thank you for your email. I am interested in learning more.',
+          replyFrom: replyFrom || existingEvent.contact?.email || 'client@example.com',
+          source: 'manual_tracking'
+        })
+      }
+    });
+
+    console.log(`✅ Reply tracking: Recorded new reply for emailId: ${emailId}`);
 
     res.json({
       success: true,
@@ -257,13 +273,18 @@ router.get('/track/reply', async (req, res) => {
  * GET /api/track/stats/:emailId
  * Get tracking statistics for a specific email
  */
-router.get('/track/stats/:emailId', async (req, res) => {
+router.get('/track/stats/:emailId', authenticateToken, async (req, res) => {
   try {
     const { emailId } = req.params;
 
     const events = await prisma.event.findMany({
       where: {
-        emailId: emailId
+        emailId: emailId,
+        enrollment: {
+          sequence: {
+            userId: req.user.id
+          }
+        }
       },
       orderBy: {
         timestamp: 'asc'
