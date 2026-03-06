@@ -1,5 +1,6 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
+const { broadcastRealTimeEvent } = require('../services/socketService');
 const router = express.Router();
 
 // Create a 1x1 transparent PNG buffer
@@ -20,9 +21,8 @@ router.get('/track/open', async (req, res) => {
   try {
     const { emailId } = req.query;
 
-    if (!emailId) {
-      console.log('❌ Open tracking: Missing emailId parameter');
-      // Still return the pixel even if tracking fails
+    // Helper to send the transparent pixel response
+    const sendPixel = () => {
       res.set({
         'Content-Type': 'image/png',
         'Content-Length': transparentPixel.length,
@@ -31,44 +31,30 @@ router.get('/track/open', async (req, res) => {
         'Expires': '0'
       });
       return res.send(transparentPixel);
+    };
+
+    if (!emailId) {
+      // console.log('❌ Open tracking: Missing emailId parameter');
+      return sendPixel();
     }
 
-    console.log(`📧 Open tracking: Processing open for emailId: ${emailId}`);
-
-    // Find the event with this emailId
+    // Find the original SENT event with this emailId
     const existingEvent = await prisma.event.findFirst({
       where: {
         emailId: emailId,
         type: 'SENT'
       },
       include: {
-        enrollment: true,
         contact: true
       }
     });
 
     if (!existingEvent) {
-      console.log(`❌ Open tracking: No sent event found for emailId: "${emailId}"`);
-      // Log all sent events to see if we have a near-match (case sensitivity etc)
-      const allSent = await prisma.event.findMany({
-        where: { type: 'SENT' },
-        take: 5,
-        select: { emailId: true }
-      });
-      console.log('Sample sent emailIds in DB:', allSent.map(s => s.emailId));
-
-      // Still return the pixel
-      res.set({
-        'Content-Type': 'image/png',
-        'Content-Length': transparentPixel.length,
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      });
-      return res.send(transparentPixel);
+      // console.log(`❌ Open tracking: No sent event found for emailId: "${emailId}"`);
+      return sendPixel();
     }
 
-    // Check if this email was already marked as opened
+    // UNIQUE OPEN CHECK: Check if this specific email was already marked as opened
     const alreadyOpened = await prisma.event.findFirst({
       where: {
         emailId: emailId,
@@ -77,8 +63,8 @@ router.get('/track/open', async (req, res) => {
     });
 
     if (!alreadyOpened) {
-      // Create OPENED event
-      await prisma.event.create({
+      // Create OPENED event - ONLY ONCE per emailId
+      const newEvent = await prisma.event.create({
         data: {
           enrollmentId: existingEvent.enrollmentId,
           contactId: existingEvent.contactId,
@@ -94,25 +80,26 @@ router.get('/track/open', async (req, res) => {
         }
       });
 
-      console.log(`✅ Open tracking: Marked email as opened for contact ${existingEvent.contact.email}`);
+      console.log(`✅ UNIQUE OPEN: Email ${emailId} opened by ${existingEvent.contact.email}. Counted in stats.`);
+
+      // Broadcast real-time event via socket so dashboard/activity log update instantly
+      broadcastRealTimeEvent({
+        type: 'OPENED',
+        campaignId: existingEvent.campaignId,
+        contactId: existingEvent.contactId,
+        enrollmentId: existingEvent.enrollmentId,
+        to: existingEvent.contact.email,
+        timestamp: new Date().toISOString()
+      });
     } else {
-      console.log(`📧 Open tracking: Email already marked as opened for emailId: ${emailId}`);
+      // console.log(`📧 REPEAT OPEN: Email ${emailId} already opened. Skipping stat recording.`);
     }
 
-    // Return the 1x1 transparent PNG
-    res.set({
-      'Content-Type': 'image/png',
-      'Content-Length': transparentPixel.length,
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
-    res.send(transparentPixel);
+    return sendPixel();
 
   } catch (error) {
     console.error('❌ Open tracking error:', error);
-
-    // Always return the pixel, even on error
+    // Return pixel anyway
     res.set({
       'Content-Type': 'image/png',
       'Content-Length': transparentPixel.length,
@@ -120,10 +107,9 @@ router.get('/track/open', async (req, res) => {
       'Pragma': 'no-cache',
       'Expires': '0'
     });
-    res.send(transparentPixel);
+    return res.send(transparentPixel);
   }
 });
-
 /**
  * POST /api/track/reply
  * Track email replies with content

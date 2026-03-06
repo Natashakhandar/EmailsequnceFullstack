@@ -1,6 +1,7 @@
 const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 const prisma = require('../db/prismaClient');
+const { broadcastRealTimeEvent } = require('./socketService');
 
 class EmailMonitorService {
   constructor(userConfig = null) {
@@ -338,6 +339,17 @@ class EmailMonitorService {
 
             console.log(`✅ Stored reply from ${parsed.from?.text} for email ${originalEvent.emailId}`);
             processedCount++;
+
+            // Broadcast real-time event via socket
+            broadcastRealTimeEvent({
+              type: 'REPLIED',
+              campaignId: originalEvent.campaignId,
+              contactId: originalEvent.contactId,
+              enrollmentId: originalEvent.enrollmentId,
+              to: replyFrom,
+              subject: replySubject,
+              timestamp: new Date().toISOString()
+            });
 
             // Update enrollment status to STOPPED since they replied
             await prisma.enrollment.update({
