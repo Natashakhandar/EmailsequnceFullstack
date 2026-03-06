@@ -33,10 +33,7 @@ const http = require('http');
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
 
-// Security middleware
-app.use(helmet());
-
-// CORS configuration
+// CORS configuration - MUST be before helmet
 app.use(cors({
   origin: [
     'http://localhost:3000',
@@ -54,6 +51,13 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
+}));
+
+// Security middleware - after CORS so it doesn't block cross-origin requests
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy: false,
+  contentSecurityPolicy: false
 }));
 
 // Rate limiting
