@@ -40,7 +40,8 @@ router.get('/', async (req, res) => {
     const { page = 1, limit = 50, isActive } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : {
       userId: req.user.id
     };
     if (isActive !== undefined) where.isActive = isActive === 'true';
@@ -90,8 +91,12 @@ router.get('/', async (req, res) => {
 // GET /api/sequences/:id - Get single sequence
 router.get('/:id', async (req, res) => {
   try {
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
     const sequence = await prisma.sequence.findFirst({
-      where: { id: req.params.id, userId: req.user.id },
+      where: {
+        id: req.params.id,
+        ...(isAdmin ? {} : { userId: req.user.id })
+      },
       include: {
         steps: {
           orderBy: { stepOrder: 'asc' },
@@ -479,6 +484,14 @@ router.put('/:id', async (req, res) => {
 
     console.log('✅ All validations passed, updating sequence...');
 
+    const existingSequence = await prisma.sequence.findFirst({
+      where: { id: req.params.id, userId: req.user.id }
+    });
+
+    if (!existingSequence) {
+      return res.status(404).json({ error: 'Sequence not found' });
+    }
+
     const sequence = await prisma.sequence.update({
       where: { id: req.params.id, userId: req.user.id },
       data: updateData,
@@ -554,6 +567,15 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
+    // First check ownership
+    const sequence = await prisma.sequence.findFirst({
+      where: { id: req.params.id, userId: req.user.id }
+    });
+
+    if (!sequence) {
+      return res.status(404).json({ error: 'Sequence not found' });
+    }
+
     await prisma.sequence.delete({
       where: { id: req.params.id, userId: req.user.id }
     });
@@ -608,7 +630,10 @@ router.post('/:id/steps', async (req, res) => {
 
     // Check if sequence exists and belongs to user
     const sequence = await prisma.sequence.findFirst({
-      where: { id: req.params.id, userId: req.user.id }
+      where: {
+        id: req.params.id,
+        userId: req.user.id
+      }
     });
 
     if (!sequence) {
@@ -771,7 +796,10 @@ router.put('/:id/trigger', async (req, res) => {
 
     // Verify sequence exists and belongs to user
     const sequence = await prisma.sequence.findFirst({
-      where: { id: sequenceId, userId: req.user.id },
+      where: {
+        id: sequenceId,
+        userId: req.user.id
+      },
       include: {
         steps: {
           orderBy: { stepOrder: 'asc' }

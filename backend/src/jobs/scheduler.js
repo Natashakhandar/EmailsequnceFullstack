@@ -11,9 +11,9 @@ let schedulerTask = null;
 async function shouldSendNextEmail(enrollment) {
   try {
     const { currentStep, lastSentStep, sequence, events } = enrollment;
-    
+
     console.log(`🔍 Checking send conditions for enrollment ${enrollment.id}, step ${currentStep}`);
-    
+
     // Prevent duplicate sends - check if current step was already sent
     if (lastSentStep && lastSentStep >= currentStep) {
       return {
@@ -55,12 +55,12 @@ async function shouldSendNextEmail(enrollment) {
     // Check if we've reached the trigger step
     if (currentStep === sequenceTrigger.triggerStep.stepOrder) {
       console.log(`🎯 Current step ${currentStep} is the trigger step`);
-      
+
       // Find the previous step's sent event
       const previousStep = currentStep - 1;
-      const previousStepSentEvent = events.find(event => 
-        event.type === 'SENT' && 
-        event.details && 
+      const previousStepSentEvent = events.find(event =>
+        event.type === 'SENT' &&
+        event.details &&
         JSON.parse(event.details).stepOrder === previousStep
       );
 
@@ -74,10 +74,10 @@ async function shouldSendNextEmail(enrollment) {
 
       // Check if previous email was opened or replied
       const previousEmailId = previousStepSentEvent.emailId;
-      const hasOpened = events.some(event => 
+      const hasOpened = events.some(event =>
         event.type === 'OPENED' && event.emailId === previousEmailId
       );
-      const hasReplied = events.some(event => 
+      const hasReplied = events.some(event =>
         event.type === 'REPLIED' && event.emailId === previousEmailId
       );
 
@@ -92,9 +92,9 @@ async function shouldSendNextEmail(enrollment) {
 
       // Check delay period for trigger step
       const sentTime = new Date(previousStepSentEvent.timestamp);
-      const delayMs = (currentStepConfig.delayDays * 24 * 60 * 60 * 1000) + 
-                     (currentStepConfig.delayHours * 60 * 60 * 1000) +
-                     (currentStepConfig.delayMinutes * 60 * 1000);
+      const delayMs = (currentStepConfig.delayDays * 24 * 60 * 60 * 1000) +
+        (currentStepConfig.delayHours * 60 * 60 * 1000) +
+        (currentStepConfig.delayMinutes * 60 * 1000);
       const shouldSendAfter = new Date(sentTime.getTime() + delayMs);
 
       if (new Date() < shouldSendAfter) {
@@ -107,9 +107,9 @@ async function shouldSendNextEmail(enrollment) {
 
       // Trigger step logic: send if previous email was opened
       if (hasOpened) {
-        return { 
-          send: true, 
-          reason: `Trigger step ${currentStep}: Previous email was opened - sending trigger email` 
+        return {
+          send: true,
+          reason: `Trigger step ${currentStep}: Previous email was opened - sending trigger email`
         };
       } else {
         return {
@@ -144,14 +144,14 @@ async function shouldSendNextEmail(enrollment) {
 async function shouldSendNextEmailDelayBased(enrollment) {
   try {
     const { currentStep, sequence, events } = enrollment;
-    
+
     // For subsequent steps, check conditions based on previous step
     const previousStep = currentStep - 1;
-    
+
     // Find the last sent event for the previous step
-    const previousStepSentEvent = events.find(event => 
-      event.type === 'SENT' && 
-      event.details && 
+    const previousStepSentEvent = events.find(event =>
+      event.type === 'SENT' &&
+      event.details &&
       JSON.parse(event.details).stepOrder === previousStep
     );
 
@@ -175,9 +175,9 @@ async function shouldSendNextEmailDelayBased(enrollment) {
 
     // Check delay period
     const sentTime = new Date(previousStepSentEvent.timestamp);
-    const delayMs = (currentStepConfig.delayDays * 24 * 60 * 60 * 1000) + 
-                   (currentStepConfig.delayHours * 60 * 60 * 1000) +
-                   (currentStepConfig.delayMinutes * 60 * 1000);
+    const delayMs = (currentStepConfig.delayDays * 24 * 60 * 60 * 1000) +
+      (currentStepConfig.delayHours * 60 * 60 * 1000) +
+      (currentStepConfig.delayMinutes * 60 * 1000);
     const shouldSendAfter = new Date(sentTime.getTime() + delayMs);
 
     if (new Date() >= shouldSendAfter) {
@@ -252,20 +252,20 @@ async function processDueEmails() {
       try {
         // Add a small delay between emails to avoid overwhelming SMTP server
         if (successCount > 0) {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+          await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay for faster processing
         }
 
         // Check if this step should be sent based on sequence logic
         const shouldSend = await shouldSendNextEmail(enrollment);
-        
+
         if (!shouldSend.send) {
           console.log(`⏭️ Skipping enrollment ${enrollment.id}: ${shouldSend.reason}`);
-          
+
           // Update enrollment based on the reason
           if (shouldSend.action === 'complete') {
             await prisma.enrollment.update({
               where: { id: enrollment.id },
-              data: { 
+              data: {
                 status: 'COMPLETED',
                 completedAt: new Date(),
                 nextSendAt: null
@@ -284,7 +284,7 @@ async function processDueEmails() {
         }
 
         const result = await sendSequenceEmail(enrollment);
-        
+
         if (result.success) {
           successCount++;
         } else {
@@ -295,12 +295,12 @@ async function processDueEmails() {
       } catch (error) {
         errorCount++;
         console.error(`❌ Error processing enrollment ${enrollment.id}:`, error.message);
-        
+
         // Mark enrollment as stopped on critical errors
         try {
           await prisma.enrollment.update({
             where: { id: enrollment.id },
-            data: { 
+            data: {
               status: 'STOPPED',
               completedAt: new Date(),
               nextSendAt: null
@@ -399,8 +399,8 @@ function startScheduler() {
 
   console.log('🚀 Starting email scheduler...');
 
-  // Main email processing task - runs every minute
-  schedulerTask = cron.schedule('* * * * *', async () => {
+  // Main email processing task - runs every 30 seconds for faster results
+  schedulerTask = cron.schedule('*/30 * * * * *', async () => {
     await processDueEmails();
   }, {
     scheduled: false,
@@ -427,10 +427,10 @@ function startScheduler() {
 
   // Start the main scheduler
   schedulerTask.start();
-  
+
   // Start email monitoring for automatic reply detection
   startEmailMonitoring();
-  
+
   console.log('✅ Email scheduler started successfully');
   console.log('📅 Schedule: Every minute for email processing');
   console.log('🧹 Daily cleanup at 2:00 AM');

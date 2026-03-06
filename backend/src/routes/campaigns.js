@@ -130,9 +130,9 @@ router.post('/', async (req, res) => {
       lead_count: lead_ids.length
     });
 
-    // Verify sequence exists
-    const sequence = await prisma.sequence.findUnique({
-      where: { id: sequence_id.trim() },
+    // Verify sequence exists and belongs to user
+    const sequence = await prisma.sequence.findFirst({
+      where: { id: sequence_id.trim(), userId: req.user.id },
       include: { steps: true }
     });
 
@@ -171,7 +171,8 @@ router.post('/', async (req, res) => {
         description: description && description.trim() ? description.trim() : null,
         sequenceId: sequence_id.trim(),
         startDate: (start_date && start_date !== '') ? new Date(start_date) : null,
-        endDate: (end_date && end_date !== '') ? new Date(end_date) : null
+        endDate: (end_date && end_date !== '') ? new Date(end_date) : null,
+        userId: req.user.id
       };
 
       console.log('📊 Creating campaign with Prisma data:', {
@@ -206,6 +207,19 @@ router.post('/', async (req, res) => {
           }))
         });
 
+        // Delete any existing enrollments for these contacts in this sequence 
+        // to allow them to re-start the sequence in the new campaign.
+        // This solves the issue where leads wouldn't send if they were previously enrolled.
+        const contactIds = lead_ids;
+        await tx.enrollment.deleteMany({
+          where: {
+            contactId: { in: contactIds },
+            sequenceId: sequence_id
+          }
+        });
+
+        console.log(`📊 Cleared ${contactIds.length} potentially existing enrollments for sequence ${sequence_id}`);
+
         // Create enrollments for all leads in this campaign
         const enrollmentData = lead_ids.map(contactId => ({
           contactId,
@@ -215,10 +229,12 @@ router.post('/', async (req, res) => {
           nextSendAt: campaign.startDate || new Date()
         }));
 
-        await tx.enrollment.createMany({
+        const resultEnrollments = await tx.enrollment.createMany({
           data: enrollmentData,
-          skipDuplicates: true // Prevent duplicate enrollments
+          skipDuplicates: true // Extra safety
         });
+
+        console.log(`✅ Created ${resultEnrollments.count} new enrollments for campaign: ${campaign.id}`);
       }
 
       return campaign;
@@ -230,7 +246,7 @@ router.post('/', async (req, res) => {
       leadsAdded: lead_ids.length
     });
 
-    // Fetch complete campaign data with stats - passing user context for isolation
+    // Fetch complete campaign data with stats
     const campaignWithStats = await getCampaignWithStats(result.id, req.user.id);
 
     // Broadcast campaign stats update via socket
@@ -273,8 +289,9 @@ router.get('/', async (req, res) => {
     });
 
     // Build where clause
-    const where = {
-      userId: req.user.id // Strictly isolate campaigns to the current user
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : {
+      userId: req.user.id
     };
     if (isActive !== undefined) where.isActive = isActive === 'true';
     if (sequenceId) where.sequenceId = sequenceId;
@@ -415,7 +432,7 @@ router.patch('/:id', async (req, res) => {
       remove_lead_ids: remove_lead_ids.length
     });
 
-    // Verify campaign exists and belongs to the user
+    // Verify campaign exists and belongs to user
     const existingCampaign = await prisma.campaign.findFirst({
       where: { id, userId: req.user.id },
       include: { sequence: true }
@@ -552,7 +569,7 @@ router.delete('/:id', async (req, res) => {
 
     console.log('🗑️ Deleting campaign:', { campaignId: id });
 
-    // Verify campaign exists and belongs to the user
+    // Verify campaign exists and get detailed counts
     const existingCampaign = await prisma.campaign.findFirst({
       where: { id, userId: req.user.id },
       include: {
@@ -655,9 +672,13 @@ router.delete('/:id', async (req, res) => {
 /**
  * Helper function to get campaign with complete stats
  */
-async function getCampaignWithStats(campaignId, userId) {
+async function getCampaignWithStats(campaignId, user) {
+  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
   const campaign = await prisma.campaign.findFirst({
-    where: { id: campaignId, userId },
+    where: {
+      id: campaignId,
+      ...(isAdmin ? {} : { userId: user.id })
+    },
     include: {
       sequence: {
         include: { steps: true }

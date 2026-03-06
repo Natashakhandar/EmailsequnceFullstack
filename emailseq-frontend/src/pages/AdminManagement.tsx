@@ -18,8 +18,15 @@ import {
   Eye,
   EyeOff,
   Edit2,
-  Trash2
+  Trash2,
+  MoreVertical
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { api, User } from "@/lib/api";
 
@@ -139,6 +146,20 @@ const AdminManagement = () => {
       await fetchUsers();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete user');
+    }
+  };
+
+  const handleImpersonate = async (user: User) => {
+    try {
+      const response = await api.impersonateUser(user.id);
+      toast.success(`Viewing work for ${user.email}...`);
+
+      // The api.impersonateUser method should store the token and return it
+      // Redirect to dashboard
+      window.location.href = "/dashboard";
+    } catch (error) {
+      console.error('Impersonation failed:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to view user work');
     }
   };
 
@@ -396,7 +417,46 @@ const AdminManagement = () => {
                       <CardTitle className="text-lg truncate">{getFullName(user)}</CardTitle>
                       <p className="text-sm text-muted-foreground truncate">{user.email}</p>
                     </div>
-                    <IconComponent className={`w-5 h-5 flex-shrink-0 ${roleInfo.color.includes('yellow') ? 'text-yellow-600' : roleInfo.color.includes('blue') ? 'text-blue-600' : 'text-gray-600'}`} />
+
+                    <div className="flex items-center gap-2">
+                      <IconComponent className={`w-5 h-5 flex-shrink-0 ${roleInfo.color.includes('yellow') ? 'text-yellow-600' : roleInfo.color.includes('blue') ? 'text-blue-600' : 'text-gray-600'}`} />
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 shadow-luxury glass border-muted/20">
+                          <DropdownMenuItem
+                            className="cursor-pointer flex items-center gap-2 text-primary focus:text-primary focus:bg-primary/5"
+                            onClick={() => handleImpersonate(user)}
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span>View User's Work</span>
+                          </DropdownMenuItem>
+
+                          {user.id !== currentUser?.id && (
+                            <>
+                              <DropdownMenuItem
+                                className="cursor-pointer flex items-center gap-2 text-blue-600 focus:text-blue-600 focus:bg-blue-50"
+                                onClick={() => handleEditClick(user)}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                <span>Edit User</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer flex items-center gap-2 text-red-600 focus:text-red-600 focus:bg-red-50"
+                                onClick={() => handleDeleteUser(user.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                <span>Delete User</span>
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -415,16 +475,6 @@ const AdminManagement = () => {
                     <p className="text-xs text-muted-foreground">
                       Created: {new Date(user.createdAt).toLocaleDateString()}
                     </p>
-                    {user.id !== currentUser?.id && (
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50" onClick={() => handleEditClick(user)}>
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeleteUser(user.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 </CardContent>
               </Card>

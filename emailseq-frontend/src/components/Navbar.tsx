@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LogOut, User, BarChart3, Mail, Users, FileText, Layers, Shield, Target } from "lucide-react";
+import { LogOut, User, BarChart3, Mail, Users, FileText, Layers, Shield, Target, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,10 +11,12 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect } from "react";
 import { api, User as UserType } from "@/lib/api";
+import { toast } from "sonner";
 
 const Navbar = () => {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
+  const [isImpersonating, setIsImpersonating] = useState(false);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -26,7 +29,14 @@ const Navbar = () => {
     };
 
     fetchCurrentUser();
+    setIsImpersonating(api.isImpersonating());
   }, []);
+
+  const handleStopImpersonating = () => {
+    api.stopImpersonating();
+    toast.success("Back to Admin account");
+    window.location.href = "/admin-management";
+  };
 
   const handleLogout = async () => {
     try {
@@ -50,12 +60,12 @@ const Navbar = () => {
   };
 
   const baseNavLinks = [
-    { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
-    { to: "/leads", label: "Leads", icon: Users },
+    { to: "/smtp-settings", label: "SMTP Settings", icon: Mail },
+    { to: "/templates", label: "Templates", icon: FileText },
     { to: "/campaigns", label: "Campaigns", icon: Target },
     { to: "/sequences", label: "Sequences", icon: Mail },
-    { to: "/templates", label: "Templates", icon: FileText },
-    { to: "/smtp-settings", label: "SMTP Settings", icon: Mail },
+    { to: "/leads", label: "Leads", icon: Users },
+    { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
     { to: "/email-activity", label: "Email Activity", icon: Layers },
     { to: "/reports", label: "Reports", icon: BarChart3 },
     { to: "/profile", label: "Profile", icon: User },
@@ -118,38 +128,46 @@ const Navbar = () => {
             ))}
           </div>
 
-          {/* Profile Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="focus:outline-none"
+          {/* Profile Dropdown & Impersonation Alert */}
+          <div className="flex items-center gap-4">
+            {isImpersonating && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleStopImpersonating}
+                className="flex items-center gap-2 border-yellow-500/50 hover:bg-yellow-50 text-yellow-700 bg-yellow-50/50"
               >
-                <Avatar className="h-8 w-8 border-2 border-primary/20 cursor-pointer">
-                  <AvatarFallback className="gradient-primary text-white font-semibold">
-                    {getUserInitials()}
-                  </AvatarFallback>
-                </Avatar>
-              </motion.button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 glass-dark">
-              <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
-                <User className="mr-2 h-4 w-4" />
-                Profile
-              </DropdownMenuItem>
-              {/* {currentUser?.role === 'SUPERADMIN' && (
-                <DropdownMenuItem onClick={() => navigate("/admin-management")} className="cursor-pointer">
-                  <Shield className="mr-2 h-4 w-4" />
-                  Admin Management
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Back to Admin</span>
+              </Button>
+            )}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="focus:outline-none"
+                >
+                  <Avatar className="h-8 w-8 border-2 border-primary/20 cursor-pointer">
+                    <AvatarFallback className="gradient-primary text-white font-semibold">
+                      {getUserInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                </motion.button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 glass-dark">
+                <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
                 </DropdownMenuItem>
-              )} */}
-              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
     </motion.nav>

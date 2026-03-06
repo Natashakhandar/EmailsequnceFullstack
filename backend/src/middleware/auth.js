@@ -14,7 +14,7 @@ const authenticateToken = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Get user from database to ensure they still exist and are active
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
@@ -60,6 +60,17 @@ const requireSuperAdmin = requireRole(['SUPERADMIN']);
 
 // Middleware to check if user is admin or superadmin
 const requireAdmin = requireRole(['ADMIN', 'SUPERADMIN']);
+
+/**
+ * Middleware to make SUPERADMIN read-only.
+ * Any non-GET request from a SUPERADMIN will be blocked.
+ */
+const readOnlyCheck = (req, res, next) => {
+  if (req.user && req.user.role === 'SUPERADMIN' && req.method !== 'GET') {
+    return res.status(403).json({ error: 'Superadmin is in read-only mode' });
+  }
+  next();
+};
 
 module.exports = {
   authenticateToken,

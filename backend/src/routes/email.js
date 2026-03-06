@@ -49,7 +49,15 @@ router.get('/track/open', async (req, res) => {
     });
 
     if (!existingEvent) {
-      console.log(`❌ Open tracking: No sent event found for emailId: ${emailId}`);
+      console.log(`❌ Open tracking: No sent event found for emailId: "${emailId}"`);
+      // Log all sent events to see if we have a near-match (case sensitivity etc)
+      const allSent = await prisma.event.findMany({
+        where: { type: 'SENT' },
+        take: 5,
+        select: { emailId: true }
+      });
+      console.log('Sample sent emailIds in DB:', allSent.map(s => s.emailId));
+
       // Still return the pixel
       res.set({
         'Content-Type': 'image/png',

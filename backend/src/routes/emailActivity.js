@@ -1,10 +1,8 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
 const { authenticateToken } = require('../middleware/auth');
-
 const router = express.Router();
 
-// Apply authentication middleware to all email activity routes
 router.use(authenticateToken);
 
 /**
@@ -40,6 +38,12 @@ router.delete('/:id', async (req, res) => {
     } catch (emailActivityError) {
       // Fallback: Try events table (which represents email activities in current schema)
       try {
+        const eventToDel = await prisma.event.findFirst({
+          where: { id, contact: { userId: req.user.id } }
+        });
+        if (!eventToDel) {
+          throw Object.assign(new Error('Event not found'), { code: 'P2025' });
+        }
         deletedRecord = await prisma.event.delete({
           where: {
             id,
@@ -122,14 +126,9 @@ router.get('/', async (req, res) => {
       }
     } catch (emailActivityError) {
       // Fallback to events table
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
       activities = await prisma.event.findMany({
-        where: {
-          enrollment: {
-            sequence: {
-              userId: req.user.id
-            }
-          }
-        },
+        where: isAdmin ? {} : { contact: { userId: req.user.id } },
         orderBy: { timestamp: 'desc' },
         take: 100,
         include: {
@@ -196,14 +195,11 @@ router.get('/:id', async (req, res) => {
       }
     } catch (emailActivityError) {
       // Fallback to events table
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
       activity = await prisma.event.findFirst({
         where: {
           id,
-          enrollment: {
-            sequence: {
-              userId: req.user.id
-            }
-          }
+          ...(isAdmin ? {} : { contact: { userId: req.user.id } })
         },
         include: {
           contact: {

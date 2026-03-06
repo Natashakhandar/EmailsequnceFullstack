@@ -31,7 +31,8 @@ function replaceTokens(text, data = {}, options = {}) {
 
   // Merge with defaults
   const tokenData = { ...DEFAULT_VALUES, ...data };
-  
+  console.log(`📝 replaceTokens data: ${Object.keys(data).join(', ')}`);
+
   // Add computed values
   if (!tokenData.fullName && (tokenData.firstName || tokenData.lastName)) {
     tokenData.fullName = [tokenData.firstName, tokenData.lastName]
@@ -55,18 +56,30 @@ function replaceTokens(text, data = {}, options = {}) {
     /\[([^\]]+)\]/g      // [token]
   ];
 
+  // Helper for case-insensitive lookup
+  const getCaseInsensitiveValue = (data, key) => {
+    // 1. Direct match (original case)
+    if (data[key] !== undefined && data[key] !== null) return data[key];
+
+    // 2. Case-insensitive match in top level
+    const lowerKey = key.toLowerCase();
+    const foundKey = Object.keys(data).find(k => k.toLowerCase() === lowerKey);
+    if (foundKey) return data[foundKey];
+
+    // 3. Fallback for nested properties
+    return getNestedProperty(data, key);
+  };
+
   tokenFormats.forEach(regex => {
     result = result.replace(regex, (match, tokenName) => {
       const cleanToken = tokenName.trim();
-      
-      // Handle nested properties (e.g., contact.firstName)
-      const value = getNestedProperty(tokenData, cleanToken);
-      
+      const value = getCaseInsensitiveValue(tokenData, cleanToken);
+
       if (value !== undefined && value !== null) {
         return String(value);
       }
-      
-      // Return original token if no replacement found (or empty string based on options)
+
+      // Return original token if no replacement found
       return options.removeUnmatched ? '' : match;
     });
   });
@@ -81,6 +94,7 @@ function replaceTokens(text, data = {}, options = {}) {
  * @returns {any} - Property value or undefined
  */
 function getNestedProperty(obj, path) {
+  if (!path || typeof path !== 'string') return undefined;
   return path.split('.').reduce((current, key) => {
     return current && current[key] !== undefined ? current[key] : undefined;
   }, obj);
@@ -150,7 +164,7 @@ function validateTokens(text, data = {}) {
 function previewTokens(text, data = {}) {
   const validation = validateTokens(text, data);
   const processed = replaceTokens(text, data);
-  
+
   return {
     original: text,
     processed,

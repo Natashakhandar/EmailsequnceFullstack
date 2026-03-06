@@ -3,7 +3,6 @@ const prisma = require('../db/prismaClient');
 const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
-// Apply authentication middleware to all reports routes
 router.use(authenticateToken);
 
 /**
@@ -24,14 +23,9 @@ router.get('/analytics', async (req, res) => {
       });
     }
 
-    // Build where clause for filtering events - strictly scoped to user's enrollments/campaigns
-    const eventWhere = {
-      enrollment: {
-        sequence: {
-          userId: req.user.id
-        }
-      }
-    };
+    // Build where clause for filtering events
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const eventWhere = isAdmin ? {} : { contact: { userId: req.user.id } };
     if (startDate || endDate) {
       eventWhere.timestamp = {};
       if (startDate) eventWhere.timestamp.gte = new Date(startDate);
@@ -101,8 +95,8 @@ router.get('/analytics', async (req, res) => {
     // Step 1: Get campaign basic info
     const campaignBreakdown = await prisma.campaign.findMany({
       where: {
-        userId: req.user.id,
         isActive: true,
+        ...(isAdmin ? {} : { userId: req.user.id }),
         ...(campaignId ? { id: campaignId } : {})
       },
       select: {
@@ -232,7 +226,10 @@ router.get('/analytics', async (req, res) => {
 
     // Get total leads (contacts) for the user
     const totalLeads = await prisma.contact.count({
-      where: { userId: req.user.id, status: 'ACTIVE' }
+      where: {
+        status: 'ACTIVE',
+        ...(isAdmin ? {} : { userId: req.user.id })
+      }
     });
 
     // Email Status Distribution
@@ -251,7 +248,10 @@ router.get('/analytics', async (req, res) => {
       repliedLeads: totalReplied,
       replyRate: totalLeads > 0 ? ((totalReplied / totalLeads) * 100) : 0,
       activeEnrollments: await prisma.enrollment.count({
-        where: { status: 'ACTIVE', sequence: { userId: req.user.id } }
+        where: {
+          status: 'ACTIVE',
+          ...(isAdmin ? {} : { contact: { userId: req.user.id } })
+        }
       })
     };
 
@@ -265,7 +265,7 @@ router.get('/analytics', async (req, res) => {
         timestamp: {
           gte: thirtyDaysAgo
         },
-        enrollment: { sequence: { userId: req.user.id } }
+        ...(isAdmin ? {} : { contact: { userId: req.user.id } })
       },
       _count: {
         type: true
@@ -408,11 +408,7 @@ router.get('/performance-trends', async (req, res) => {
       timestamp: {
         gte: startDate
       },
-      enrollment: {
-        sequence: {
-          userId: req.user.id
-        }
-      }
+      ...(isAdmin ? {} : { contact: { userId: req.user.id } })
     };
 
     if (sequenceId) {
@@ -495,7 +491,10 @@ router.get('/campaign-performance', async (req, res) => {
 
     // Get all active campaigns with their performance metrics for this user
     const campaigns = await prisma.campaign.findMany({
-      where: { userId: req.user.id, isActive: true },
+      where: {
+        isActive: true,
+        ...(req.user.role === 'SUPERADMIN' ? {} : { userId: req.user.id })
+      },
       select: {
         id: true,
         campaignName: true,
@@ -641,7 +640,7 @@ router.get('/real-time-stats', async (req, res) => {
         timestamp: {
           gte: twentyFourHoursAgo
         },
-        enrollment: { sequence: { userId: req.user.id } }
+        ...(isAdmin ? {} : { contact: { userId: req.user.id } })
       },
       _count: {
         type: true
@@ -655,18 +654,15 @@ router.get('/real-time-stats', async (req, res) => {
 
     // Get active enrollments count
     const activeEnrollments = await prisma.enrollment.count({
-      where: { status: 'ACTIVE', sequence: { userId: req.user.id } }
+      where: {
+        status: 'ACTIVE',
+        ...(isAdmin ? {} : { contact: { userId: req.user.id } })
+      }
     });
 
     // Get recent activity (last 10 events)
     const recentActivity = await prisma.event.findMany({
-      where: {
-        enrollment: {
-          sequence: {
-            userId: req.user.id
-          }
-        }
-      },
+      where: req.user.role === 'SUPERADMIN' ? {} : { contact: { userId: req.user.id } },
       take: 10,
       orderBy: {
         timestamp: 'desc'
@@ -740,7 +736,7 @@ router.get('/campaign-analytics', async (req, res) => {
     }
 
     // Build where clause for filtering
-    const where = {};
+    const where = req.user.role === 'SUPERADMIN' ? {} : { userId: req.user.id };
     if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) where.createdAt.gte = new Date(startDate);

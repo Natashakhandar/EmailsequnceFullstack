@@ -3,7 +3,6 @@ const prisma = require('../db/prismaClient');
 const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
-// Apply authentication middleware to all dashboard routes
 router.use(authenticateToken);
 
 /**
@@ -15,12 +14,9 @@ router.get('/stats', async (req, res) => {
     const { startDate, endDate, sequenceId } = req.query;
 
     // Build where clause for filtering
-    const where = {
-      enrollment: {
-        sequence: {
-          userId: req.user.id
-        }
-      }
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : {
+      contact: { userId: req.user.id }
     };
     if (startDate || endDate) {
       where.timestamp = {};
@@ -129,13 +125,22 @@ router.get('/stats', async (req, res) => {
 
     // Get additional metrics
     const totalSequences = await prisma.sequence.count({
-      where: { userId: req.user.id, isActive: true }
+      where: {
+        isActive: true,
+        ...(isAdmin ? {} : { userId: req.user.id })
+      }
     });
     const totalContacts = await prisma.contact.count({
-      where: { userId: req.user.id, status: 'ACTIVE' }
+      where: {
+        status: 'ACTIVE',
+        ...(isAdmin ? {} : { userId: req.user.id })
+      }
     });
     const activeEnrollments = await prisma.enrollment.count({
-      where: { status: 'ACTIVE', sequence: { userId: req.user.id } }
+      where: {
+        status: 'ACTIVE',
+        ...(isAdmin ? {} : { contact: { userId: req.user.id } })
+      }
     });
 
     const response = {
@@ -254,15 +259,12 @@ router.get('/performance-trends', async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
 
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
     const where = {
       timestamp: {
         gte: startDate
       },
-      enrollment: {
-        sequence: {
-          userId: req.user.id
-        }
-      }
+      ...(isAdmin ? {} : { contact: { userId: req.user.id } })
     };
 
     if (sequenceId) {

@@ -40,6 +40,7 @@ model User {
   contacts  Contact[]
   templates Template[]
   campaigns Campaign[]
+  emailConfig EmailConfig?
 
   @@map("users")
 }
@@ -68,6 +69,7 @@ model Contact {
 
 model Template {
   id        String   @id @default(cuid())
+  userId    String?  // Owner of the template
   name      String
   subject   String
   body      String   @db.LongText // HTML or plain text - supports very long content
@@ -160,7 +162,7 @@ model Event {
   contactId    String
   campaignId   String? // Link events to campaigns
   type         EventType
-  details      String? // JSON string for additional data
+  details      String?   @db.MediumText // JSON string for additional data
   timestamp    DateTime  @default(now())
   emailId      String? // Message-ID from sent email
 
@@ -198,6 +200,7 @@ model SequenceTrigger {
 
 model Campaign {
   id           String    @id @default(cuid())
+  userId       String?   // Owner of the campaign
   campaignName String
   description  String?   @db.Text
   sequenceId   String
@@ -263,4 +266,29 @@ enum EventType {
   BOUNCED
   UNSUBSCRIBED
   FAILED
+}
+
+model EmailConfig {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  smtpHost     String?
+  smtpPort     Int?
+  smtpSecure   Boolean  @default(false)
+  smtpUser     String?
+  smtpPassword String?
+  fromEmail    String?
+  fromName     String?
+
+  imapHost     String?
+  imapPort     Int?
+  imapTls      Boolean  @default(true)
+  imapUser     String?
+  imapPassword String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_configs")
 }

@@ -41,7 +41,7 @@ function enhanceHtmlFormatting(htmlContent) {
   // Ensure paragraphs are properly wrapped
   if (!enhanced.includes('<p>') && enhanced.includes('<br>')) {
     // Wrap content in paragraphs, splitting on double breaks
-    const paragraphs = enhanced.split('<br><br>');
+    const paragraphs = (typeof enhanced === 'string') ? enhanced.split('<br><br>') : [];
     enhanced = paragraphs.map(p => p.trim() ? `<p>${p.replace(/<br>/g, '<br>')}</p>` : '').join('');
   }
 
@@ -97,10 +97,29 @@ function generateTextFromHtml(htmlContent) {
 // Create reusable transporter object using SMTP transport
 let transporter = null;
 
-function createTransporter(customConfig = null) {
-  if (customConfig) {
-    return nodemailer.createTransport(customConfig);
+function createTransporter(userConfig = null) {
+  if (userConfig && userConfig.smtpHost) {
+    return nodemailer.createTransport({
+      host: userConfig.smtpHost,
+      port: (typeof userConfig.smtpPort === 'string' ? parseInt(userConfig.smtpPort) : userConfig.smtpPort) || 465,
+      secure: userConfig.smtpSecure ?? true,
+      auth: {
+        user: userConfig.smtpUser,
+        pass: userConfig.smtpPassword
+      },
+      pool: true,
+      maxConnections: 10,
+      maxMessages: 100,
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
+      tls: {
+        rejectUnauthorized: false,
+        servername: userConfig.smtpHost
+      }
+    });
   }
+
   if (!transporter) {
     transporter = nodemailer.createTransport(smtpConfig);
   }
@@ -108,15 +127,32 @@ function createTransporter(customConfig = null) {
 }
 
 // Verify SMTP connection
-async function verifyConnection() {
+async function verifyConnection(userConfig = null) {
   try {
-    const transport = createTransporter();
+    const transport = createTransporter(userConfig);
     await transport.verify();
     console.log('✅ SMTP connection verified successfully');
     return true;
   } catch (error) {
     console.error('❌ SMTP connection failed:', error.message);
     return false;
+  }
+}
+
+// Verify SMTP connection with detailed error
+async function verifyConnectionDetailed(userConfig = null) {
+  try {
+    const transport = createTransporter(userConfig);
+    await transport.verify();
+    return { success: true };
+  } catch (error) {
+    console.error('❌ SMTP verification detailed error:', error);
+    let errorMessage = error.message || 'Unknown SMTP error';
+    if (error.code === 'EAUTH') errorMessage = 'Authentication failed. Please check your username and password.';
+    if (error.code === 'ECONNREFUSED') errorMessage = 'Connection refused. Check the Host and Port.';
+    if (error.code === 'ETIMEDOUT') errorMessage = 'Connection timed out. Check your firewall or port.';
+
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -140,10 +176,10 @@ async function generateUnsubscribeToken(contactId) {
 }
 
 // Save sent email to IMAP Sent folder
-async function saveToSentFolder(mailOptions) {
-  const imapHost = process.env.IMAP_HOST;
-  const imapUser = process.env.IMAP_USER || process.env.SMTP_USER;
-  const imapPass = process.env.IMAP_PASSWORD || process.env.SMTP_PASS;
+async function saveToSentFolder(mailOptions, userConfig = null) {
+  const imapHost = userConfig?.imapHost || process.env.IMAP_HOST;
+  const imapUser = userConfig?.imapUser || process.env.IMAP_USER || userConfig?.smtpUser || process.env.SMTP_USER;
+  const imapPass = userConfig?.imapPassword || process.env.IMAP_PASSWORD || userConfig?.smtpPassword || process.env.SMTP_PASS;
 
   if (!imapHost || !imapUser || !imapPass) {
     return; // IMAP not configured, skip
@@ -154,27 +190,34 @@ async function saveToSentFolder(mailOptions) {
       user: imapUser,
       password: imapPass,
       host: imapHost,
-      port: parseInt(process.env.IMAP_PORT) || 993,
-      tls: true,
+      port: (userConfig && userConfig.imapPort) ? userConfig.imapPort : (parseInt(process.env.IMAP_PORT) || 993),
+      tls: userConfig?.imapTls !== undefined ? userConfig.imapTls : true,
       tlsOptions: { rejectUnauthorized: false },
       authTimeout: 5000,
       connTimeout: 10000
     });
 
-    // Build raw email string
+    // Build valid RFC-822 raw email string
     const fromStr = mailOptions.from.name
       ? `"${mailOptions.from.name}" <${mailOptions.from.address}>`
       : mailOptions.from.address;
-    const rawEmail = [
+
+    // Construct headers array
+    const headers = [
       `From: ${fromStr}`,
       `To: ${mailOptions.to}`,
       `Subject: ${mailOptions.subject}`,
       `Content-Type: text/html; charset=utf-8`,
       `Date: ${new Date().toUTCString()}`,
-      mailOptions.headers?.['Message-ID'] ? `Message-ID: ${mailOptions.headers['Message-ID']}` : '',
-      '',
-      mailOptions.html || mailOptions.text || ''
-    ].filter(Boolean).join('\r\n');
+      `MIME-Version: 1.0`
+    ];
+
+    if (mailOptions.headers?.['Message-ID']) {
+      headers.push(`Message-ID: ${mailOptions.headers['Message-ID']}`);
+    }
+
+    // Join headers with CRLF, then add TWO CRLFs before the body
+    const rawEmail = headers.join('\r\n') + '\r\n\r\n' + (mailOptions.html || mailOptions.text || '');
 
     imap.once('ready', () => {
       // Try common Sent folder names
@@ -221,14 +264,10 @@ async function sendEmail({
   contactId = null,
   signature = null,
   campaignId = null,
-  userSmtpConfig = null
+  userConfig = null
 }) {
   try {
-    const transport = createTransporter(userSmtpConfig);
-
-    // Default email from info
-    const fromName = userSmtpConfig?.fromName || emailConfig.from.name;
-    const fromAddress = userSmtpConfig?.fromAddress || emailConfig.from.address;
+    const transport = createTransporter(userConfig);
 
     // CRITICAL LOGGING: Input validation
     console.log('📧 SENDMAIL INPUT VALIDATION');
@@ -240,13 +279,14 @@ async function sendEmail({
     // Replace tokens in subject and body (removeUnmatched: true so empty contact fields don't show raw tokens)
     const tokenOptions = { removeUnmatched: true };
     const processedSubject = replaceTokens(subject, contactData, tokenOptions);
+    console.log(`📝 Final Processed Subject: "${processedSubject}"`);
 
     // Process email body: replace tokens and convert line breaks to <br> tags
     let processedEmailBody = replaceTokens(htmlBody, contactData, tokenOptions);
-    console.log('After token replacement - body length:', processedEmailBody?.length || 0);
+    console.log(`📝 Body after token replacement length: ${processedEmailBody?.length || 0}`);
 
     const formattedBody = processedEmailBody.replace(/\n/g, '<br>');
-    console.log('After line break conversion - body length:', formattedBody?.length || 0);
+    console.log(`📝 Body after formatting length: ${formattedBody?.length || 0}`);
 
     // Process signature: replace tokens and convert line breaks to <br> tags
     const formattedSignature = signature && signature.trim() ?
@@ -260,30 +300,25 @@ async function sendEmail({
       </div>
     `;
 
-    console.log('Final email HTML length:', fullEmailHtml?.length || 0);
-    console.log('Final email contains signature:', fullEmailHtml.includes(formattedSignature));
+    console.log(`📝 Full final HTML length: ${fullEmailHtml?.length || 0}`);
 
     let processedHtmlBody = fullEmailHtml;
-
-    // Generate text version from HTML if not provided (signature is already included in processedHtmlBody)
     let processedTextBody = textBody ?
       replaceTokens(textBody, contactData, tokenOptions) :
       generateTextFromHtml(processedHtmlBody);
 
     // Generate unique Message-ID for tracking
-    const fromDomain = fromAddress.split('@')[1] || 'boostnow.in';
+    const fromName = userConfig?.fromName || emailConfig.from.name || 'Sales';
+    const fromAddress = userConfig?.fromEmail || emailConfig.from.address || 'sales@boostnow.in';
+    const fromDomain = (fromAddress && typeof fromAddress === 'string' && fromAddress.includes('@'))
+      ? fromAddress.split('@')[1].trim()
+      : 'boostnow.in';
     const messageId = `<${uuidv4()}@${fromDomain}>`;
 
     // Add tracking pixel to HTML body if enrollmentId is provided
     if (enrollmentId && processedHtmlBody) {
       const trackingPixel = `<img src="${emailConfig.appUrl}/api/track/open?emailId=${encodeURIComponent(messageId)}" width="1" height="1" style="display:none;" alt="" />`;
-
-      // Try to insert before closing body tag, otherwise append
-      if (processedHtmlBody.includes('</body>')) {
-        processedHtmlBody = processedHtmlBody.replace('</body>', `${trackingPixel}</body>`);
-      } else {
-        processedHtmlBody += trackingPixel;
-      }
+      processedHtmlBody = trackingPixel + processedHtmlBody;
     }
 
     // Generate unsubscribe URL if contactId is provided
@@ -302,7 +337,7 @@ async function sendEmail({
       subject: processedSubject,
       html: processedHtmlBody,
       text: processedTextBody,
-      replyTo: userSmtpConfig?.fromAddress || emailConfig.replyTo,
+      replyTo: fromAddress,
       headers: {
         'Message-ID': messageId,
         'List-Unsubscribe': `<${unsubscribeUrl}>`,
@@ -313,10 +348,11 @@ async function sendEmail({
       }
     };
 
-    // Add bounce handling if configured
-    if (emailConfig.bounceAddress) {
+    // Add bounce handling
+    const bounceAddr = userConfig?.fromEmail || emailConfig.bounceAddress;
+    if (bounceAddr) {
       mailOptions.envelope = {
-        from: emailConfig.bounceAddress,
+        from: bounceAddr,
         to: [to]
       };
     }
@@ -329,17 +365,21 @@ async function sendEmail({
     console.log('Subject:', mailOptions.subject);
 
     // Send email - THIS IS THE ONLY SENDMAIL CALL PER SEQUENCE STEP
+    console.log(`📤 INITIATING SENDMAIL TO: ${to} VIA ${mailOptions.from.address}`);
     const info = await transport.sendMail(mailOptions);
 
     // DELIVERY CONFIRMATION
-    console.log('✅ EMAIL DELIVERY CONFIRMED');
-    console.log(`📧 Email sent successfully to ${to}`);
+    console.log('✅ EMAIL DELIVERY CONFIRMED BY SMTP SERVER');
+    console.log(`📧 Status: ${info.response}`);
     console.log(`Message ID: ${info.messageId}`);
-    console.log('Response:', info.response);
-    console.log('Exactly ONE email sent for this sequence step');
+    console.log(`Accepted: ${info.accepted.join(', ')}`);
+    if (info.rejected.length > 0) {
+      console.log(`❌ Rejected: ${info.rejected.join(', ')}`);
+    }
+    console.log('--- END OF SEND_EMAIL LOG ---');
 
     // Save to IMAP Sent folder (async, non-blocking)
-    saveToSentFolder(mailOptions).catch(err => {
+    saveToSentFolder(mailOptions, userConfig).catch(err => {
       console.log('⚠️ Could not save to Sent folder:', err.message);
     });
 
@@ -349,7 +389,7 @@ async function sendEmail({
         data: {
           enrollmentId,
           contactId,
-          campaignId, // Include campaign ID for tracking
+          campaignId,
           type: 'SENT',
           emailId: messageId,
           details: JSON.stringify({
@@ -357,8 +397,9 @@ async function sendEmail({
             subject: processedSubject,
             messageId: info.messageId,
             response: info.response,
-            replyTo: emailConfig.replyTo || emailConfig.from.address,
-            sentFrom: emailConfig.from.address
+            replyTo: mailOptions.replyTo,
+            sentFrom: mailOptions.from.address,
+            provider: userConfig?.smtpHost || 'fallback'
           })
         }
       });
@@ -438,13 +479,7 @@ async function sendSequenceEmail(enrollment) {
                 firstName: true,
                 lastName: true,
                 email: true,
-                smtpHost: true,
-                smtpPort: true,
-                smtpSecure: true,
-                smtpUser: true,
-                smtpPass: true,
-                fromEmail: true,
-                fromName: true
+                emailConfig: true
               }
             }
           }
@@ -542,18 +577,7 @@ async function sendSequenceEmail(enrollment) {
       contactId: contact.id,
       signature: userSignature,
       campaignId: fullEnrollment.campaignId, // Pass campaign ID for tracking
-      userSmtpConfig: sequence.user?.smtpHost ? {
-        host: sequence.user.smtpHost,
-        port: sequence.user.smtpPort,
-        secure: sequence.user.smtpSecure,
-        auth: {
-          user: sequence.user.smtpUser,
-          pass: sequence.user.smtpPass
-        },
-        fromName: sequence.user.fromName,
-        fromAddress: sequence.user.fromEmail,
-        tls: { rejectUnauthorized: false }
-      } : null
+      userConfig: sequence.user?.emailConfig || null
     });
 
     if (result.success) {
@@ -647,10 +671,11 @@ async function sendSequenceEmail(enrollment) {
 }
 
 // Send test email
-async function sendTestEmail(to, subject = 'Test Email', body = 'This is a test email from the Email Sequencing System.') {
+async function sendTestEmail(to, subject = 'Test Email', body = 'This is a test email from the Email Sequencing System.', userConfig = null) {
   return await sendEmail({
     to,
     subject,
+    userConfig,
     htmlBody: `
       <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -673,5 +698,6 @@ module.exports = {
   sendSequenceEmail,
   sendTestEmail,
   verifyConnection,
+  verifyConnectionDetailed,
   createTransporter
 };

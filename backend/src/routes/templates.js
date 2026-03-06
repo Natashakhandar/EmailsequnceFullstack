@@ -3,7 +3,6 @@ const prisma = require('../db/prismaClient');
 const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
-// Apply authentication middleware to all template routes
 router.use(authenticateToken);
 
 // GET /api/templates - Get all templates
@@ -51,7 +50,10 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const template = await prisma.template.findFirst({
-      where: { id: req.params.id, userId: req.user.id },
+      where: {
+        id: req.params.id,
+        userId: req.user.id
+      },
       include: {
         sequenceSteps: {
           include: {
@@ -88,8 +90,8 @@ router.post('/', async (req, res) => {
         name: name.trim(),
         subject: subject.trim(),
         body: body.trim(),
-        userId: req.user.id,
-        isActive
+        isActive,
+        userId: req.user.id
       }
     });
 
@@ -110,6 +112,14 @@ router.put('/:id', async (req, res) => {
     if (subject !== undefined) updateData.subject = subject.trim();
     if (body !== undefined) updateData.body = body.trim();
     if (isActive !== undefined) updateData.isActive = isActive;
+
+    const existingTemplate = await prisma.template.findFirst({
+      where: { id: req.params.id, userId: req.user.id }
+    });
+
+    if (!existingTemplate) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
 
     const template = await prisma.template.update({
       where: { id: req.params.id, userId: req.user.id },
@@ -140,6 +150,15 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
+    // Check if template exists and belongs to user
+    const template = await prisma.template.findFirst({
+      where: { id: req.params.id, userId: req.user.id }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
     await prisma.template.delete({
       where: { id: req.params.id, userId: req.user.id }
     });
@@ -160,7 +179,10 @@ router.post('/:id/preview', async (req, res) => {
     const { sampleData = {} } = req.body;
 
     const template = await prisma.template.findFirst({
-      where: { id: req.params.id, userId: req.user.id }
+      where: {
+        id: req.params.id,
+        userId: req.user.id
+      }
     });
 
     if (!template) {
