@@ -83,13 +83,23 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Debug port endpoint
-app.get('/api/debug-port', (req, res) => {
+// Debug environment variables (non-sensitive)
+app.get('/api/debug-env', (req, res) => {
+  const safeEnv = {};
+  const sensitiveKeys = ['PASS', 'SECRET', 'KEY', 'URL', 'TOKEN', 'DB', 'DATABASE'];
+
+  Object.keys(process.env).forEach(key => {
+    const isSensitive = sensitiveKeys.some(s => key.toUpperCase().includes(s));
+    if (!isSensitive) {
+      safeEnv[key] = process.env[key];
+    }
+  });
+
   res.json({
-    process_port: process.env.PORT,
-    server_address: server.address(),
-    port_variable: PORT,
-    node_env: process.env.NODE_ENV
+    env: safeEnv,
+    node_version: process.version,
+    platform: process.platform,
+    cwd: process.cwd()
   });
 });
 
