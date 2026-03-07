@@ -5,31 +5,25 @@
 const path = require('path');
 const fs = require('fs');
 
-// Log startup attempt
 console.log('--- Starting BoostNow Email Service ---');
-console.log('Current Directory:', __cwd);
-console.log('Files in directory:', fs.readdirSync(__cwd).join(', '));
+console.log('Current Directory:', process.cwd());
 
-// Try to find the backend entry point
-const possiblePaths = [
-    './backend/src/index.js',
-    './src/index.js',
-    '../backend/src/index.js'
-];
+// 1. Find and Start Backend
+const backendPath = path.join(process.cwd(), 'src/index.js');
+const altBackendPath = path.join(process.cwd(), 'backend/src/index.js');
 
-let foundPath = null;
-for (const p of possiblePaths) {
-    if (fs.existsSync(path.join(__cwd, p))) {
-        foundPath = p;
-        break;
-    }
+let targetPath = null;
+if (fs.existsSync(backendPath)) {
+    targetPath = backendPath;
+} else if (fs.existsSync(altBackendPath)) {
+    targetPath = altBackendPath;
 }
 
-if (foundPath) {
-    console.log(`✅ Found backend entry point at: ${foundPath}`);
-    require(foundPath);
+if (targetPath) {
+    console.log(`🚀 Launching backend from: ${targetPath}`);
+    require(targetPath);
 } else {
-    console.error('❌ CRITICAL ERROR: Could not find backend entry point (src/index.js)!');
-    console.error('Please ensure your "backend" folder or "src" folder exists in the application root.');
+    console.error('❌ CRITICAL ERROR: Could not find src/index.js or backend/src/index.js');
+    console.log('Files in current directory:', fs.readdirSync(process.cwd()));
     process.exit(1);
 }
