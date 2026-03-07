@@ -103,6 +103,19 @@ app.get('/api/debug-env', (req, res) => {
   });
 });
 
+// Debug port file read
+app.get('/api/read-port', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const portFile = path.join(__dirname, '../port.txt');
+  if (fs.existsSync(portFile)) {
+    res.send(fs.readFileSync(portFile, 'utf8'));
+  } else {
+    res.status(404).send('port.txt not found at ' + portFile);
+  }
+});
+
+
 
 
 // API routes
