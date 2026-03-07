@@ -147,9 +147,22 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+// Static file serving - Serve frontend build
+const path = require('path');
+const frontendPath = path.join(__dirname, '../../emailseq-frontend/dist');
+
+// Serve static files from the React app
+app.use(express.static(frontendPath));
+
+// For all other requests, send back index.html (React routing)
+// BUT exclude /api routes so they still trigger 404 or their respective handlers
+app.get(/^(?!\/api).*/, (req, res) => {
+  res.sendFile(path.join(frontendPath, 'index.html'));
+});
+
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ error: 'API Route not found' });
 });
 
 // Start server
