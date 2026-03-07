@@ -7,7 +7,8 @@
         "dev": "npm run install:all && concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
         "dev:backend": "cd backend && npm run dev",
         "dev:frontend": "cd emailseq-frontend && npm run dev",
-        "install:all": "cd backend && npm install && cd ../emailseq-frontend && npm install"
+        "install:all": "cd backend && npm install && cd ../emailseq-frontend && npm install",
+        "start": "cd backend && npm start"
     },
     "devDependencies": {
         "concurrently": "^8.2.2"
