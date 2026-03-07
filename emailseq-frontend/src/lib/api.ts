@@ -30,6 +30,8 @@ export const API_BASE_URL = RAW_BASE.endsWith('/api')
   ? RAW_BASE
   : `${RAW_BASE.replace(/\/$/, '')}/api`;
 
+console.log('🌐 API_BASE_URL:', API_BASE_URL);
+
 // API response types
 export interface Contact {
   id: string;

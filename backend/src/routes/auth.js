@@ -78,7 +78,12 @@ router.post('/login', async (req, res) => {
       stack: error.stack,
       code: error.code
     });
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      message: error.message,
+      code: error.code,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

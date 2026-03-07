@@ -34,6 +34,12 @@ const http = require('http');
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
+if (!process.env.DATABASE_URL) {
+  console.error('❌ DATABASE_URL is not defined in environment variables');
+} else {
+  console.log('✅ DATABASE_URL is configured');
+}
+
 // CORS configuration - MUST be before helmet
 app.use(cors({
   origin: [
@@ -144,9 +150,8 @@ app.use((err, req, res, next) => {
   }
 
   res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : err.message,
+    error: 'Internal server error',
+    message: err.message,
     ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
   });
 });
@@ -169,8 +174,8 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
-  try { startEmailMonitoring(); } catch (e) { console.error('Email monitor error:', e.message); }
+  // try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
+  // try { startEmailMonitoring(); } catch (e) { console.error('Email monitor error:', e.message); }
 });
 
 process.on('uncaughtException', (error) => {
