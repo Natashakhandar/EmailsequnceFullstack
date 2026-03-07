@@ -191,7 +191,13 @@ server.listen(PORT, () => {
 
   // Start the email reply monitor
   startEmailMonitoring();
+
+  // Log port for debugging
+  const fs = require('fs');
+  const path = require('path');
+  fs.writeFileSync(path.join(__dirname, '../port.txt'), `Started on port: ${PORT}\nEnv PORT: ${process.env.PORT}\nTime: ${new Date().toISOString()}`);
 });
+
 
 // Graceful shutdown
 const shutdown = () => {
