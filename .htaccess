@@ -2,7 +2,10 @@
   RewriteEngine On
   RewriteBase /
 
-  # Send ALL requests to the working Hostinger site URL
-  RewriteRule ^(.*)$ https://silver-tapir-929419.hostingersite.com/$1 [P,L]
+  # Standard Hostinger Node.js Proxy Rule
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.*)$ http://localhost:3001/$1 [P,L]
+
 
 </IfModule>
