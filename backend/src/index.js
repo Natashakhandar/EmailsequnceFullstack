@@ -84,13 +84,15 @@ app.get('/health', (req, res) => {
 });
 
 // Debug port endpoint
-app.get('/debug-port', (req, res) => {
+app.get('/api/debug-port', (req, res) => {
   res.json({
     process_port: process.env.PORT,
     server_address: server.address(),
-    port_variable: PORT
+    port_variable: PORT,
+    node_env: process.env.NODE_ENV
   });
 });
+
 
 
 // API routes
