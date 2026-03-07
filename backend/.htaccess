@@ -3,10 +3,10 @@
   RewriteBase /
 
   # Standard Hostinger Node.js Proxy Rule
-  # Do not proxy if the file actually exists (like find-port.php)
+  # Try port 8080 which is common for Hostinger Node apps
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^(.*)$ http://localhost:3001/$1 [P,L]
+  RewriteRule ^(.*)$ http://localhost:8080/$1 [P,L]
 
 
 </IfModule>
