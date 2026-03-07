@@ -2,7 +2,7 @@
   RewriteEngine On
   RewriteBase /
 
-  # Send ALL requests to the Node.js backend (Port 3001)
-  # Replace 3001 if your Hostinger Node.js app is assigned a different port
-  RewriteRule ^(.*)$ http://localhost:3001/$1 [P,L]
+  # Send ALL requests to the working Hostinger site URL
+  RewriteRule ^(.*)$ https://silver-tapir-929419.hostingersite.com/$1 [P,L]
+
 </IfModule>
