@@ -142,31 +142,18 @@ app.use('/api/campaigns', campaignsRouter);
 app.use('/api/fix-event-details', fixEventDetailsRouter);
 app.use('/api/smtp', smtpRouter);
 
-// Root endpoint
-app.get('/', (req, res) => {
+// Static file serving - Serve frontend build from local public folder
+const path = require('path');
+const frontendPath = path.join(__dirname, '../public');
+
+// Serve static files from the React app
+app.use(express.static(frontendPath));
+
+// API routes Documentation
+app.get('/api', (req, res) => {
   res.json({
     message: 'Email Sequencing Backend API',
-    version: '1.0.0',
-    endpoints: {
-      health: '/health',
-      auth: '/api/auth',
-      contacts: '/api/contacts',
-      leads: '/api/leads',
-      templates: '/api/templates',
-      sequences: '/api/sequences',
-      enrollments: '/api/enrollments',
-      events: '/api/events',
-      unsubscribe: '/api/unsubscribe',
-      scheduler: '/api/scheduler',
-      tracking: '/api/track',
-      emailActivity: '/api/email-activity',
-      emailMonitoring: '/api/email-monitoring',
-      profile: '/api/profile',
-      dashboard: '/api/dashboard',
-      reports: '/api/reports',
-      campaigns: '/api/campaigns',
-      smtp: '/api/smtp'
-    }
+    version: '1.0.0'
   });
 });
 
@@ -185,13 +172,6 @@ app.use((err, req, res, next) => {
     ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
   });
 });
-
-// Static file serving - Serve frontend build
-const path = require('path');
-const frontendPath = path.join(__dirname, '../../emailseq-frontend/dist');
-
-// Serve static files from the React app
-app.use(express.static(frontendPath));
 
 // For all other requests, send back index.html (React routing)
 // BUT exclude /api routes so they still trigger 404 or their respective handlers
