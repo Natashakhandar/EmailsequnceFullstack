@@ -1,15 +1,3 @@
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /
-
-  # Standard Hostinger Node.js Proxy Rule
-  # If the file exists locally (like images/js/css), serve it directly
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
-  RewriteRule ^ - [L]
-
-  # Otherwise, proxy everything to the working internal Hostinger URL
-  RewriteRule ^(.*)$ https://silver-tapir-929419.hostingersite.com/$1 [P,L]
-
-
-</IfModule>
+# Hostinger Node.js Web App - htaccess not needed
+# The Node.js app handles all routing (API + SPA frontend)
+# Hostinger automatically proxies traffic to the Node.js process

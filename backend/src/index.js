@@ -31,7 +31,7 @@ const { initializeSocket } = require('./services/socketService');
 const app = express();
 const http = require('http');
 const server = http.createServer(app);
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 // CORS configuration - MUST be before helmet
 app.use(cors({
@@ -79,47 +79,9 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    port: PORT,
-    process_port: process.env.PORT,
-    cwd: process.cwd()
+    environment: process.env.NODE_ENV || 'development'
   });
 });
-
-
-// Debug environment variables (non-sensitive)
-app.get('/api/debug-env', (req, res) => {
-  const safeEnv = {};
-  const sensitiveKeys = ['PASS', 'SECRET', 'KEY', 'URL', 'TOKEN', 'DB', 'DATABASE'];
-
-  Object.keys(process.env).forEach(key => {
-    const isSensitive = sensitiveKeys.some(s => key.toUpperCase().includes(s));
-    if (!isSensitive) {
-      safeEnv[key] = process.env[key];
-    }
-  });
-
-  res.json({
-    env: safeEnv,
-    node_version: process.version,
-    platform: process.platform,
-    cwd: process.cwd()
-  });
-});
-
-// Debug port file read
-app.get('/api/read-port', (req, res) => {
-  const fs = require('fs');
-  const path = require('path');
-  const portFile = path.join(__dirname, '../port.txt');
-  if (fs.existsSync(portFile)) {
-    res.send(fs.readFileSync(portFile, 'utf8'));
-  } else {
-    res.status(404).send('port.txt not found at ' + portFile);
-  }
-});
-
-
 
 
 // API routes
@@ -187,34 +149,27 @@ app.use('/api/*', (req, res) => {
 // Start server
 initializeSocket(server);
 
-server.listen(PORT, () => {
-  console.log(`🚀 Email Sequencing Backend running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  // Start the email scheduler
-  startScheduler();
-  console.log('📧 Email scheduler started');
-
-  // Start the email reply monitor
-  startEmailMonitoring();
-
-  // Log port for debugging
-  const fs = require('fs');
-  const path = require('path');
-  fs.writeFileSync(path.join(__dirname, '../port.txt'), `Started on port: ${PORT}\nEnv PORT: ${process.env.PORT}\nTime: ${new Date().toISOString()}`);
+  try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
+  try { startEmailMonitoring(); } catch (e) { console.error('Email monitor error:', e.message); }
 });
 
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
 
-// Graceful shutdown
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+  process.exit(1);
+});
+
 const shutdown = () => {
-  console.log('Stopping server gracefully...');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
-  });
+  server.close(() => process.exit(0));
 };
-
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
