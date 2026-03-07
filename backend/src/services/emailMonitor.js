@@ -51,7 +51,7 @@ class EmailMonitorService {
       });
 
       this.imap.once('error', (err) => {
-        console.error('❌ IMAP connection error:', err.message);
+        console.error('IMAP connection error:', err.message);
         this.isConnected = false;
         reject(err);
       });

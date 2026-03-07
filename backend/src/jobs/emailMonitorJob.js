@@ -51,7 +51,14 @@ async function checkForReplies() {
 
 // Start the email monitoring scheduler
 function startEmailMonitoring() {
-  console.log('📧 Starting email monitoring scheduler...');
+  // Skip if IMAP credentials are not configured
+  const imapUser = process.env.IMAP_USER || process.env.SMTP_USER || '';
+  if (!imapUser || imapUser === 'your_email@example.com') {
+    console.log('Email monitoring skipped - IMAP not configured');
+    return;
+  }
+
+  console.log('Starting email monitoring scheduler...');
 
   // Run every 5 minutes to check for new replies
   cron.schedule('*/5 * * * *', checkForReplies, {
@@ -59,12 +66,11 @@ function startEmailMonitoring() {
     timezone: "UTC"
   });
 
-  console.log('✅ Email monitoring scheduler started (runs every 5 minutes)');
+  console.log('Email monitoring scheduler started (runs every 5 minutes)');
 
   // Run initial check after 30 seconds
   setTimeout(() => {
-    console.log('🚀 Running initial email reply check...');
-    checkForReplies();
+    checkForReplies().catch(err => console.error('Initial email check failed:', err.message));
   }, 30000);
 }
 

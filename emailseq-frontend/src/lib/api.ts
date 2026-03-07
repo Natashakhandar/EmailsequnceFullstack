@@ -3,15 +3,37 @@
 const getApiBaseUrl = () => {
   // Use environment variables if provided
   const envUrl = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_API_BASE_URL;
-  if (envUrl) return envUrl;
 
-  // In development, default to the backend port
+  // In development mode (Vite dev server)
   if (import.meta.env.DEV) {
-    return 'http://localhost:3001';
+    // If an env URL is explicitly provided and it's not the default placeholder, use it
+    if (envUrl && !envUrl.includes('placeholder')) return envUrl;
+
+    // Default to empty string to use Vite's proxy (configured in vite.config.ts)
+    return '';
   }
 
-  // In production, use the current origin
-  return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
+  // In production mode
+  if (typeof window !== 'undefined') {
+    // In many hosting environments (like Hostinger), the frontend and API
+    // are served from the same origin. Using window.session.origin is the most robust.
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+    // If we're on localhost but envUrl points to production, use origin for local testing
+    if (isLocalhost && envUrl && envUrl.includes('boostnow.in')) {
+      return window.location.origin;
+    }
+
+    // Prefer current origin for all hosted domains (boostnow.in, hostingersite.com, etc.)
+    // This allows preview sites to work with their own backend if available.
+    if (hostname !== 'localhost') {
+      return window.location.origin;
+    }
+  }
+
+  // Fallback to env variable or current origin
+  return envUrl || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
 };
 
 export const RAW_BASE = getApiBaseUrl();

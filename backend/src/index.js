@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -105,7 +106,6 @@ app.use('/api/fix-event-details', fixEventDetailsRouter);
 app.use('/api/smtp', smtpRouter);
 
 // Static file serving - Serve frontend build from local public folder
-const path = require('path');
 const frontendPath = path.join(__dirname, '../public');
 
 // Serve static files from the React app
@@ -158,13 +158,14 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-  process.exit(1);
+  console.error('Uncaught Exception:', error.message);
+  // Don't exit on IMAP/network errors - only exit on fatal errors
+  if (error.code === 'ERR_INTERNAL_ASSERTION') process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
-  process.exit(1);
+  // Don't crash on unhandled promise rejections
 });
 
 const shutdown = () => {
