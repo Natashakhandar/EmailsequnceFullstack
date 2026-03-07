@@ -105,8 +105,24 @@ app.use('/api/campaigns', campaignsRouter);
 app.use('/api/fix-event-details', fixEventDetailsRouter);
 app.use('/api/smtp', smtpRouter);
 
-// Static file serving - Serve frontend build from local public folder
-const frontendPath = path.join(__dirname, '../public');
+// Static file serving - Serve frontend build
+const fs = require('fs');
+const possibleFrontendPaths = [
+  path.join(__dirname, '../public'),
+  path.join(__dirname, '../../public'),
+  path.join(__dirname, '../dist'),
+  path.join(process.cwd(), 'public'),
+  path.join(process.cwd(), 'backend/public')
+];
+
+let frontendPath = possibleFrontendPaths[0];
+for (const p of possibleFrontendPaths) {
+  if (fs.existsSync(path.join(p, 'index.html'))) {
+    frontendPath = p;
+    console.log(`✅ Serving frontend from: ${frontendPath}`);
+    break;
+  }
+}
 
 // Serve static files from the React app
 app.use(express.static(frontendPath));
