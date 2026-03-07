@@ -4,7 +4,7 @@ import MetricCard from "@/components/MetricCard";
 import { TrendingUp, Users, Mail, Activity, Target, Eye, Reply, AlertCircle } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, RAW_BASE } from "@/lib/api";
 import io from "socket.io-client";
 
 const Reports = () => {
@@ -19,9 +19,9 @@ const Reports = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       console.log('📊 Fetching reports data...');
-      
+
       const [analyticsResponse, performanceResponse] = await Promise.all([
         api.getReportsAnalytics().catch(err => {
           console.warn('Analytics API failed:', err.message);
@@ -32,10 +32,10 @@ const Reports = () => {
           return null;
         })
       ]);
-      
+
       console.log('📊 Analytics response:', analyticsResponse);
       console.log('📊 Performance response:', performanceResponse);
-      
+
       // Validate and set analytics data
       if (analyticsResponse && typeof analyticsResponse === 'object') {
         setAnalyticsData(analyticsResponse);
@@ -43,7 +43,7 @@ const Reports = () => {
         console.warn('Invalid analytics response:', analyticsResponse);
         setAnalyticsData(null);
       }
-      
+
       // Validate and set performance data
       if (performanceResponse && typeof performanceResponse === 'object') {
         setCampaignPerformanceData(performanceResponse);
@@ -51,16 +51,16 @@ const Reports = () => {
         console.warn('Invalid performance response:', performanceResponse);
         setCampaignPerformanceData(null);
       }
-      
+
       // If all requests failed, show error
       if (!analyticsResponse && !performanceResponse) {
         setError('Unable to load reports data. Please check your connection and try again.');
       }
-      
+
     } catch (err: any) {
       console.error('Failed to fetch analytics data:', err);
       const errorMessage = err?.message || 'Unknown error occurred';
-      
+
       if (errorMessage.includes('404')) {
         setError('Reports API endpoint not found. Please contact support.');
       } else if (errorMessage.includes('500')) {
@@ -77,12 +77,11 @@ const Reports = () => {
 
   useEffect(() => {
     fetchAnalyticsData();
-    
+
     // Set up socket connection for real-time updates
-    const apiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-    const socketConnection = io(apiUrl);
+    const socketConnection = io(RAW_BASE);
     setSocket(socketConnection);
-    
+
     // Listen for analytics updates
     socketConnection.on('analyticsUpdate', (data) => {
       console.log('Received analytics update:', data);
@@ -90,7 +89,7 @@ const Reports = () => {
         setAnalyticsData(prev => prev ? { ...prev, ...data } : data);
       }
     });
-    
+
     // Listen for general stats updates
     socketConnection.on('statsUpdate', (data) => {
       console.log('Received stats update:', data);
@@ -98,19 +97,19 @@ const Reports = () => {
         setAnalyticsData(prev => prev ? { ...prev, ...data } : data);
       }
     });
-    
+
     // Handle socket connection errors
     socketConnection.on('connect_error', (error) => {
       console.warn('Socket connection error:', error);
     });
-    
+
     socketConnection.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
     });
-    
+
     // Set up polling as fallback for real-time updates every 30 seconds
     const interval = setInterval(fetchAnalyticsData, 30000);
-    
+
     return () => {
       clearInterval(interval);
       socketConnection.disconnect();
@@ -120,31 +119,31 @@ const Reports = () => {
   // Prepare chart data from API response with safe fallbacks
   // Combine campaign events and uncategorized events for the main distribution
   const statusData = analyticsData?.emailStatusDistribution ? [
-    { 
-      name: "Sent", 
-      value: (analyticsData.emailStatusDistribution.sent || 0) + (analyticsData.uncategorizedEvents?.sent || 0), 
-      color: "hsl(var(--primary))" 
+    {
+      name: "Sent",
+      value: (analyticsData.emailStatusDistribution.sent || 0) + (analyticsData.uncategorizedEvents?.sent || 0),
+      color: "hsl(var(--primary))"
     },
-    { 
-      name: "Opened", 
-      value: (analyticsData.emailStatusDistribution.opened || 0) + (analyticsData.uncategorizedEvents?.opened || 0), 
-      color: "hsl(var(--secondary))" 
+    {
+      name: "Opened",
+      value: (analyticsData.emailStatusDistribution.opened || 0) + (analyticsData.uncategorizedEvents?.opened || 0),
+      color: "hsl(var(--secondary))"
     },
-    { 
-      name: "Replied", 
-      value: (analyticsData.emailStatusDistribution.replied || 0) + (analyticsData.uncategorizedEvents?.replied || 0), 
-      color: "hsl(var(--accent))" 
+    {
+      name: "Replied",
+      value: (analyticsData.emailStatusDistribution.replied || 0) + (analyticsData.uncategorizedEvents?.replied || 0),
+      color: "hsl(var(--accent))"
     },
-    { 
-      name: "Bounced", 
-      value: (analyticsData.emailStatusDistribution.bounced || 0) + (analyticsData.uncategorizedEvents?.bounced || 0), 
-      color: "hsl(0 70% 60%)" 
+    {
+      name: "Bounced",
+      value: (analyticsData.emailStatusDistribution.bounced || 0) + (analyticsData.uncategorizedEvents?.bounced || 0),
+      color: "hsl(0 70% 60%)"
     },
   ] : [];
 
   // Prepare campaign analytics from /api/reports/analytics response
   const campaignAnalytics = analyticsData?.campaignBreakdown || [];
-  
+
   // Add debug logging for campaign analytics as requested
   console.log("✅ Loaded campaign analytics:", analyticsData?.campaignBreakdown);
   console.log("📊 Analytics data structure:", {
@@ -153,7 +152,7 @@ const Reports = () => {
     campaignBreakdownLength: analyticsData?.campaignBreakdown?.length || 0,
     analyticsDataKeys: analyticsData ? Object.keys(analyticsData) : []
   });
-  
+
   // Enhanced debug logging for each campaign
   if (campaignAnalytics.length > 0) {
     console.log("📊 Individual campaign data:");
@@ -173,7 +172,7 @@ const Reports = () => {
     console.warn("- Backend /api/reports/analytics returns campaignBreakdown array");
     console.warn("- Campaign data has correct field names: name, sent, opened, replied, bounced");
   }
-  
+
   // Prepare bar chart data for campaign performance using processed analytics
   const campaignBarData = campaignAnalytics.slice(0, 5).map((campaign: any) => ({
     name: campaign.name,
@@ -219,7 +218,7 @@ const Reports = () => {
                   Please check your internet connection and try again.
                 </p>
               </div>
-              <button 
+              <button
                 onClick={fetchAnalyticsData}
                 className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
                 disabled={loading}
@@ -237,7 +236,7 @@ const Reports = () => {
   const hasData = analyticsData;
   const hasAnalyticsData = analyticsData && Object.keys(analyticsData).length > 0;
   const hasCampaignData = campaignAnalytics.length > 0;
-  
+
   // Debug logging for campaign data validation
   console.log('📊 Campaign Analytics Debug:', {
     rawCampaigns: analyticsData?.campaignBreakdown?.length || 0,
@@ -280,7 +279,7 @@ const Reports = () => {
                 <li>• No emails have been sent yet</li>
                 <li>• The system is still collecting data</li>
               </ul>
-              <button 
+              <button
                 onClick={fetchAnalyticsData}
                 className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
               >
@@ -327,78 +326,34 @@ const Reports = () => {
         {/* Charts */}
         {hasAnalyticsData && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Email Status Distribution */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="glass rounded-2xl p-6 shadow-card hover-lift"
-          >
-            <h3 className="text-lg font-semibold mb-4 text-foreground">Email Status Distribution</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value, percent }) =>
-                    `${name}: ${(percent * 100).toFixed(0)}% (${value})`
-                  }
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                  animationDuration={1000}
-                  animationBegin={0}
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "0.75rem",
-                    padding: "12px",
-                    boxShadow: "var(--shadow-card)",
-                  }}
-                  formatter={(value: number, name: string, props: any) => {
-                    const total = statusData.reduce((sum, item) => sum + item.value, 0);
-                    const percentage = ((value / total) * 100).toFixed(1);
-                    return [`${percentage}% – ${value} of ${total} emails`, name];
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 500 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </motion.div>
-
-          {/* Campaign Performance Bar Chart */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="glass rounded-2xl p-6 shadow-card hover-lift"
-          >
-            <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
-              <Target className="w-5 h-5" />
-              Campaign Performance
-            </h3>
-            {campaignBarData.length > 0 ? (
+            {/* Email Status Distribution */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="glass rounded-2xl p-6 shadow-card hover-lift"
+            >
+              <h3 className="text-lg font-semibold mb-4 text-foreground">Email Status Distribution</h3>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={campaignBarData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                  <XAxis 
-                    dataKey="name" 
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    interval={0}
-                  />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, value, percent }) =>
+                      `${name}: ${(percent * 100).toFixed(0)}% (${value})`
+                    }
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                    animationDuration={1000}
+                    animationBegin={0}
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
@@ -407,28 +362,72 @@ const Reports = () => {
                       padding: "12px",
                       boxShadow: "var(--shadow-card)",
                     }}
-                    formatter={(value: number, name: string) => [
-                      `${value} emails`,
-                      name
-                    ]}
+                    formatter={(value: number, name: string, props: any) => {
+                      const total = statusData.reduce((sum, item) => sum + item.value, 0);
+                      const percentage = ((value / total) * 100).toFixed(1);
+                      return [`${percentage}% – ${value} of ${total} emails`, name];
+                    }}
                   />
                   <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 500 }} />
-                  <Bar dataKey="Sent" fill="hsl(var(--primary))" name="Sent" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="Opened" fill="hsl(var(--secondary))" name="Opened" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="Replied" fill="hsl(var(--accent))" name="Replied" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="Bounced" fill="hsl(0 70% 60%)" name="Bounced" radius={[2, 2, 0, 0]} />
-                </BarChart>
+                </PieChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-64 text-muted-foreground">
-                <div className="text-center">
-                  <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium mb-2">No campaign data yet</p>
-                  <p className="text-sm">Create and run campaigns to see performance metrics</p>
+            </motion.div>
+
+            {/* Campaign Performance Bar Chart */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="glass rounded-2xl p-6 shadow-card hover-lift"
+            >
+              <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
+                <Target className="w-5 h-5" />
+                Campaign Performance
+              </h3>
+              {campaignBarData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={campaignBarData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                    <XAxis
+                      dataKey="name"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                      interval={0}
+                    />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "0.75rem",
+                        padding: "12px",
+                        boxShadow: "var(--shadow-card)",
+                      }}
+                      formatter={(value: number, name: string) => [
+                        `${value} emails`,
+                        name
+                      ]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 500 }} />
+                    <Bar dataKey="Sent" fill="hsl(var(--primary))" name="Sent" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="Opened" fill="hsl(var(--secondary))" name="Opened" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="Replied" fill="hsl(var(--accent))" name="Replied" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="Bounced" fill="hsl(0 70% 60%)" name="Bounced" radius={[2, 2, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-64 text-muted-foreground">
+                  <div className="text-center">
+                    <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg font-medium mb-2">No campaign data yet</p>
+                    <p className="text-sm">Create and run campaigns to see performance metrics</p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </motion.div>
+              )}
+            </motion.div>
           </div>
         )}
 
@@ -519,7 +518,7 @@ const Reports = () => {
               <p className="text-muted-foreground mb-4">
                 Create and run campaigns to see detailed performance breakdown
               </p>
-              <button 
+              <button
                 onClick={fetchAnalyticsData}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
               >
@@ -532,55 +531,55 @@ const Reports = () => {
         {/* Summary Stats */}
         {hasAnalyticsData && (
           <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="mt-6 glass rounded-2xl p-8 shadow-card hover-lift"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold text-foreground">Monthly Summary</h3>
-            <div className="flex items-center text-xs text-muted-foreground">
-              <Activity className="w-3 h-3 mr-1" />
-              Last updated: {analyticsData?.lastUpdated ? new Date(analyticsData.lastUpdated).toLocaleTimeString() : 'Never'}
-              {socket?.connected && <span className="ml-2 text-green-600">● Live</span>}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            className="mt-6 glass rounded-2xl p-8 shadow-card hover-lift"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-foreground">Monthly Summary</h3>
+              <div className="flex items-center text-xs text-muted-foreground">
+                <Activity className="w-3 h-3 mr-1" />
+                Last updated: {analyticsData?.lastUpdated ? new Date(analyticsData.lastUpdated).toLocaleTimeString() : 'Never'}
+                {socket?.connected && <span className="ml-2 text-green-600">● Live</span>}
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <motion.div 
-              className="text-center p-6 rounded-xl bg-primary/5 transition-smooth hover:bg-primary/10"
-              whileHover={{ scale: 1.02 }}
-            >
-              <p className="text-3xl font-bold text-primary mb-2">{analyticsData?.monthlySummary?.totalEmailsSent?.toLocaleString() || '0'}</p>
-              <p className="text-sm text-muted-foreground font-medium">Total Emails Sent</p>
-              <p className="text-xs text-muted-foreground mt-1">This month</p>
-            </motion.div>
-            <motion.div 
-              className="text-center p-6 rounded-xl bg-secondary/5 transition-smooth hover:bg-secondary/10"
-              whileHover={{ scale: 1.02 }}
-            >
-              <p className="text-3xl font-bold text-secondary mb-2">{analyticsData?.monthlySummary?.emailsOpened?.toLocaleString() || '0'}</p>
-              <p className="text-sm text-muted-foreground font-medium">Emails Opened</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {(analyticsData?.monthlySummary?.totalEmailsSent || 0) > 0 
-                  ? `${(((analyticsData?.monthlySummary?.emailsOpened || 0) / (analyticsData?.monthlySummary?.totalEmailsSent || 1)) * 100).toFixed(1)}% of sent`
-                  : '0% of sent'
-                }
-              </p>
-            </motion.div>
-            <motion.div 
-              className="text-center p-6 rounded-xl bg-accent/5 transition-smooth hover:bg-accent/10"
-              whileHover={{ scale: 1.02 }}
-            >
-              <p className="text-3xl font-bold text-accent mb-2">{analyticsData?.monthlySummary?.repliesReceived?.toLocaleString() || '0'}</p>
-              <p className="text-sm text-muted-foreground font-medium">Replies Received</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {(analyticsData?.monthlySummary?.totalEmailsSent || 0) > 0 
-                  ? `${(((analyticsData?.monthlySummary?.repliesReceived || 0) / (analyticsData?.monthlySummary?.totalEmailsSent || 1)) * 100).toFixed(1)}% of sent`
-                  : '0% of sent'
-                }
-              </p>
-            </motion.div>
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <motion.div
+                className="text-center p-6 rounded-xl bg-primary/5 transition-smooth hover:bg-primary/10"
+                whileHover={{ scale: 1.02 }}
+              >
+                <p className="text-3xl font-bold text-primary mb-2">{analyticsData?.monthlySummary?.totalEmailsSent?.toLocaleString() || '0'}</p>
+                <p className="text-sm text-muted-foreground font-medium">Total Emails Sent</p>
+                <p className="text-xs text-muted-foreground mt-1">This month</p>
+              </motion.div>
+              <motion.div
+                className="text-center p-6 rounded-xl bg-secondary/5 transition-smooth hover:bg-secondary/10"
+                whileHover={{ scale: 1.02 }}
+              >
+                <p className="text-3xl font-bold text-secondary mb-2">{analyticsData?.monthlySummary?.emailsOpened?.toLocaleString() || '0'}</p>
+                <p className="text-sm text-muted-foreground font-medium">Emails Opened</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(analyticsData?.monthlySummary?.totalEmailsSent || 0) > 0
+                    ? `${(((analyticsData?.monthlySummary?.emailsOpened || 0) / (analyticsData?.monthlySummary?.totalEmailsSent || 1)) * 100).toFixed(1)}% of sent`
+                    : '0% of sent'
+                  }
+                </p>
+              </motion.div>
+              <motion.div
+                className="text-center p-6 rounded-xl bg-accent/5 transition-smooth hover:bg-accent/10"
+                whileHover={{ scale: 1.02 }}
+              >
+                <p className="text-3xl font-bold text-accent mb-2">{analyticsData?.monthlySummary?.repliesReceived?.toLocaleString() || '0'}</p>
+                <p className="text-sm text-muted-foreground font-medium">Replies Received</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(analyticsData?.monthlySummary?.totalEmailsSent || 0) > 0
+                    ? `${(((analyticsData?.monthlySummary?.repliesReceived || 0) / (analyticsData?.monthlySummary?.totalEmailsSent || 1)) * 100).toFixed(1)}% of sent`
+                    : '0% of sent'
+                  }
+                </p>
+              </motion.div>
+            </div>
           </motion.div>
         )}
       </main>

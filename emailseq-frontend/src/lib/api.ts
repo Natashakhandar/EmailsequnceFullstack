@@ -1,11 +1,22 @@
 // API configuration and utilities for the email sequencing backend
 
-// Prefer VITE_API_URL, fallback to VITE_API_BASE_URL, then localhost
-const RAW_BASE = (import.meta as any).env?.VITE_API_URL
-  || (import.meta as any).env?.VITE_API_BASE_URL
-  || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
+const getApiBaseUrl = () => {
+  // Use environment variables if provided
+  const envUrl = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_API_BASE_URL;
+  if (envUrl) return envUrl;
 
-const API_BASE_URL = RAW_BASE.endsWith('/api')
+  // In development, default to the backend port
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3001';
+  }
+
+  // In production, use the current origin
+  return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
+};
+
+export const RAW_BASE = getApiBaseUrl();
+
+export const API_BASE_URL = RAW_BASE.endsWith('/api')
   ? RAW_BASE
   : `${RAW_BASE.replace(/\/$/, '')}/api`;
 

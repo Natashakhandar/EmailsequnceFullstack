@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
 import { Mail, Eye, MessageSquare, TrendingUp, RefreshCw } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { api } from "@/lib/api";
+import { api, RAW_BASE } from "@/lib/api";
 
 interface DashboardStats {
   totalEmailsSent: number;
@@ -43,7 +43,7 @@ const Dashboard = () => {
         setError(null);
 
         console.log('🔄 Fetching dashboard statistics...');
-        console.log('📡 API Base URL:', import.meta.env?.VITE_API_URL || import.meta.env?.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001'));
+        console.log('📡 API Base URL:', RAW_BASE);
 
         const stats = await api.getDashboardStats();
         console.log('✅ Dashboard statistics loaded:', stats);
