@@ -79,9 +79,13 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    port: PORT,
+    process_port: process.env.PORT,
+    cwd: process.cwd()
   });
 });
+
 
 // Debug environment variables (non-sensitive)
 app.get('/api/debug-env', (req, res) => {
