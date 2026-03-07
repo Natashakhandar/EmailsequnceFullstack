@@ -3,9 +3,8 @@
 // Prefer VITE_API_URL, fallback to VITE_API_BASE_URL, then localhost
 const RAW_BASE = (import.meta as any).env?.VITE_API_URL
   || (import.meta as any).env?.VITE_API_BASE_URL
-  || 'http://localhost:3001';
+  || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
 
-// Ensure exactly one '/api' suffix
 const API_BASE_URL = RAW_BASE.endsWith('/api')
   ? RAW_BASE
   : `${RAW_BASE.replace(/\/$/, '')}/api`;

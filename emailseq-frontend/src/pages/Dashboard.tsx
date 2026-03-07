@@ -41,17 +41,17 @@ const Dashboard = () => {
       try {
         setLoading(true);
         setError(null);
-        
+
         console.log('🔄 Fetching dashboard statistics...');
-        console.log('📡 API Base URL:', import.meta.env?.VITE_API_URL || import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3001');
-        
+        console.log('📡 API Base URL:', import.meta.env?.VITE_API_URL || import.meta.env?.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001'));
+
         const stats = await api.getDashboardStats();
         console.log('✅ Dashboard statistics loaded:', stats);
-        
+
         setDashboardStats(stats);
       } catch (err) {
         console.error('❌ Error fetching dashboard data:', err);
-        
+
         // Provide more detailed error information
         let errorMessage = 'Failed to load dashboard data';
         if (err instanceof Error) {
@@ -61,7 +61,7 @@ const Dashboard = () => {
             errorMessage = err.message;
           }
         }
-        
+
         setError(errorMessage);
       } finally {
         setLoading(false);
@@ -88,7 +88,7 @@ const Dashboard = () => {
     const sentRatio = dashboardStats.totalEmailsSent > 0 ? 1 : 0;
     const openRatio = dashboardStats.totalEmailsSent > 0 ? dashboardStats.openRate.percentage / 100 : 0;
     const replyRatio = dashboardStats.totalEmailsSent > 0 ? dashboardStats.replyRate.percentage / 100 : 0;
-    
+
     return {
       week: `Week ${index + 1}`,
       sent: Math.floor(total * sentRatio),
@@ -102,11 +102,11 @@ const Dashboard = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       console.log('🔄 Refreshing dashboard statistics...');
       const stats = await api.getDashboardStats();
       console.log('✅ Dashboard statistics refreshed:', stats);
-      
+
       setDashboardStats(stats);
     } catch (err) {
       console.error('❌ Error refreshing dashboard data:', err);
@@ -144,8 +144,8 @@ const Dashboard = () => {
               <div className="text-red-500 text-xl mb-4">⚠️</div>
               <p className="text-muted-foreground mb-4">Failed to load dashboard data</p>
               <p className="text-sm text-red-500">{error}</p>
-              <button 
-                onClick={() => window.location.reload()} 
+              <button
+                onClick={() => window.location.reload()}
                 className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
               >
                 Retry
@@ -165,7 +165,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       <Navbar />
-      
+
       <main className="container mx-auto px-6 pt-20 pb-12">
         {/* Header */}
         <motion.div
@@ -244,13 +244,13 @@ const Dashboard = () => {
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={dailyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                <XAxis 
-                  dataKey="day" 
-                  stroke="hsl(var(--muted-foreground))" 
+                <XAxis
+                  dataKey="day"
+                  stroke="hsl(var(--muted-foreground))"
                   style={{ fontSize: '12px', fontWeight: 500 }}
                 />
-                <YAxis 
-                  stroke="hsl(var(--muted-foreground))" 
+                <YAxis
+                  stroke="hsl(var(--muted-foreground))"
                   style={{ fontSize: '12px', fontWeight: 500 }}
                 />
                 <Tooltip
@@ -289,12 +289,12 @@ const Dashboard = () => {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={weeklyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                <XAxis 
-                  dataKey="week" 
+                <XAxis
+                  dataKey="week"
                   stroke="hsl(var(--muted-foreground))"
                   style={{ fontSize: '12px', fontWeight: 500 }}
                 />
-                <YAxis 
+                <YAxis
                   stroke="hsl(var(--muted-foreground))"
                   style={{ fontSize: '12px', fontWeight: 500 }}
                 />
