@@ -74,7 +74,6 @@ model Template {
   subject   String
   body      String   @db.LongText // HTML or plain text - supports very long content
   isActive  Boolean  @default(true)
-  userId    String? // Owner of the template
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -204,7 +203,6 @@ model Campaign {
   campaignName String
   description  String?   @db.Text
   sequenceId   String
-  userId       String? // Owner of the campaign
   startDate    DateTime?
   endDate      DateTime?
   isActive     Boolean   @default(true)

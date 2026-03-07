@@ -192,6 +192,7 @@ router.get('/analytics/summary', async (req, res) => {
     const where = isAdmin ? {} : {
       contact: { userId: req.user.id }
     };
+    const { startDate, endDate, sequenceId } = req.query;
     if (startDate || endDate) {
       where.timestamp = {};
       if (startDate) where.timestamp.gte = new Date(startDate);
@@ -245,6 +246,7 @@ router.get('/analytics/timeline', async (req, res) => {
     const where = isAdmin ? {} : {
       contact: { userId: req.user.id }
     };
+    const { startDate, endDate, sequenceId } = req.query;
     if (startDate || endDate) {
       where.timestamp = {};
       if (startDate) where.timestamp.gte = new Date(startDate);

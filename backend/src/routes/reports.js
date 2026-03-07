@@ -404,6 +404,7 @@ router.get('/performance-trends', async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
 
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
     const where = {
       timestamp: {
         gte: startDate
@@ -634,6 +635,7 @@ router.get('/real-time-stats', async (req, res) => {
     const twentyFourHoursAgo = new Date();
     twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
     const recentEvents = await prisma.event.groupBy({
       by: ['type'],
       where: {

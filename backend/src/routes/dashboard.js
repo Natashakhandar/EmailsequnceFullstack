@@ -25,7 +25,10 @@ router.get('/stats', async (req, res) => {
     }
 
     if (sequenceId) {
-      where.enrollment.sequenceId = sequenceId;
+      where.enrollment = {
+        ...(where.enrollment || {}),
+        sequenceId
+      };
     }
 
     console.log('📊 Fetching dashboard statistics with filters:', {
@@ -268,7 +271,10 @@ router.get('/performance-trends', async (req, res) => {
     };
 
     if (sequenceId) {
-      where.enrollment.sequenceId = sequenceId;
+      where.enrollment = {
+        ...(where.enrollment || {}),
+        sequenceId
+      };
     }
 
     const events = await prisma.event.findMany({

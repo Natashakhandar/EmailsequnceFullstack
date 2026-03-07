@@ -247,7 +247,7 @@ router.post('/', async (req, res) => {
     });
 
     // Fetch complete campaign data with stats
-    const campaignWithStats = await getCampaignWithStats(result.id, req.user.id);
+    const campaignWithStats = await getCampaignWithStats(result.id, req.user);
 
     // Broadcast campaign stats update via socket
     broadcastCampaignStats(result.id, campaignWithStats.stats);
@@ -366,7 +366,7 @@ router.get('/:id', async (req, res) => {
 
     console.log('📊 Fetching campaign details:', { campaignId: id, userId: req.user.id });
 
-    const campaign = await getCampaignWithStats(id, req.user.id);
+    const campaign = await getCampaignWithStats(id, req.user);
 
     if (!campaign) {
       return res.status(404).json({ error: 'Campaign not found' });
@@ -531,7 +531,7 @@ router.patch('/:id', async (req, res) => {
     });
 
     // Fetch updated campaign with stats
-    const updatedCampaign = await getCampaignWithStats(id, req.user.id);
+    const updatedCampaign = await getCampaignWithStats(id, req.user);
 
     // Broadcast campaign stats update via socket
     broadcastCampaignStats(id, updatedCampaign.stats);
@@ -714,7 +714,7 @@ async function getCampaignWithStats(campaignId, user) {
 
   if (!campaign) return null;
 
-  const stats = await getCampaignStats(campaignId, userId);
+  const stats = await getCampaignStats(campaignId, user.id);
 
   return {
     ...campaign,
