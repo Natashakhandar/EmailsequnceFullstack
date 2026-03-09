@@ -8,8 +8,8 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 // Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '24h' });
+const generateToken = (userId, extraClaims = {}) => {
+  return jwt.sign({ userId, ...extraClaims }, process.env.JWT_SECRET, { expiresIn: '24h' });
 };
 
 // POST /api/auth/login
@@ -275,8 +275,8 @@ router.post('/impersonate/:userId', authenticateToken, requireSuperAdmin, async 
       return res.status(400).json({ error: 'Cannot impersonate an inactive user' });
     }
 
-    // Generate token for target user
-    const token = generateToken(targetUser.id);
+    // Generate token for target user (mark as impersonating for read-only mode)
+    const token = generateToken(targetUser.id, { isImpersonating: true });
     const { password: _, ...userWithoutPassword } = targetUser;
 
     console.log(`✅ Impersonation successful: Logged in as ${targetUser.email}`);

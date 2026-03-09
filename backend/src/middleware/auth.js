@@ -14,6 +14,7 @@ const authenticateToken = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.isImpersonating = !!decoded.isImpersonating;
 
     // Get user from database to ensure they still exist and are active
     const user = await prisma.user.findUnique({
@@ -33,6 +34,15 @@ const authenticateToken = async (req, res, next) => {
     }
 
     req.user = user;
+    
+    // If impersonating, block any non-GET requests (Read-only Work Mode)
+    if (req.isImpersonating && req.method !== 'GET') {
+      console.log(`🚫 Blocked ${req.method} request while impersonating`);
+      return res.status(403).json({ 
+        error: 'In Work Mode: Read-only access only. You cannot make any changes while viewing user work.' 
+      });
+    }
+
     next();
   } catch (error) {
     console.error('Token verification error:', error);
@@ -62,12 +72,14 @@ const requireSuperAdmin = requireRole(['SUPERADMIN']);
 const requireAdmin = requireRole(['ADMIN', 'SUPERADMIN']);
 
 /**
- * Middleware to make SUPERADMIN read-only.
- * Any non-GET request from a SUPERADMIN will be blocked.
+ * Middleware to make impersonation mode read-only.
+ * Any non-GET request while impersonating will be blocked.
  */
 const readOnlyCheck = (req, res, next) => {
-  if (req.user && req.user.role === 'SUPERADMIN' && req.method !== 'GET') {
-    return res.status(403).json({ error: 'Superadmin is in read-only mode' });
+  if (req.isImpersonating && req.method !== 'GET') {
+    return res.status(403).json({ 
+      error: 'In Work Mode: Read-only access only. You cannot make any changes while viewing user work.' 
+    });
   }
   next();
 };
@@ -76,5 +88,6 @@ module.exports = {
   authenticateToken,
   requireRole,
   requireSuperAdmin,
-  requireAdmin
+  requireAdmin,
+  readOnlyCheck
 };

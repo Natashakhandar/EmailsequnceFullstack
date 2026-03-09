@@ -174,8 +174,8 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  // try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
-  // try { startEmailMonitoring(); } catch (e) { console.error('Email monitor error:', e.message); }
+  try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
+  try { startEmailMonitoring(); } catch (e) { console.error('Email monitor error:', e.message); }
 });
 
 process.on('uncaughtException', (error) => {

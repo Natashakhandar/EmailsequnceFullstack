@@ -479,6 +479,15 @@ async function sendSequenceEmail(enrollment) {
                 firstName: true,
                 lastName: true,
                 email: true,
+                smtpHost: true,
+                smtpPort: true,
+                smtpSecure: true,
+                smtpUser: true,
+                smtpPass: true,
+                fromEmail: true,
+                fromName: true,
+                imapHost: true,
+                imapPort: true,
                 emailConfig: true
               }
             }
@@ -577,7 +586,7 @@ async function sendSequenceEmail(enrollment) {
       contactId: contact.id,
       signature: userSignature,
       campaignId: fullEnrollment.campaignId, // Pass campaign ID for tracking
-      userConfig: sequence.user?.emailConfig || null
+      userConfig: sequence.user?.emailConfig || sequence.user || null
     });
 
     if (result.success) {
