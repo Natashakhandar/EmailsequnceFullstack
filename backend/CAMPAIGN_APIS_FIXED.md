@@ -8,7 +8,7 @@ Fixed and enhanced campaign details and delete APIs to ensure the frontend campa
 
 ### 1. **GET `/api/campaigns/:id` - Campaign Details Endpoint** ✅
 
-#### **Enhanced Response Structure**:
+#### **Enhanced Response Structur**:
 ```json
 {
   "campaign": {
