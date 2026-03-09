@@ -21,6 +21,7 @@ const transparentPixel = Buffer.from([
 router.get('/track/open', async (req, res) => {
   try {
     const { emailId } = req.query;
+    console.log(`📩 Open tracking request received for emailId: "${emailId}"`);
 
     // Helper to send the transparent pixel response
     const sendPixel = () => {
