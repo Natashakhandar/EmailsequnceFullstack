@@ -33,6 +33,8 @@ const app = express();
 const http = require('http');
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+app.set('trust proxy', true); // Trust Hostinger proxy for accurate IP tracking
+
 
 if (!process.env.DATABASE_URL) {
   console.error('❌ DATABASE_URL is not defined in environment variables');

@@ -209,39 +209,55 @@ router.get('/stats', async (req, res) => {
  */
 router.get('/recent-activity', async (req, res) => {
   try {
-    console.log('🔍 Testing recent activity endpoint...');
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : {
+      contact: { userId: req.user.id }
+    };
 
-    // Return mock data for now to test the endpoint
-    const mockActivity = [
-      {
-        id: '1',
-        type: 'SENT',
-        timestamp: new Date(),
-        contact: {
-          email: 'test1@example.com',
-          name: 'Test Contact 1'
-        },
-        sequence: 'Welcome Sequence'
+    const activities = await prisma.event.findMany({
+      where,
+      take: 20,
+      orderBy: {
+        timestamp: 'desc'
       },
-      {
-        id: '2',
-        type: 'OPENED',
-        timestamp: new Date(Date.now() - 3600000),
+      include: {
         contact: {
-          email: 'test2@example.com',
-          name: 'Test Contact 2'
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true
+          }
         },
-        sequence: 'Follow-up Sequence'
+        enrollment: {
+          include: {
+            sequence: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }
       }
-    ];
-
-    console.log('✅ Returning mock activity data');
-
-    res.json({
-      recentActivity: mockActivity,
-      count: mockActivity.length
     });
 
+    const formattedActivity = activities.map(activity => ({
+      id: activity.id,
+      type: activity.type,
+      timestamp: activity.timestamp,
+      contact: {
+        email: activity.contact?.email || 'unknown',
+        name: `${activity.contact?.firstName || ''} ${activity.contact?.lastName || ''}`.trim() || activity.contact?.email || 'Unknown Contact'
+      },
+      sequence: activity.enrollment?.sequence?.name || 'Manual'
+    }));
+
+    console.log(`✅ Returning ${formattedActivity.length} real activity events`);
+
+    res.json({
+      recentActivity: formattedActivity,
+      count: formattedActivity.length
+    });
   } catch (error) {
     console.error('❌ Error in recent activity:', error);
     res.status(500).json({
