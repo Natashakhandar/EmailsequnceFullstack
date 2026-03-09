@@ -72,13 +72,22 @@ const Navbar = () => {
   ];
 
   // Add Admin Management link for superadmins
-  const navLinks = currentUser?.role === 'SUPERADMIN'
+  let navLinks = currentUser?.role === 'SUPERADMIN'
     ? [
       ...baseNavLinks.slice(0, -1), // All links except Profile
       { to: "/admin-management", label: "Admin Management", icon: Shield },
       baseNavLinks[baseNavLinks.length - 1] // Profile link at the end
     ]
     : baseNavLinks;
+
+  // Restrict navigation if impersonating (Superadmin viewing user work)
+  if (isImpersonating) {
+    navLinks = [
+      { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
+      { to: "/reports", label: "Reports", icon: BarChart3 },
+      { to: "/email-activity", label: "Email Activity", icon: Layers },
+    ];
+  }
 
   return (
     <motion.nav
@@ -130,7 +139,7 @@ const Navbar = () => {
 
           {/* Profile Dropdown & Impersonation Alert */}
           <div className="flex items-center gap-4">
-            {isImpersonating && (
+            {currentUser && isImpersonating && (
               <Button
                 variant="outline"
                 size="sm"
@@ -138,7 +147,7 @@ const Navbar = () => {
                 className="flex items-center gap-2 border-yellow-500/50 hover:bg-yellow-50 text-yellow-700 bg-yellow-50/50"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Back to Admin</span>
+                <span className="hidden sm:inline">Back to Admin (Work Mode)</span>
               </Button>
             )}
 
@@ -157,10 +166,12 @@ const Navbar = () => {
                 </motion.button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 glass-dark">
-                <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  Profile
-                </DropdownMenuItem>
+                {!isImpersonating && (
+                  <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    Profile
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
                   Logout

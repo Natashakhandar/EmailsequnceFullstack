@@ -204,6 +204,8 @@ class ApiClient {
 
     // Store token in localStorage
     localStorage.setItem('auth_token', response.token);
+    // Clear any previous impersonation session
+    localStorage.removeItem('original_auth_token');
 
     return response;
   }
@@ -221,6 +223,8 @@ class ApiClient {
 
     // Store token in localStorage
     localStorage.setItem('auth_token', response.token);
+    // Clear any previous impersonation session
+    localStorage.removeItem('original_auth_token');
 
     return response;
   }
@@ -231,8 +235,9 @@ class ApiClient {
         method: 'POST',
       });
     } finally {
-      // Always remove token from localStorage
+      // Always remove token and impersonation state from localStorage
       localStorage.removeItem('auth_token');
+      localStorage.removeItem('original_auth_token');
     }
   }
 
