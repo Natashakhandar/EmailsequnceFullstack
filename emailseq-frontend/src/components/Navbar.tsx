@@ -58,35 +58,37 @@ const Navbar = () => {
     return currentUser.email[0].toUpperCase();
   };
 
-  const baseNavLinks = [
-    { to: "/smtp-settings", label: "SMTP Settings", icon: Mail },
-    { to: "/templates", label: "Templates", icon: FileText },
-    { to: "/campaigns", label: "Campaigns", icon: Target },
-    { to: "/sequences", label: "Sequences", icon: Mail },
-    { to: "/leads", label: "Leads", icon: Users },
-    { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
-    { to: "/email-activity", label: "Email Activity", icon: Layers },
-    { to: "/reports", label: "Reports", icon: BarChart3 },
-    { to: "/profile", label: "Profile", icon: User },
-  ];
-
-  // Add Admin Management link for superadmins
-  let navLinks = currentUser?.role === 'SUPERADMIN'
+  // Define navigation links based on impersonation status and user role
+  const navLinks = isImpersonating 
     ? [
-      ...baseNavLinks.slice(0, -1), // All links except Profile
-      { to: "/admin-management", label: "Admin Management", icon: Shield },
-      baseNavLinks[baseNavLinks.length - 1] // Profile link at the end
-    ]
-    : baseNavLinks;
+        { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
+        { to: "/reports", label: "Reports", icon: BarChart3 },
+        { to: "/email-activity", label: "Email Activity", icon: Layers },
+      ]
+    : (() => {
+        const base = [
+          { to: "/smtp-settings", label: "SMTP Settings", icon: Mail },
+          { to: "/templates", label: "Templates", icon: FileText },
+          { to: "/campaigns", label: "Campaigns", icon: Target },
+          { to: "/sequences", label: "Sequences", icon: Mail },
+          { to: "/leads", label: "Leads", icon: Users },
+          { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
+          { to: "/email-activity", label: "Email Activity", icon: Layers },
+          { to: "/reports", label: "Reports", icon: BarChart3 },
+          { to: "/profile", label: "Profile", icon: User },
+        ];
 
-  // Restrict navigation if impersonating (Superadmin viewing user work)
-  if (isImpersonating) {
-    navLinks = [
-      { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
-      { to: "/reports", label: "Reports", icon: BarChart3 },
-      { to: "/email-activity", label: "Email Activity", icon: Layers },
-    ];
-  }
+        if (currentUser?.role === 'SUPERADMIN') {
+          const links = [...base];
+          const profileItem = links.pop();
+          links.push({ to: "/admin-management", label: "Admin Management", icon: Shield });
+          if (profileItem) links.push(profileItem);
+          return links;
+        }
+        return base;
+      })();
+
+  console.log('[Navbar] Impersonating:', isImpersonating, 'Role:', currentUser?.role, 'Links:', navLinks.length);
 
   return (
     <motion.nav
