@@ -132,7 +132,7 @@ const SmtpSettings = () => {
       setImapConnected(false);
       setSaveError(e?.message || "IMAP connection failed. Check your host, port, and credentials.");
     } finally {
-      setSaving(false);
+      setVerifyingImap(false);
     }
   };
 
