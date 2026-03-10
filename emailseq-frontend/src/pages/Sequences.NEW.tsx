@@ -25,6 +25,9 @@ interface EmailStep {
   triggerStepId?: string | null; // Which step acts as trigger
   skipTrigger?: boolean;
   stepOrder: number;
+  scheduleType: 'delay' | 'weekly' | 'monthly';
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
 }
 
 
@@ -72,7 +75,10 @@ const SequencesNew: React.FC = () => {
       delayHours: 0,
       triggerType: 'delay',
       skipTrigger: false,
-      stepOrder: 1
+      stepOrder: 1,
+      scheduleType: 'delay',
+      dayOfWeek: 1, // Default Monday
+      dayOfMonth: 1
     }
   ]);
   const [selectedStep, setSelectedStep] = useState<string>('1');
@@ -184,7 +190,10 @@ const SequencesNew: React.FC = () => {
       delayHours: 0,
       triggerType: 'delay',
       skipTrigger: false,
-      stepOrder: steps.length + 1
+      stepOrder: steps.length + 1,
+      scheduleType: 'delay',
+      dayOfWeek: 1,
+      dayOfMonth: 1
     };
 
     setSteps(prevSteps => [...prevSteps, newStep]);
@@ -333,6 +342,9 @@ const SequencesNew: React.FC = () => {
             triggerStepId: resolvedTriggerStepId,
             delayDays: step.delayDays || 0,
             delayHours: step.delayHours || 0,
+            scheduleType: step.scheduleType || 'delay',
+            dayOfWeek: step.scheduleType === 'weekly' ? parseInt(String(step.dayOfWeek)) : null,
+            dayOfMonth: step.scheduleType === 'monthly' ? parseInt(String(step.dayOfMonth)) : null,
             templateId: step.templateId || null
           };
 
@@ -468,7 +480,10 @@ const SequencesNew: React.FC = () => {
       delayHours: 0,
       triggerType: 'delay',
       skipTrigger: false,
-      stepOrder: 1
+      stepOrder: 1,
+      scheduleType: 'delay',
+      dayOfWeek: 1,
+      dayOfMonth: 1
     };
     setSteps([firstStep]);
     setSelectedStep(firstStep.id);
@@ -541,10 +556,11 @@ const SequencesNew: React.FC = () => {
           delayDays: step.delayDays,
           delayHours: step.delayHours,
           triggerType: step.triggerType || 'delay',
-          triggerStepId: null, // Will be set in second pass
-          skipTrigger: step.triggerType === 'skip',
           stepOrder: step.stepOrder,
-          notOpenedDelayHours: step.triggerType === 'not_opened' ? 24 : undefined // Default for not_opened
+          notOpenedDelayHours: step.triggerType === 'not_opened' ? 24 : undefined, // Default for not_opened
+          scheduleType: step.scheduleType || 'delay',
+          dayOfWeek: step.dayOfWeek,
+          dayOfMonth: step.dayOfMonth
         };
       });
 
@@ -1488,55 +1504,116 @@ Line breaks will be preserved in the final email."
                                   {/* Conditional Content Based on Trigger Type */}
                                   <AnimatePresence mode="wait">
                                     {steps.find(s => s.id === selectedStep)?.triggerType === 'delay' ? (
-                                      <motion.div
-                                        key="delay-settings"
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        transition={{ duration: 0.2 }}
-                                        className="space-y-3"
-                                      >
-                                        <Label className="text-sm font-medium text-gray-700">
-                                          Delay Duration
-                                        </Label>
-                                        <div className="grid grid-cols-2 gap-4">
-                                          <div>
-                                            <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                                              Days
+                                        <div className="space-y-4 pt-2">
+                                          <div className="space-y-2">
+                                            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                              Schedule Strategy
                                             </Label>
-                                            <select
-                                              value={steps.find(s => s.id === selectedStep)?.delayDays || 0}
-                                              onChange={(e) => selectedStep && updateStep(selectedStep, 'delayDays', parseInt(e.target.value))}
-                                              className="w-full p-3 border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-blue-500/20 transition-all duration-200 bg-white text-sm"
+                                            <Select 
+                                              value={steps.find(s => s.id === selectedStep)?.scheduleType || 'delay'}
+                                              onValueChange={(val: 'delay' | 'weekly' | 'monthly') => selectedStep && updateStep(selectedStep, 'scheduleType', val)}
                                             >
-                                              <option value={0}>0 days</option>
-                                              <option value={1}>1 day</option>
-                                              <option value={2}>2 days</option>
-                                              <option value={3}>3 days</option>
-                                              <option value={7}>1 week</option>
-                                              <option value={14}>2 weeks</option>
-                                              <option value={30}>1 month</option>
-                                            </select>
+                                              <SelectTrigger className="w-full border-gray-200 bg-white shadow-sm">
+                                                <SelectValue placeholder="Schedule Type" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="delay">📏 Standard Delay (Wait X time)</SelectItem>
+                                                <SelectItem value="weekly">📅 Weekly (Every Monday, etc.)</SelectItem>
+                                                <SelectItem value="monthly">🗓️ Monthly (On a specific date)</SelectItem>
+                                              </SelectContent>
+                                            </Select>
                                           </div>
-                                          <div>
-                                            <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                                              Hours
-                                            </Label>
-                                            <select
-                                              value={steps.find(s => s.id === selectedStep)?.delayHours || 0}
-                                              onChange={(e) => selectedStep && updateStep(selectedStep, 'delayHours', parseInt(e.target.value))}
-                                              className="w-full p-3 border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-blue-500/20 transition-all duration-200 bg-white text-sm"
-                                            >
-                                              <option value={0}>0 hours</option>
-                                              <option value={1}>1 hour</option>
-                                              <option value={2}>2 hours</option>
-                                              <option value={4}>4 hours</option>
-                                              <option value={8}>8 hours</option>
-                                              <option value={12}>12 hours</option>
-                                            </select>
-                                          </div>
+
+                                          {/* Standard Delay View */}
+                                          {steps.find(s => s.id === selectedStep)?.scheduleType === 'delay' && (
+                                            <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                              <div>
+                                                <Label className="text-xs text-gray-600 mb-2 block font-medium">Wait Days</Label>
+                                                <select
+                                                  value={steps.find(s => s.id === selectedStep)?.delayDays || 0}
+                                                  onChange={(e) => selectedStep && updateStep(selectedStep, 'delayDays', parseInt(e.target.value))}
+                                                  className="w-full p-2.5 border border-gray-200 rounded-lg focus:border-blue-500 shadow-sm text-sm"
+                                                >
+                                                  <option value={0}>0 days (Immediate)</option>
+                                                  <option value={1}>1 day</option>
+                                                  <option value={2}>2 days</option>
+                                                  <option value={3}>3 days</option>
+                                                  <option value={5}>5 days</option>
+                                                  <option value={7}>1 week</option>
+                                                </select>
+                                              </div>
+                                              <div>
+                                                <Label className="text-xs text-gray-600 mb-2 block font-medium">Wait Hours</Label>
+                                                <select
+                                                  value={steps.find(s => s.id === selectedStep)?.delayHours || 0}
+                                                  onChange={(e) => selectedStep && updateStep(selectedStep, 'delayHours', parseInt(e.target.value))}
+                                                  className="w-full p-2.5 border border-gray-200 rounded-lg focus:border-blue-500 shadow-sm text-sm"
+                                                >
+                                                  <option value={0}>0 hours</option>
+                                                  <option value={1}>1 hour</option>
+                                                  <option value={4}>4 hours</option>
+                                                  <option value={8}>8 hours</option>
+                                                  <option value={12}>12 hours</option>
+                                                </select>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Weekly Strategy View */}
+                                          {steps.find(s => s.id === selectedStep)?.scheduleType === 'weekly' && (
+                                            <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                                              <Label className="text-xs text-blue-700 mb-1 block font-bold">REPEAT WEEKLY ON</Label>
+                                              <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                                                {[
+                                                  { l: 'Mon', v: 1 }, { l: 'Tue', v: 2 }, { l: 'Wed', v: 3 }, 
+                                                  { l: 'Thu', v: 4 }, { l: 'Fri', v: 5 }, { l: 'Sat', v: 6 }, { l: 'Sun', v: 0 }
+                                                ].map(day => (
+                                                  <button
+                                                    key={day.v}
+                                                    type="button"
+                                                    onClick={() => selectedStep && updateStep(selectedStep, 'dayOfWeek', day.v)}
+                                                    className={`py-2 px-1 text-xs font-bold rounded-lg transition-all border ${
+                                                      steps.find(s => s.id === selectedStep)?.dayOfWeek === day.v
+                                                      ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                                      : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-50'
+                                                    }`}
+                                                  >
+                                                    {day.l}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                              <p className="text-[11px] text-blue-600 font-medium italic mt-2">
+                                                * If you set Monday, this mail will go every week on Monday.
+                                              </p>
+                                            </div>
+                                          )}
+
+                                          {/* Monthly Strategy View */}
+                                          {steps.find(s => s.id === selectedStep)?.scheduleType === 'monthly' && (
+                                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                                              <div>
+                                                <Label className="text-xs text-indigo-700 mb-2 block font-bold">SEND ON THIS DATE EVERY MONTH</Label>
+                                                <div className="flex items-center gap-3">
+                                                  <div className="flex-1">
+                                                     <select
+                                                      value={steps.find(s => s.id === selectedStep)?.dayOfMonth || 1}
+                                                      onChange={(e) => selectedStep && updateStep(selectedStep, 'dayOfMonth', parseInt(e.target.value))}
+                                                      className="w-full p-3 border border-indigo-200 rounded-lg focus:border-indigo-500 shadow-sm text-sm font-bold text-indigo-700 bg-white"
+                                                    >
+                                                      {Array.from({length: 31}, (_, i) => i + 1).map(d => (
+                                                        <option key={d} value={d}>Day {d}</option>
+                                                      ))}
+                                                    </select>
+                                                  </div>
+                                                  <div className="text-indigo-600 font-bold">OfMonth</div>
+                                                </div>
+                                              </div>
+                                              <p className="text-[11px] text-indigo-600 font-medium italic">
+                                                * If you set 15th, this mail will go on the 15th of every month.
+                                              </p>
+                                            </div>
+                                          )}
                                         </div>
-                                      </motion.div>
                                     ) : steps.find(s => s.id === selectedStep)?.triggerType === 'not_opened' ? (
                                       <motion.div
                                         key="not-opened-settings"

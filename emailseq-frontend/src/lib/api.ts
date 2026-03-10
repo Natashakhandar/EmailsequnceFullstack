@@ -76,6 +76,9 @@ export interface SequenceStep {
   delayHours: number;
   triggerType: 'delay' | 'opened' | 'not_opened' | 'replied' | 'skip';
   triggerStepId?: string | null;
+  scheduleType: 'delay' | 'weekly' | 'monthly';
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
   isActive: boolean;
   template?: Template;
 }
