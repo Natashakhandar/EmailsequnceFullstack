@@ -10,8 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, RefreshCw, Eye, Filter, Calendar, Mail, User, Activity, Trash2, MessageCircle, Inbox } from "lucide-react";
 import { toast } from "sonner";
-import { api, Event, Contact, Sequence } from "@/lib/api";
-import { safeJsonParse } from "@/lib/utils"; // Import safeJsonParse
+import io from "socket.io-client";
+import { api, Event, Contact, Sequence, RAW_BASE } from "@/lib/api";
+import { safeJsonParse } from "@/lib/utils";
 import EmailDetailsPopup from "@/components/popups/EmailDetailsPopup";
 
 interface EmailActivityFilters {
@@ -34,6 +35,7 @@ const EmailActivity = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [socket, setSocket] = useState<any>(null);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 50,
@@ -41,19 +43,76 @@ const EmailActivity = () => {
     pages: 0
   });
 
-  // Auto-refresh every 10 seconds
+  // Auto-refresh every 30 seconds as fallback
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!loading && !refreshing) {
-        loadEvents(true);
+      if (!loading && !refreshing && pagination.page === 1 && Object.keys(filters).length === 0) {
+        loadEvents(false);
       }
-    }, 10000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [loading, refreshing, filters, pagination.page]);
 
   useEffect(() => {
     loadInitialData();
+
+    // Set up socket connection for real-time updates
+    const socketConnection = io(RAW_BASE);
+    setSocket(socketConnection);
+
+    // Listen for real-time events (sent, opened, replied)
+    socketConnection.on('realTimeEvent', (data) => {
+      console.log('📡 Real-time event received:', data);
+      
+      if (data && data.event) {
+        // Map common fields for frontend consistency
+        const rawEvent = data.event;
+        const newEvent: Event = {
+          id: rawEvent.id || `temp-${Date.now()}`,
+          enrollmentId: rawEvent.enrollmentId,
+          contactId: rawEvent.contactId,
+          type: rawEvent.type,
+          timestamp: rawEvent.timestamp || new Date().toISOString(),
+          details: rawEvent.details || JSON.stringify({ to: rawEvent.to }),
+          contact: { 
+            email: rawEvent.to || '', 
+            id: rawEvent.contactId 
+          } as any
+        };
+        
+        // Add new event to the top of the list if it matches current filters
+        setEvents(prev => {
+          // Check if event already exists in list (to avoid duplicates from polling/sockets)
+          if (prev.some(e => e.id === newEvent.id)) return prev;
+          
+          // Apply basic filtering if active
+          if (filters.type && newEvent.type !== filters.type) return prev;
+          if (filters.contactId && newEvent.contactId !== filters.contactId) return prev;
+          
+          // Add to start and limit to current page size
+          const updated = [newEvent, ...prev].slice(0, pagination.limit);
+          return updated;
+        });
+
+        // Show toast for important events
+        if (newEvent.type === 'OPENED') {
+          toast.success(`Email opened! ${newEvent.to || ''}`, {
+            description: `A recipient just opened your email.`,
+            icon: <Eye className="w-4 h-4 text-purple-600" />
+          });
+        } else if (newEvent.type === 'REPLIED') {
+          toast.success(`New reply! ${newEvent.to || ''}`, {
+            description: `You've received a response.`,
+            icon: <MessageCircle className="w-4 h-4 text-emerald-600" />
+          });
+        }
+      }
+    });
+
+    return () => {
+      socketConnection.disconnect();
+    };
   }, []);
 
   useEffect(() => {
