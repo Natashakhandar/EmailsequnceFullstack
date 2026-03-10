@@ -98,6 +98,12 @@ const Reports = () => {
       }
     });
 
+    // Listen for real-time events (sent, opened, replied) to refresh stats
+    socketConnection.on('realTimeEvent', (data) => {
+      console.log('📡 Reports received real-time event, refreshing stats...', data.type);
+      fetchAnalyticsData(); // Full refresh
+    });
+
     // Handle socket connection errors
     socketConnection.on('connect_error', (error) => {
       console.warn('Socket connection error:', error);
