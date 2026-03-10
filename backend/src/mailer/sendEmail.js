@@ -5,6 +5,7 @@ const { smtpConfig, emailConfig } = require('../config/smtp');
 const { replaceTokens } = require('../utils/tokenReplace');
 const prisma = require('../db/prismaClient');
 const { broadcastRealTimeEvent } = require('../services/socketService');
+const { calculateNextSendDate } = require('../utils/schedulerUtils');
 
 // Enhanced HTML formatting function
 function enhanceHtmlFormatting(htmlContent) {
@@ -627,10 +628,8 @@ async function sendSequenceEmail(enrollment) {
       };
 
       if (nextStepData) {
-        // Schedule next step
-        const nextSendAt = new Date();
-        nextSendAt.setDate(nextSendAt.getDate() + nextStepData.delayDays);
-        nextSendAt.setHours(nextSendAt.getHours() + nextStepData.delayHours);
+        // Schedule next step using custom logic
+        const nextSendAt = calculateNextSendDate(nextStepData);
 
         updateData = {
           ...updateData,

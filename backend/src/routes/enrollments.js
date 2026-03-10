@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../db/prismaClient');
 const { authenticateToken } = require('../middleware/auth');
+const { calculateNextSendDate } = require('../utils/schedulerUtils');
 const router = express.Router();
 
 router.use(authenticateToken);
@@ -194,10 +195,8 @@ router.post('/', async (req, res) => {
     if (startImmediately) {
       nextSendAt = new Date();
     } else {
-      nextSendAt = new Date();
-      nextSendAt.setDate(nextSendAt.getDate() + firstStep.delayDays);
-      nextSendAt.setHours(nextSendAt.getHours() + firstStep.delayHours);
-      nextSendAt.setMinutes(nextSendAt.getMinutes() + (firstStep.delayMinutes || 0));
+      // Use the custom schedule for the first step
+      nextSendAt = calculateNextSendDate(firstStep);
     }
 
     console.log('📅 Enrollment timing:', {
@@ -475,8 +474,7 @@ router.post('/bulk', async (req, res) => {
     const firstStep = sequence.steps[0];
     let nextSendAt = new Date();
     if (!startImmediately) {
-      nextSendAt.setDate(nextSendAt.getDate() + firstStep.delayDays);
-      nextSendAt.setHours(nextSendAt.getHours() + firstStep.delayHours);
+      nextSendAt = calculateNextSendDate(firstStep);
     }
 
     for (const contactId of contactIds) {

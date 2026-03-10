@@ -2,6 +2,7 @@ const express = require('express');
 const prisma = require('../db/prismaClient');
 const { authenticateToken } = require('../middleware/auth');
 const { broadcastCampaignStats, broadcastGeneralStats } = require('../services/socketService');
+const { calculateNextSendDate } = require('../utils/schedulerUtils');
 const router = express.Router();
 
 // Apply authentication middleware to all campaign routes
@@ -221,12 +222,14 @@ router.post('/', async (req, res) => {
         console.log(`📊 Cleared ${contactIds.length} potentially existing enrollments for sequence ${sequence_id}`);
 
         // Create enrollments for all leads in this campaign
+        const firstStep = sequence.steps[0];
         const enrollmentData = lead_ids.map(contactId => ({
           contactId,
           sequenceId: sequence_id,
           campaignId: campaign.id,
           currentStep: 1,
-          nextSendAt: campaign.startDate || new Date()
+          // Calculate nextSendAt based on first step schedule and campaign start date
+          nextSendAt: calculateNextSendDate(firstStep, campaign.startDate || new Date())
         }));
 
         const resultEnrollments = await tx.enrollment.createMany({
@@ -507,12 +510,13 @@ router.patch('/:id', async (req, res) => {
         });
 
         // Create enrollments for new leads
+        const firstStep = existingCampaign.sequence.steps[0];
         const enrollmentData = add_lead_ids.map(contactId => ({
           contactId,
           sequenceId: existingCampaign.sequenceId,
           campaignId: id,
           currentStep: 1,
-          nextSendAt: campaign.startDate || new Date()
+          nextSendAt: calculateNextSendDate(firstStep, campaign.startDate || new Date())
         }));
 
         await tx.enrollment.createMany({
