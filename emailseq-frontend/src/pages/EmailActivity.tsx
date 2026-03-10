@@ -175,15 +175,23 @@ const EmailActivity = () => {
         pages: response.pagination.pages
       }));
 
-      // Calculate stats from all events if possible, or just the current set
-      // For a real app, this should come from a separate /stats endpoint
-      if (pagination.page === 1) {
-        const newStats = response.events.reduce((acc: any, curr: any) => {
-          const type = curr.type.toLowerCase();
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-        }, { sent: 0, opened: 0, replied: 0, bounced: 0 });
-        setStats(newStats);
+      // Update local stats from meta if possible
+      if (response.stats) {
+        setStats(response.stats); // If the backend is updated to return this
+      } else if (pagination.page === 1) {
+        // Fallback: Use the data available in the first 50 events to estimate
+        // In reality, we should hit /api/dashboard/stats for the whole sum 
+        // to ensure we don't miss anything on older pages.
+        api.getDashboardStats().then(dashStats => {
+           setStats({
+             sent: dashStats.totalEmailsSent,
+             opened: dashStats.openRate.count,
+             replied: dashStats.replyRate.count,
+             bounced: dashStats.bounceRate.count
+           });
+        }).catch(err => {
+           console.log("Could not fetch dashboard stats for summary:", err);
+        });
       }
 
       if (isRefresh) {

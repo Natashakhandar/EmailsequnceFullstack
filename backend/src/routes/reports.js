@@ -95,7 +95,6 @@ router.get('/analytics', async (req, res) => {
     // Step 1: Get campaign basic info
     const campaignBreakdown = await prisma.campaign.findMany({
       where: {
-        isActive: true,
         ...(isAdmin ? {} : { userId: req.user.id }),
         ...(campaignId ? { id: campaignId } : {})
       },
@@ -749,8 +748,7 @@ router.get('/campaign-analytics', async (req, res) => {
     const campaigns = await prisma.campaign.findMany({
       where: {
         userId: req.user.id,
-        ...where,
-        isActive: true
+        ...where
       },
       include: {
         sequence: {
