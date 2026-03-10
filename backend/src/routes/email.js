@@ -14,102 +14,108 @@ const transparentPixel = Buffer.from([
   0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
 ]);
 
-/**
- * GET /api/track/open
- * Track email opens using a 1x1 tracking pixel
- */
 router.get('/track/open', async (req, res) => {
   try {
     const { emailId } = req.query;
-    console.log(`📩 Open tracking request received for emailId: "${emailId}"`);
+    
+    // Better IP detection for proxied environments (Hostinger/Cloudflare)
+    const ip = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress || '0.0.0.0';
+    console.log(`📩 [TRACKER] Open request for ID: "${emailId}" from IP: ${ip}`);
 
-    // Helper to send the transparent pixel response
+    // Helper to send the transparent pixel response as fast as possible
     const sendPixel = () => {
       res.set({
         'Content-Type': 'image/png',
         'Content-Length': transparentPixel.length,
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
-        'Expires': '0'
+        'Expires': '0',
+        'Access-Control-Allow-Origin': '*' // Allow tracking from anywhere
       });
-      return res.send(transparentPixel);
+      return res.status(200).send(transparentPixel);
     };
 
     if (!emailId) {
-      // console.log('❌ Open tracking: Missing emailId parameter');
       return sendPixel();
     }
 
-    // Find the original SENT event with this emailId
-    const existingEvent = await prisma.event.findFirst({
+    // FUZZY MATCHING: Try to find the email even if brackets are missing or added
+    const cleanId = emailId.trim();
+    const idWithBrackets = cleanId.startsWith('<') ? cleanId : `<${cleanId}>`;
+    const idWithoutBrackets = cleanId.replace(/[<>]/g, '');
+
+    // Search for the original SENT event
+    const sentEvent = await prisma.event.findFirst({
       where: {
-        emailId: emailId,
-        type: 'SENT'
+        type: 'SENT',
+        OR: [
+          { emailId: cleanId },
+          { emailId: idWithBrackets },
+          { emailId: idWithoutBrackets }
+        ]
       },
       include: {
         contact: true
       }
     });
 
-    if (!existingEvent) {
-      // console.log(`❌ Open tracking: No sent event found for emailId: "${emailId}"`);
+    if (!sentEvent) {
+      console.log(`⚠️ [TRACKER] No 'SENT' event found matching ID: "${emailId}"`);
       return sendPixel();
     }
 
-    // UNIQUE OPEN CHECK: Only record first open per emailId
+    // UNIQUE OPEN CHECK: Check if already opened (using fuzzy search as well)
     const alreadyOpened = await prisma.event.findFirst({
       where: {
-        emailId: emailId,
-        type: 'OPENED'
+        type: 'OPENED',
+        OR: [
+          { emailId: cleanId },
+          { emailId: idWithBrackets },
+          { emailId: idWithoutBrackets }
+        ]
       }
     });
 
     if (!alreadyOpened) {
-      // Create OPENED event - ONLY ONCE per emailId
+      // Record the NEW open event
       const newEvent = await prisma.event.create({
         data: {
-          enrollmentId: existingEvent.enrollmentId,
-          contactId: existingEvent.contactId,
-          campaignId: existingEvent.campaignId,
+          enrollmentId: sentEvent.enrollmentId,
+          contactId: sentEvent.contactId,
+          campaignId: sentEvent.campaignId,
           type: 'OPENED',
-          emailId: emailId,
+          emailId: sentEvent.emailId, // Use the ID from the database for consistency
           details: JSON.stringify({
             openedAt: new Date().toISOString(),
-            userAgent: req.get('User-Agent') || '',
-            ip: req.ip || req.connection.remoteAddress || '',
-            referer: req.get('Referer') || ''
+            userAgent: req.get('User-Agent') || 'Unknown',
+            ip: ip,
+            referer: req.get('Referer') || 'Direct',
+            originalQueryId: emailId
           })
         }
       });
 
-      console.log(`✅ FIRST OPEN DETECTED: Email ${emailId} opened by ${existingEvent.contact.email}. Counted in stats.`);
+      console.log(`✅ [TRACKER] FIRST OPEN LOGGED: Contact ${sentEvent.contact.email} opened email ${sentEvent.emailId}`);
 
-      // Broadcast real-time event via socket so dashboard/activity log update instantly
+      // Broadcast via socket for real-time UI updates
       broadcastRealTimeEvent({
         id: newEvent.id,
         type: 'OPENED',
-        campaignId: existingEvent.campaignId,
-        contactId: existingEvent.contactId,
-        enrollmentId: existingEvent.enrollmentId,
-        to: existingEvent.contact.email,
+        campaignId: sentEvent.campaignId,
+        contactId: sentEvent.contactId,
+        enrollmentId: sentEvent.enrollmentId,
+        to: sentEvent.contact.email,
         timestamp: newEvent.timestamp || new Date().toISOString()
       });
     } else {
-      console.log(`ℹ️ REPEAT OPEN: Email ${emailId} was opened again. Not incrementing stats.`);
+      console.log(`ℹ️ [TRACKER] Repeat open for ID: ${emailId} (Contact: ${sentEvent.contact.email}). Skipping log.`);
     }
 
     return sendPixel();
 
   } catch (error) {
-    console.error('❌ Open tracking error:', error);
-    // Return pixel anyway
-    res.set({
-      'Content-Type': 'image/png',
-      'Content-Length': transparentPixel.length,
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
+    console.error('❌ [TRACKER] Critical Error:', error.message);
+    res.set('Content-Type', 'image/png');
     return res.send(transparentPixel);
   }
 });
