@@ -16,7 +16,7 @@ import { toast } from "sonner";
 const Navbar = () => {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
-  const [isImpersonating, setIsImpersonating] = useState(false);
+  const isImpersonating = api.isImpersonating();
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -29,7 +29,6 @@ const Navbar = () => {
     };
 
     fetchCurrentUser();
-    setIsImpersonating(api.isImpersonating());
   }, []);
 
   const handleStopImpersonating = () => {
@@ -139,7 +138,7 @@ const Navbar = () => {
 
           {/* Profile Dropdown & Impersonation Alert */}
           <div className="flex items-center gap-4">
-            {currentUser && isImpersonating && (
+            {currentUser && isImpersonating && currentUser.role !== 'SUPERADMIN' && (
               <Button
                 variant="outline"
                 size="sm"
@@ -147,7 +146,7 @@ const Navbar = () => {
                 className="flex items-center gap-2 border-yellow-500/50 hover:bg-yellow-50 text-yellow-700 bg-yellow-50/50"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Back to Admin (Work Mode)</span>
+                <span className="hidden sm:inline">Back to Admin</span>
               </Button>
             )}
 
