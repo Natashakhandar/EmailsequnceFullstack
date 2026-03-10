@@ -42,6 +42,12 @@ const EmailActivity = () => {
     total: 0,
     pages: 0
   });
+  const [stats, setStats] = useState({
+    sent: 0,
+    opened: 0,
+    replied: 0,
+    bounced: 0
+  });
 
   // Auto-refresh every 30 seconds as fallback
   useEffect(() => {
@@ -75,34 +81,43 @@ const EmailActivity = () => {
           type: rawEvent.type,
           timestamp: rawEvent.timestamp || new Date().toISOString(),
           details: rawEvent.details || JSON.stringify({ to: rawEvent.to }),
-          contact: { 
+          campaignId: rawEvent.campaignId,
+          contact: rawEvent.contact || { 
             email: rawEvent.to || '', 
-            id: rawEvent.contactId 
+            id: rawEvent.contactId,
+            firstName: rawEvent.firstName,
+            lastName: rawEvent.lastName
+          } as any,
+          enrollment: rawEvent.enrollment || {
+            id: rawEvent.enrollmentId,
+            sequence: rawEvent.sequence || { name: rawEvent.sequenceName || 'Sequence' }
           } as any
         };
         
         // Add new event to the top of the list if it matches current filters
         setEvents(prev => {
-          // Check if event already exists in list (to avoid duplicates from polling/sockets)
           if (prev.some(e => e.id === newEvent.id)) return prev;
           
-          // Apply basic filtering if active
           if (filters.type && newEvent.type !== filters.type) return prev;
           if (filters.contactId && newEvent.contactId !== filters.contactId) return prev;
           
-          // Add to start and limit to current page size
-          const updated = [newEvent, ...prev].slice(0, pagination.limit);
-          return updated;
+          return [newEvent, ...prev].slice(0, pagination.limit);
         });
+
+        // Update local stats
+        setStats(prev => ({
+          ...prev,
+          [newEvent.type.toLowerCase()]: (prev[newEvent.type.toLowerCase() as keyof typeof prev] || 0) + 1
+        }));
 
         // Show toast for important events
         if (newEvent.type === 'OPENED') {
-          toast.success(`Email opened! ${newEvent.to || ''}`, {
+          toast.success(`Email opened! ${newEvent.contact?.email || ''}`, {
             description: `A recipient just opened your email.`,
             icon: <Eye className="w-4 h-4 text-purple-600" />
           });
         } else if (newEvent.type === 'REPLIED') {
-          toast.success(`New reply! ${newEvent.to || ''}`, {
+          toast.success(`New reply! ${newEvent.contact?.email || ''}`, {
             description: `You've received a response.`,
             icon: <MessageCircle className="w-4 h-4 text-emerald-600" />
           });
@@ -159,6 +174,17 @@ const EmailActivity = () => {
         total: response.pagination.total,
         pages: response.pagination.pages
       }));
+
+      // Calculate stats from all events if possible, or just the current set
+      // For a real app, this should come from a separate /stats endpoint
+      if (pagination.page === 1) {
+        const newStats = response.events.reduce((acc: any, curr: any) => {
+          const type = curr.type.toLowerCase();
+          acc[type] = (acc[type] || 0) + 1;
+          return acc;
+        }, { sent: 0, opened: 0, replied: 0, bounced: 0 });
+        setStats(newStats);
+      }
 
       if (isRefresh) {
         toast.success("Email activity refreshed");
@@ -258,11 +284,11 @@ const EmailActivity = () => {
       UNSUBSCRIBED: { variant: "secondary" as const, color: "bg-gray-100 text-gray-800" }
     };
 
-    const config = statusConfig[type as keyof typeof statusConfig] || statusConfig.SENT;
+    const config = statusConfig[type.toUpperCase() as keyof typeof statusConfig] || statusConfig.SENT;
     
     return (
-      <Badge variant={config.variant} className={config.color}>
-        {type}
+      <Badge variant={config.variant} className={`${config.color} font-bold px-2.5 py-0.5 rounded-full border-none`}>
+        {type.toUpperCase()}
       </Badge>
     );
   };
@@ -316,8 +342,47 @@ const EmailActivity = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-
       <main className="container mx-auto px-6 pt-20 pb-12">
+        {/* Activity Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <Card className="bg-blue-50 border-blue-100 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">Total Sent</p>
+                <h3 className="text-2xl font-bold text-blue-900">{stats.sent}</h3>
+              </div>
+              <Mail className="w-8 h-8 text-blue-200" />
+            </CardContent>
+          </Card>
+          <Card className="bg-purple-50 border-purple-100 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-purple-600">Total Opened</p>
+                <h3 className="text-2xl font-bold text-purple-900">{stats.opened}</h3>
+              </div>
+              <Eye className="w-8 h-8 text-purple-200" />
+            </CardContent>
+          </Card>
+          <Card className="bg-emerald-50 border-emerald-100 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-emerald-600">Total Replied</p>
+                <h3 className="text-2xl font-bold text-emerald-900">{stats.replied}</h3>
+              </div>
+                <MessageCircle className="w-8 h-8 text-emerald-200" />
+            </CardContent>
+          </Card>
+          <Card className="bg-gray-50 border-gray-100 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Events</p>
+                <h3 className="text-2xl font-bold text-gray-900">{pagination.total}</h3>
+              </div>
+              <Activity className="w-8 h-8 text-gray-200" />
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
@@ -539,7 +604,16 @@ const EmailActivity = () => {
                             <User className="w-4 h-4 text-gray-400" />
                             <div>
                               <div className="font-medium text-gray-900">
-                                {getContactName(event.contactId)}
+                                {event.contact ? (
+                                  <>
+                                    <div className="font-semibold text-gray-900">
+                                      {`${(event.contact.firstName || '')} ${(event.contact.lastName || '')}`.trim() || event.contact.email}
+                                    </div>
+                                    <div className="text-xs text-gray-400">{event.contact.email}</div>
+                                  </>
+                                ) : (
+                                  getContactName(event.contactId)
+                                )}
                               </div>
                               <div className="text-sm text-gray-500">
                                 {event.contact?.email}
