@@ -5,6 +5,7 @@ import MetricCard from "@/components/MetricCard";
 import { Mail, Eye, MessageSquare, TrendingUp, RefreshCw } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { api, RAW_BASE } from "@/lib/api";
+import io from "socket.io-client";
 
 interface DashboardStats {
   totalEmailsSent: number;
@@ -34,41 +35,47 @@ const Dashboard = () => {
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [socket, setSocket] = useState<any>(null);
+
+  const fetchDashboardData = async (isRefreshing = false) => {
+    try {
+      if (!isRefreshing) setLoading(true);
+      setError(null);
+
+      console.log('🔄 Fetching dashboard statistics...');
+      const stats = await api.getDashboardStats();
+      setDashboardStats(stats);
+    } catch (err) {
+      console.error('❌ Error fetching dashboard data:', err);
+      let errorMessage = 'Failed to load dashboard data';
+      if (err instanceof Error) {
+        errorMessage = err.message.includes('fetch') 
+          ? 'Cannot connect to backend server.' 
+          : err.message;
+      }
+      setError(errorMessage);
+    } finally {
+      if (!isRefreshing) setLoading(false);
+    }
+  };
 
   // Fetch dashboard data on component mount
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        console.log('🔄 Fetching dashboard statistics...');
-        console.log('📡 API Base URL:', RAW_BASE);
-
-        const stats = await api.getDashboardStats();
-        console.log('✅ Dashboard statistics loaded:', stats);
-
-        setDashboardStats(stats);
-      } catch (err) {
-        console.error('❌ Error fetching dashboard data:', err);
-
-        // Provide more detailed error information
-        let errorMessage = 'Failed to load dashboard data';
-        if (err instanceof Error) {
-          if (err.message.includes('fetch')) {
-            errorMessage = 'Cannot connect to backend server. Please verify the API status and your connection.';
-          } else {
-            errorMessage = err.message;
-          }
-        }
-
-        setError(errorMessage);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDashboardData();
+
+    // Set up socket connection for real-time updates
+    const socketConnection = io(RAW_BASE);
+    setSocket(socketConnection);
+
+    // When ANY real-time event happens (SENT, OPENED, REPLIED), refresh the dashboard stats
+    socketConnection.on('realTimeEvent', (data) => {
+      console.log('📡 Dashboard received real-time event, refreshing stats...', data.type);
+      fetchDashboardData(true); // Silent refresh
+    });
+
+    return () => {
+      socketConnection.disconnect();
+    };
   }, []);
 
   // Transform daily activity data for chart (Sunday=0 to Saturday=6)

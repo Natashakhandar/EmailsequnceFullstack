@@ -66,7 +66,7 @@ router.get('/track/open', async (req, res) => {
 
     if (!alreadyOpened) {
       // Create OPENED event - ONLY ONCE per emailId
-      await prisma.event.create({
+      const newEvent = await prisma.event.create({
         data: {
           enrollmentId: existingEvent.enrollmentId,
           contactId: existingEvent.contactId,
@@ -82,17 +82,20 @@ router.get('/track/open', async (req, res) => {
         }
       });
 
-      console.log(`✅ UNIQUE OPEN: Email ${emailId} opened by ${existingEvent.contact.email}. Counted in stats.`);
+      console.log(`✅ FIRST OPEN DETECTED: Email ${emailId} opened by ${existingEvent.contact.email}. Counted in stats.`);
 
       // Broadcast real-time event via socket so dashboard/activity log update instantly
       broadcastRealTimeEvent({
+        id: newEvent.id,
         type: 'OPENED',
         campaignId: existingEvent.campaignId,
         contactId: existingEvent.contactId,
         enrollmentId: existingEvent.enrollmentId,
         to: existingEvent.contact.email,
-        timestamp: new Date().toISOString()
+        timestamp: newEvent.timestamp || new Date().toISOString()
       });
+    } else {
+      console.log(`ℹ️ REPEAT OPEN: Email ${emailId} was opened again. Not incrementing stats.`);
     }
 
     return sendPixel();
