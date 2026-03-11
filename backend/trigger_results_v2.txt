@@ -1,6 +1,0 @@
-Triggering email processing...
-???? Starting email processing cycle...
-prisma:info Starting a mysql pool with 10 connections.
-prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`status` = ? AND `u825197931_email_app`.`enrollments`.`nextSendAt` <= ?) ORDER BY `u825197931_email_app`.`enrollments`.`nextSendAt` ASC
-???? No emails due for sending
-Finished.

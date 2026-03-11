@@ -1,4 +1,0 @@
-Started on port: 3000
-Env PORT: undefined
-Bound to: 0.0.0.0
-Time: 2026-03-07T10:29:25.574Z

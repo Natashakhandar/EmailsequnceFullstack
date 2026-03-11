@@ -54,17 +54,18 @@ function startEmailMonitoring() {
   console.log('🚀 Starting email monitoring scheduler...');
 
   // Run every 5 minutes to check for new replies
-  cron.schedule('*/5 * * * *', checkForReplies, {
+  cron.schedule('*/2 * * * *', checkForReplies, {
     scheduled: true,
     timezone: "UTC"
   });
 
-  console.log('Email monitoring scheduler started (runs every 5 minutes)');
+  console.log('Email monitoring scheduler started (runs every 2 minutes)');
 
   // Run initial check after 60 seconds to avoid connection spike on startup
   setTimeout(() => {
-    checkForReplies().catch(err => console.error('Initial email check failed:', err.message));
-  }, 60000);
+    console.log('🔄 Initial email monitoring check...');
+    checkForReplies().catch(err => console.error('Initial monitoring check failed:', err.message));
+  }, 10000);
 }
 
 // Stop the email monitoring (if needed)

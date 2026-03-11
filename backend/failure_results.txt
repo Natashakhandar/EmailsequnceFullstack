@@ -1,3 +1,0 @@
-Found 2 recent failure events.
-- [2026-03-07T09:45:21.708Z] Error: {"to":"sharmakanchan0209@gmail.com","error":"Connection timeout","code":"ETIMEDOUT","command":"CONN"}
-- [2026-03-07T09:45:11.343Z] Error: {"to":"natashakhandr05@gmail.com","error":"Connection timeout","code":"ETIMEDOUT","command":"CONN"}
