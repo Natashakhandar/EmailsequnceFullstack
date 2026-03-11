@@ -68,10 +68,10 @@ function startEmailMonitoring() {
 
   console.log('Email monitoring scheduler started (runs every 5 minutes)');
 
-  // Run initial check after 30 seconds
+  // Run initial check after 60 seconds to avoid connection spike on startup
   setTimeout(() => {
     checkForReplies().catch(err => console.error('Initial email check failed:', err.message));
-  }, 30000);
+  }, 60000);
 }
 
 // Stop the email monitoring (if needed)

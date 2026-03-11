@@ -5,8 +5,13 @@ const prisma = new PrismaClient({
 });
 
 // Graceful shutdown
-process.on('beforeExit', async () => {
+const shutdown = async () => {
+  console.log('🔌 Disconnecting Prisma...');
   await prisma.$disconnect();
-});
+};
+
+process.on('beforeExit', shutdown);
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 module.exports = prisma;

@@ -1,11 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../db/prismaClient');
 const { authenticateToken, requireSuperAdmin, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Generate JWT token
 const generateToken = (userId, extraClaims = {}) => {

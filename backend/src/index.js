@@ -177,7 +177,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
   try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
-  try { startEmailMonitoring(); } catch (e) { console.error('Email monitor error:', e.message); }
+  // Removed redundant startEmailMonitoring here as it is started by the scheduler
 });
 
 process.on('uncaughtException', (error) => {
