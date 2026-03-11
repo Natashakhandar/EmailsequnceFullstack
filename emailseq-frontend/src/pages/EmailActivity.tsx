@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, RefreshCw, Eye, Filter, Calendar, Mail, User, Activity, Trash2, MessageCircle, Inbox } from "lucide-react";
+import { Loader2, RefreshCw, Eye, Filter, Calendar, Mail, User, Activity, Trash2, MessageCircle, Inbox, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import io from "socket.io-client";
 import { api, Event, Contact, Sequence, RAW_BASE } from "@/lib/api";
@@ -120,6 +120,11 @@ const EmailActivity = () => {
           toast.success(`New reply! ${newEvent.contact?.email || ''}`, {
             description: `You've received a response.`,
             icon: <MessageCircle className="w-4 h-4 text-emerald-600" />
+          });
+        } else if (newEvent.type === 'BOUNCED') {
+          toast.error(`Email Bounced: ${newEvent.contact?.email || ''}`, {
+            description: `Message marked as undelivered. Contact status updated to BOUNCED.`,
+            icon: <AlertCircle className="w-4 h-4 text-red-600" />
           });
         }
       }
@@ -294,9 +299,14 @@ const EmailActivity = () => {
 
     const config = statusConfig[type.toUpperCase() as keyof typeof statusConfig] || statusConfig.SENT;
     
+    // Custom label for Bouncel
+    let label = type.toUpperCase();
+    if (type === 'BOUNCED') label = "UNDELIVERED";
+    if (type === 'REPLIED') label = "REPLY RECEIVED";
+
     return (
-      <Badge variant={config.variant} className={`${config.color} font-bold px-2.5 py-0.5 rounded-full border-none`}>
-        {type.toUpperCase()}
+      <Badge variant={config.variant} className={`${config.color} font-bold px-2.5 py-0.5 rounded-full border-none whitespace-nowrap`}>
+        {label}
       </Badge>
     );
   };
@@ -351,47 +361,7 @@ const EmailActivity = () => {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <main className="container mx-auto px-6 pt-20 pb-12">
-        {/* Activity Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card className="bg-blue-50 border-blue-100 shadow-sm">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-600">Total Sent</p>
-                <h3 className="text-2xl font-bold text-blue-900">{stats.sent}</h3>
-              </div>
-              <Mail className="w-8 h-8 text-blue-200" />
-            </CardContent>
-          </Card>
-          <Card className="bg-purple-50 border-purple-100 shadow-sm">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-purple-600">Total Opened</p>
-                <h3 className="text-2xl font-bold text-purple-900">{stats.opened}</h3>
-              </div>
-              <Eye className="w-8 h-8 text-purple-200" />
-            </CardContent>
-          </Card>
-          <Card className="bg-emerald-50 border-emerald-100 shadow-sm">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-emerald-600">Total Replied</p>
-                <h3 className="text-2xl font-bold text-emerald-900">{stats.replied}</h3>
-              </div>
-                <MessageCircle className="w-8 h-8 text-emerald-200" />
-            </CardContent>
-          </Card>
-          <Card className="bg-gray-50 border-gray-100 shadow-sm">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Events</p>
-                <h3 className="text-2xl font-bold text-gray-900">{pagination.total}</h3>
-              </div>
-              <Activity className="w-8 h-8 text-gray-200" />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Header */}
+        {/* Email Activity Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -608,24 +578,21 @@ const EmailActivity = () => {
                     {events.map((event) => (
                       <TableRow key={event.id}>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-gray-400" />
-                            <div>
-                              <div className="font-medium text-gray-900">
+                          <div className="flex items-center gap-3 py-1">
+                            <div className="bg-gray-100 p-2 rounded-full">
+                              <User className="w-4 h-4 text-gray-500" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-gray-900 leading-tight">
                                 {event.contact ? (
-                                  <>
-                                    <div className="font-semibold text-gray-900">
-                                      {`${(event.contact.firstName || '')} ${(event.contact.lastName || '')}`.trim() || event.contact.email}
-                                    </div>
-                                    <div className="text-xs text-gray-400">{event.contact.email}</div>
-                                  </>
+                                  `${(event.contact.firstName || '')} ${(event.contact.lastName || '')}`.trim() || event.contact.email
                                 ) : (
                                   getContactName(event.contactId)
                                 )}
-                              </div>
-                              <div className="text-sm text-gray-500">
+                              </span>
+                              <span className="text-xs text-gray-500 mt-0.5">
                                 {event.contact?.email}
-                              </div>
+                              </span>
                             </div>
                           </div>
                         </TableCell>

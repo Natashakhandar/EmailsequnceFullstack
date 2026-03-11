@@ -159,14 +159,24 @@ class EmailMonitorService {
       const subject = (parsed.subject || '').toLowerCase();
       const fromEmail = (parsed.from?.value?.[0]?.address || parsed.from?.text || '').toLowerCase();
 
-      // 1. FILTER: Ignore common automated/system emails that are NOT replies
+      // 1. FILTER: Ignore common automated emails, but KEEP potential bounces
       const ignorePrefixes = [
-        'read:', 'delivered:', 'undeliverable:', 'auto:', 'out of office',
-        'automatic reply', 'failure notice', 'delivery status notification'
+        'read:', 'delivered:', 'auto:', 'out of office',
+        'automatic reply'
       ];
 
-      if (ignorePrefixes.some(prefix => subject.startsWith(prefix))) {
-        // console.log(`ℹ️ Ignoring automated system email: "${subject}" from ${fromEmail}`);
+      // Bounce signals (we'll handle these separately)
+      const bounceKeywords = [
+        'undeliverable:', 'undelivered mail', 'delivery status notification', 
+        'failure notice', 'returned mail', 'mail delivery failed', 
+        'bounced', 'mailbox full', 'blocked', 'rejected'
+      ];
+      
+      const isPotentialBounce = bounceKeywords.some(kw => subject.includes(kw)) || 
+                                fromEmail.includes('mailer-daemon') || 
+                                fromEmail.includes('postmaster');
+
+      if (!isPotentialBounce && ignorePrefixes.some(prefix => subject.startsWith(prefix))) {
         return { isReply: false, reason: 'automated_system_email' };
       }
 
@@ -189,17 +199,24 @@ class EmailMonitorService {
         });
 
         if (sentEvent) {
-          return { isReply: true, originalEvent: sentEvent };
+          return { 
+            isReply: true, 
+            type: isPotentialBounce ? 'BOUNCED' : 'REPLIED',
+            originalEvent: sentEvent 
+          };
         }
       }
 
       // 3. FALLBACK: Match by contact and timing if it LOOKS like a reply
-      if (fromEmail) {
+      const targetEmail = isPotentialBounce ? this.extractBounceRecipient(parsed) : fromEmail;
+
+      if (targetEmail) {
         // Only consider it a reply if it has "Re:" or "Fwd:" or is a standard thread
+        // OR if it's a potential bounce (where "reply" markers don't apply)
         const looksLikeReply = subject.startsWith('re:') || subject.startsWith('fwd:') || subject.startsWith('aw:');
 
         const contact = await prisma.contact.findFirst({
-          where: { email: fromEmail }
+          where: { email: targetEmail }
         });
 
         if (contact) {
@@ -219,11 +236,13 @@ class EmailMonitorService {
             const replyDate = parsed.date ? new Date(parsed.date) : new Date();
             const sentDate = new Date(recentSentEvent.timestamp);
 
-            // Must be after sent date AND must look like a reply (or have threading headers we missed)
-            if (replyDate > sentDate && looksLikeReply) {
-              return { isReply: true, originalEvent: recentSentEvent };
-            } else if (replyDate > sentDate && !looksLikeReply) {
-              // console.log(`ℹ️ Email from ${fromEmail} is newer but lacks reply markers (Subject: "${subject}")`);
+            // Must be after sent date
+            if (replyDate > sentDate && (looksLikeReply || isPotentialBounce)) {
+              return { 
+                isReply: true, 
+                type: isPotentialBounce ? 'BOUNCED' : 'REPLIED', 
+                originalEvent: recentSentEvent 
+              };
             }
           }
         }
@@ -269,6 +288,35 @@ class EmailMonitorService {
     return sanitized;
   }
 
+  // Extract recipient from email headers or body for bounces
+  extractBounceRecipient(parsed) {
+    // 1. Check custom headers
+    const xFailedHeader = parsed.headers?.['x-failed-recipients'];
+    if (xFailedHeader) return xFailedHeader.toLowerCase().trim();
+
+    // 2. Scan body for email addresses near bounce markers
+    const body = (parsed.text || parsed.html || '').toLowerCase();
+    
+    // Look for common patterns like "Final-Recipient: rfc822; user@example.com"
+    const recipientRegex = /final-recipient: rfc822;\s*([^\s@]+@[^\s@]+\.[^\s@]+)/i;
+    const matchFound = body.match(recipientRegex);
+    if (matchFound?.[1]) return matchFound[1].toLowerCase().trim();
+
+    // Secondary scan: looking for "to: <email>" mentioned in the rejection part
+    const toMatch = body.match(/to:.*?([^\s@]+@[^\s@]+\.[^\s@]+)/i);
+    if (toMatch?.[1]) return toMatch[1].toLowerCase().trim();
+
+    // Third scan: Look for common "failed to deliver to USER@DOMAIN.COM" patterns
+    const failToMatch = body.match(/(?:failed|undeliverable|delivery to|address rejected|message not delivered).*?\s+([^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)/i);
+    if (failToMatch?.[1]) return failToMatch[1].toLowerCase().replace(/[<>]/g, '').trim();
+
+    // Fourth scan: Looking for Remote-MTA reports
+    const mtaMatch = body.match(/remote-mta:.*?;\s*([^\s@]+@[^\s@]+\.[^\s@]+)/i);
+    if (mtaMatch?.[1]) return mtaMatch[1].toLowerCase().trim();
+
+    return null;
+  }
+
   // Process and store reply emails
   async processReplyEmails() {
     try {
@@ -283,66 +331,72 @@ class EmailMonitorService {
         if (replyCheck.isReply && replyCheck.originalEvent) {
           const parsed = email.parsed;
           const originalEvent = replyCheck.originalEvent;
+          const eventType = replyCheck.type || 'REPLIED';
 
-          // Check if we already have this reply
-          const existingReply = await prisma.event.findFirst({
+          console.log(`✨ Detected ${eventType} for ${originalEvent.contact?.email} (Email ID: ${originalEvent.emailId})`);
+
+          // Check if we already have this specific event (reply or bounce) recorded
+          const existingEvent = await prisma.event.findFirst({
             where: {
               emailId: originalEvent.emailId,
-              type: 'REPLIED'
+              type: eventType
             }
           });
 
-          if (!existingReply) {
-            // Also check if this specific reply message has already been processed (using messageId)
-            const replyMessageId = parsed.messageId || '';
-            const duplicateReply = await prisma.event.findFirst({
+          if (!existingEvent) {
+            // Also check if this specific incoming message has already been processed (using messageId)
+            const incomingMessageId = parsed.messageId || '';
+            const duplicateMessage = await prisma.event.findFirst({
               where: {
-                type: 'REPLIED',
+                type: { in: ['REPLIED', 'BOUNCED'] },
                 details: {
-                  contains: replyMessageId
+                  contains: incomingMessageId
                 }
               }
             });
 
-            if (duplicateReply && replyMessageId !== '') {
-              console.log(`ℹ️ Reply ${replyMessageId} already processed for another event, skipping.`);
+            if (duplicateMessage && incomingMessageId !== '') {
+              console.log(`ℹ️ Email ${incomingMessageId} already processed, skipping.`);
               continue;
             }
 
-            // Sanitize email content before storing
+            // Sanitize incoming content
             const replyBody = this.sanitizeForJson(parsed.text || parsed.html || 'No content');
             const replySubject = this.sanitizeForJson(parsed.subject || 'No Subject');
             const replyFrom = this.sanitizeForJson(
               parsed.from?.value?.[0]?.address || parsed.from?.text || 'Unknown'
             );
 
-            // Create a new REPLIED event with the actual email content
+            // Determine event type (REPLIED or BOUNCED)
+            const eventType = replyCheck.type || 'REPLIED';
+
+            // Create the event
             await prisma.event.create({
               data: {
                 enrollmentId: originalEvent.enrollmentId,
                 contactId: originalEvent.contactId,
                 campaignId: originalEvent.campaignId,
-                type: 'REPLIED',
+                type: eventType,
                 emailId: originalEvent.emailId,
                 details: JSON.stringify({
-                  repliedAt: parsed.date || new Date().toISOString(),
-                  replySubject: replySubject,
-                  replyBody: replyBody,
-                  replyFrom: replyFrom,
+                  receivedAt: parsed.date || new Date().toISOString(),
+                  subject: replySubject,
+                  body: replyBody,
+                  from: replyFrom,
                   messageId: parsed.messageId || '',
                   inReplyTo: parsed.inReplyTo || '',
                   source: 'imap_monitoring',
-                  attachments: parsed.attachments?.length || 0
+                  isBounce: eventType === 'BOUNCED'
                 })
               }
             });
 
-            console.log(`✅ Stored reply from ${parsed.from?.text} for email ${originalEvent.emailId}`);
+            console.log(`✅ Stored ${eventType} from ${parsed.from?.text} for email ${originalEvent.emailId}`);
             processedCount++;
 
             // Broadcast real-time event via socket
             broadcastRealTimeEvent({
-              type: 'REPLIED',
+              type: eventType,
               campaignId: originalEvent.campaignId,
               contactId: originalEvent.contactId,
               enrollmentId: originalEvent.enrollmentId,
@@ -351,7 +405,16 @@ class EmailMonitorService {
               timestamp: new Date().toISOString()
             });
 
-            // Update enrollment status to STOPPED since they replied
+            // If it's a bounce, update contact status too
+            if (eventType === 'BOUNCED') {
+              await prisma.contact.update({
+                where: { id: originalEvent.contactId },
+                data: { status: 'BOUNCED' }
+              });
+              console.log(`🚫 Contact ${originalEvent.contactId} marked as BOUNCED`);
+            }
+
+            // Update enrollment status to STOPPED
             await prisma.enrollment.update({
               where: { id: originalEvent.enrollmentId },
               data: {

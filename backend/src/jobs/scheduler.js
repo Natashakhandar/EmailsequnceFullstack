@@ -250,13 +250,31 @@ async function processDueEmails() {
     // Process each enrollment
     for (const enrollment of dueEnrollments) {
       try {
-        // Add a small delay between emails to avoid overwhelming SMTP server
-        if (successCount > 0) {
-          await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay for faster processing
+        // Double-check status and lastSentStep just before processing to catch race conditions 
+        // (especially between Local and Production instances)
+        const freshEnrollment = await prisma.enrollment.findUnique({
+          where: { id: enrollment.id }
+        });
+        
+        if (!freshEnrollment || freshEnrollment.status !== 'ACTIVE' || 
+            (freshEnrollment.lastSentStep && freshEnrollment.lastSentStep >= freshEnrollment.currentStep)) {
+          console.log(`🔍 skipping enrollment ${enrollment.id} - already processed by another instance`);
+          continue;
         }
 
+        // Lock this enrollment immediately to prevent other instances from picking it up
+        await prisma.enrollment.update({
+          where: { id: enrollment.id },
+          data: { lastSentStep: enrollment.currentStep }
+        });
+
+        // Add a small delay between emails to avoid overwhelming SMTP server
+        if (successCount > 0) {
+          await new Promise(resolve => setTimeout(resolve, 300)); 
+        }
+        
         // Check if this step should be sent based on sequence logic
-        const shouldSend = await shouldSendNextEmail(enrollment);
+        const shouldSend = await shouldSendNextEmail({ ...enrollment, lastSentStep: enrollment.currentStep });
 
         if (!shouldSend.send) {
           console.log(`⏭️ Skipping enrollment ${enrollment.id}: ${shouldSend.reason}`);
@@ -399,8 +417,8 @@ function startScheduler() {
 
   console.log('🚀 Starting email scheduler...');
 
-  // Main email processing task - runs every 30 seconds for faster results
-  schedulerTask = cron.schedule('*/30 * * * * *', async () => {
+  // Main email processing task - runs every 60 seconds to conserve DB connections on Hostinger
+  schedulerTask = cron.schedule('0 * * * * *', async () => {
     await processDueEmails();
   }, {
     scheduled: false,
