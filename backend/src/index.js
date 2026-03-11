@@ -44,22 +44,30 @@ if (!process.env.DATABASE_URL) {
 
 // CORS configuration - MUST be before helmet
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:8080',
-    'http://localhost:5173',
-    'http://localhost:8081',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:8080',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:8081',
-    'https://email.boostnow.in',
-    'https://www.email.boostnow.in',
-    'https://silver-tapir-929419.hostingersite.com'
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    const allowedPatterns = [
+      'localhost',
+      '127.0.0.1',
+      'boostnow.in',
+      'hostingersite.com'
+    ];
+    
+    const isAllowed = allowedPatterns.some(pattern => origin.includes(pattern));
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log('🚫 CORS Blocked Origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  credentials: true,
+  maxAge: 86400 // Cache preflight for 24 hours
 }));
 
 // Security middleware - after CORS so it doesn't block cross-origin requests
@@ -70,10 +78,14 @@ app.use(helmet({
 }));
 
 // Rate limiting
+// Rate limiting - increased for production because Hostinger triggers it often
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500, // Increased limit for production to avoid early blocking
-  message: 'Too many requests from this IP, please try again later.'
+  max: 2000, // Significantly increased to avoid proxy IP issues
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many requests, please try again later.',
+  skip: (req) => req.method === 'OPTIONS', // Never rate limit preflights
 });
 app.use(limiter);
 
