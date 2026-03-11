@@ -124,3 +124,9 @@ From: "Mail Delivery System" <MAILER-DAEMON@mailchannels.net>
 => 'IDLE IDLE'
 <= '+ idling'
 <= '* OK Still here'
+<= '* OK Still here'
+=> DONE
+<= '* OK [HIGHESTMODSEQ 48] Highest'
+<= 'IDLE OK Idle completed.'
+=> 'IDLE IDLE'
+<= '+ idling'
