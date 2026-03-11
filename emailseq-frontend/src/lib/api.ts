@@ -11,10 +11,13 @@ const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
 
-    // Same-origin is always best for production to avoid CORS and SSL mismatch
+    // REDIRECT API: If on boostnow domain, talk to the silver-tapir backend
+    // This is because boostnow is likely configured as static-only in some environments
+    if (hostname.includes('boostnow.in')) {
+      return 'https://silver-tapir-929419.hostingersite.com';
+    }
+
     if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      // If we are on boostnow, but the backend is only on silver-tapir, we might need the redirect
-      // BUT let's try same-origin first as it's the standard for Node deployments on Hostinger
       return window.location.origin;
     }
   }
