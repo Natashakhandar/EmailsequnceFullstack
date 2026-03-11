@@ -1,0 +1,5 @@
+Found 2 email configs.
+User: natashakhandr05@gmail.com
+  SMTP: smtp.hostinger.com:465 (User: natasha@boostnow.in)
+User: hello@gmail.com
+  SMTP: smtp.hostinger.com:465 (User: kanchan@boostnow.in)

@@ -251,22 +251,24 @@ async function processDueEmails() {
     for (const enrollment of dueEnrollments) {
       try {
         // Double-check status and lastSentStep just before processing to catch race conditions 
-        // (especially between Local and Production instances)
         const freshEnrollment = await prisma.enrollment.findUnique({
           where: { id: enrollment.id }
         });
         
-        if (!freshEnrollment || freshEnrollment.status !== 'ACTIVE' || 
-            (freshEnrollment.lastSentStep && freshEnrollment.lastSentStep >= freshEnrollment.currentStep)) {
-          console.log(`🔍 skipping enrollment ${enrollment.id} - already processed by another instance`);
+        if (!freshEnrollment || freshEnrollment.status !== 'ACTIVE') {
+          console.log(`🔍 skipping enrollment ${enrollment.id} - no longer active`);
           continue;
         }
 
-        // Lock this enrollment immediately to prevent other instances from picking it up
-        await prisma.enrollment.update({
-          where: { id: enrollment.id },
-          data: { lastSentStep: enrollment.currentStep }
-        });
+        // For locking, we check if it was processed VERY recently (within 5 seconds)
+        // to prevent double-processing by multiple instances. 
+        // We use updatedAt for this check.
+        const now = new Date();
+        if (freshEnrollment.lastSentStep === enrollment.currentStep && 
+            (now - new Date(freshEnrollment.updatedAt)) < 5000) {
+          console.log(`🔍 skipping enrollment ${enrollment.id} - already being processed by another instance`);
+          continue;
+        }
 
         // Add a small delay between emails to avoid overwhelming SMTP server
         if (successCount > 0) {
@@ -274,7 +276,7 @@ async function processDueEmails() {
         }
         
         // Check if this step should be sent based on sequence logic
-        const shouldSend = await shouldSendNextEmail({ ...enrollment, lastSentStep: enrollment.currentStep });
+        const shouldSend = await shouldSendNextEmail({ ...enrollment });
 
         if (!shouldSend.send) {
           console.log(`⏭️ Skipping enrollment ${enrollment.id}: ${shouldSend.reason}`);

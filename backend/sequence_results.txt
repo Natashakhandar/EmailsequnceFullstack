@@ -1,0 +1,23 @@
+Sequence: Production (Steps: 2)
+  Step 1: Delay 0d 0h 0m
+  Step 2: Delay 1d 0h 0m
+Sequence: Campaign (Steps: 2)
+  Step 1: Delay 0d 0h 0m
+  Step 2: Delay 1d 0h 0m
+Sequence: Welcome (Steps: 1)
+  Step 1: Delay 0d 0h 0m
+Sequence: Hey (Steps: 1)
+  Step 1: Delay 0d 0h 0m
+Sequence: Welcome (Steps: 1)
+  Step 1: Delay 0d 1h 0m
+Sequence: Series (Steps: 3)
+  Step 1: Delay 0d 0h 0m
+  Step 2: Delay 1d 0h 0m
+  Step 3: Delay 1d 0h 0m
+Sequence: Connections (Steps: 2)
+  Step 1: Delay 0d 0h 0m
+  Step 2: Delay 1d 0h 0m
+Sequence: Welcome (Steps: 1)
+  Step 1: Delay 0d 0h 0m
+Sequence: Pro (Steps: 1)
+  Step 1: Delay 0d 0h 0m

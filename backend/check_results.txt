@@ -1,0 +1,17 @@
+--- Enrollment Statistics ---
+Total Enrollments: 21
+Active Enrollments: 6
+Today's Enrollments: 4
+
+Pending Enrollments Due (Limit 10): 4
+- ID: cmmds0hd1000g11epumcf9mi6, Email: darpans760@gmail.com, Sequence: Connections, nextSendAt: Wed Mar 11 2026 16:54:11 GMT+0530 (India Standard Time)
+- ID: cmmeiegu20001lb3xdqi82ncn, Email: sharmakanchan0209@gmail.com, Sequence: Campaign, nextSendAt: Wed Mar 11 2026 16:54:12 GMT+0530 (India Standard Time)
+- ID: cmmlp1ib1000614bwof0uwtra, Email: arya.sambre.cyb@ghrietn.raisoni.ne, Sequence: Pro, nextSendAt: Wed Mar 11 2026 16:54:09 GMT+0530 (India Standard Time)
+- ID: cmmlp3kqv000f14bwqbveimhf, Email: arya.sambre.cyb@ghrietn.raisoni.ne, Sequence: Connections, nextSendAt: Wed Mar 11 2026 16:54:11 GMT+0530 (India Standard Time)
+
+Last 5 Events:
+- [2026-03-10T11:50:38.842Z] BOUNCED to natasha.khandar.cyb@ghrietn.raisoni.ne
+- [2026-03-10T11:39:08.454Z] SENT to natasha.khandar.cyb@ghrietn.raisoni.ne
+- [2026-03-10T11:39:03.337Z] SENT to natasha.khandar.cyb@ghrietn.raisoni.ne
+- [2026-03-10T10:38:35.313Z] SENT to mandakhandar67@gmail.com
+- [2026-03-10T10:38:31.775Z] SENT to mandakhandar67@gmail.com
