@@ -51,14 +51,7 @@ async function checkForReplies() {
 
 // Start the email monitoring scheduler
 function startEmailMonitoring() {
-  // Skip if IMAP credentials are not configured
-  const imapUser = process.env.IMAP_USER || process.env.SMTP_USER || '';
-  if (!imapUser || imapUser === 'your_email@example.com') {
-    console.log('Email monitoring skipped - IMAP not configured');
-    return;
-  }
-
-  console.log('Starting email monitoring scheduler...');
+  console.log('🚀 Starting email monitoring scheduler...');
 
   // Run every 5 minutes to check for new replies
   cron.schedule('*/5 * * * *', checkForReplies, {
