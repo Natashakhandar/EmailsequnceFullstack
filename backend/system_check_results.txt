@@ -164,3 +164,8 @@ Detected 0 bounces in the last 5 days.
 => 'IDLE IDLE'
 <= '+ idling'
 <= '* OK Still here'
+=> DONE
+<= '* OK [HIGHESTMODSEQ 48] Highest'
+<= 'IDLE OK Idle completed.'
+=> 'IDLE IDLE'
+<= '+ idling'

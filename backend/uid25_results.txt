@@ -124,3 +124,8 @@ Contact: aniket.roy.cyb@ghrietn.raisoni.ne
 => 'IDLE IDLE'
 <= '+ idling'
 <= '* OK Still here'
+=> DONE
+<= '* OK [HIGHESTMODSEQ 48] Highest'
+<= 'IDLE OK Idle completed.'
+=> 'IDLE IDLE'
+<= '+ idling'
