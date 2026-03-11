@@ -1,0 +1,4 @@
+ID: cmmds0hd1000g11epumcf9mi6, nextSendAt: 2026-03-11T12:40:02.204Z, status: ACTIVE, currentStep: 2, lastSentStep: 2
+ID: cmmeiegu20001lb3xdqi82ncn, nextSendAt: 2026-03-11T12:40:02.560Z, status: ACTIVE, currentStep: 2, lastSentStep: 2
+ID: cmmlp1ib1000614bwof0uwtra, nextSendAt: 2026-03-11T12:40:01.488Z, status: ACTIVE, currentStep: 1, lastSentStep: 1
+ID: cmmlp3kqv000f14bwqbveimhf, nextSendAt: 2026-03-11T12:40:01.916Z, status: ACTIVE, currentStep: 1, lastSentStep: 1

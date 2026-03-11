@@ -1,0 +1,281 @@
+Triggering email processing...
+???? Starting email processing cycle...
+prisma:info Starting a mysql pool with 10 connections.
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`status` = ? AND `u825197931_email_app`.`enrollments`.`nextSendAt` <= ?) ORDER BY `u825197931_email_app`.`enrollments`.`nextSendAt` ASC
+prisma:query SELECT `u825197931_email_app`.`contacts`.`id`, `u825197931_email_app`.`contacts`.`userId`, `u825197931_email_app`.`contacts`.`email`, `u825197931_email_app`.`contacts`.`firstName`, `u825197931_email_app`.`contacts`.`lastName`, `u825197931_email_app`.`contacts`.`company`, `u825197931_email_app`.`contacts`.`timezone`, `u825197931_email_app`.`contacts`.`status`, `u825197931_email_app`.`contacts`.`createdAt`, `u825197931_email_app`.`contacts`.`updatedAt` FROM `u825197931_email_app`.`contacts` WHERE `u825197931_email_app`.`contacts`.`id` IN (?,?,?,?,?)
+prisma:query SELECT `u825197931_email_app`.`sequences`.`id`, `u825197931_email_app`.`sequences`.`name`, `u825197931_email_app`.`sequences`.`description`, `u825197931_email_app`.`sequences`.`isActive`, `u825197931_email_app`.`sequences`.`userId`, `u825197931_email_app`.`sequences`.`createdAt`, `u825197931_email_app`.`sequences`.`updatedAt` FROM `u825197931_email_app`.`sequences` WHERE `u825197931_email_app`.`sequences`.`id` IN (?,?,?)
+prisma:query SELECT `u825197931_email_app`.`sequence_steps`.`id`, `u825197931_email_app`.`sequence_steps`.`sequenceId`, `u825197931_email_app`.`sequence_steps`.`templateId`, `u825197931_email_app`.`sequence_steps`.`stepOrder`, `u825197931_email_app`.`sequence_steps`.`delayDays`, `u825197931_email_app`.`sequence_steps`.`delayHours`, `u825197931_email_app`.`sequence_steps`.`scheduleType`, `u825197931_email_app`.`sequence_steps`.`dayOfWeek`, `u825197931_email_app`.`sequence_steps`.`dayOfMonth`, `u825197931_email_app`.`sequence_steps`.`subject`, `u825197931_email_app`.`sequence_steps`.`body`, `u825197931_email_app`.`sequence_steps`.`triggerType`, `u825197931_email_app`.`sequence_steps`.`triggerStepId`, `u825197931_email_app`.`sequence_steps`.`delayMinutes`, `u825197931_email_app`.`sequence_steps`.`isActive`, `u825197931_email_app`.`sequence_steps`.`createdAt`, `u825197931_email_app`.`sequence_steps`.`updatedAt` FROM `u825197931_email_app`.`sequence_steps` WHERE `u825197931_email_app`.`sequence_steps`.`sequenceId` IN (?,?,?) ORDER BY `u825197931_email_app`.`sequence_steps`.`stepOrder` ASC
+prisma:query SELECT `u825197931_email_app`.`events`.`id`, `u825197931_email_app`.`events`.`enrollmentId`, `u825197931_email_app`.`events`.`contactId`, `u825197931_email_app`.`events`.`campaignId`, `u825197931_email_app`.`events`.`type`, `u825197931_email_app`.`events`.`details`, `u825197931_email_app`.`events`.`timestamp`, `u825197931_email_app`.`events`.`emailId` FROM `u825197931_email_app`.`events` WHERE `u825197931_email_app`.`events`.`enrollmentId` IN (?,?,?,?,?,?) ORDER BY `u825197931_email_app`.`events`.`timestamp` DESC
+???? Found 6 emails due for sending
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+???? Checking send conditions for enrollment cmmds0hd1000g11epumcf9mi6, step 2
+prisma:query SELECT `u825197931_email_app`.`sequence_triggers`.`id`, `u825197931_email_app`.`sequence_triggers`.`sequenceId`, `u825197931_email_app`.`sequence_triggers`.`triggerStepId`, `u825197931_email_app`.`sequence_triggers`.`createdAt`, `u825197931_email_app`.`sequence_triggers`.`updatedAt` FROM `u825197931_email_app`.`sequence_triggers` WHERE (`u825197931_email_app`.`sequence_triggers`.`sequenceId` = ? AND 1=1) LIMIT ? OFFSET ?
+?????? No trigger configured, using delay-based logic
+?????? Skipping enrollment cmmds0hd1000g11epumcf9mi6: Error checking delay conditions: Unterminated string in JSON at position 191 (line 1 column 192)
+prisma:query BEGIN
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1)
+prisma:query UPDATE `u825197931_email_app`.`enrollments` SET `nextSendAt` = ?, `updatedAt` = ? WHERE (`u825197931_email_app`.`enrollments`.`id` IN (?) AND (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1))
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE `u825197931_email_app`.`enrollments`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+???? Checking send conditions for enrollment cmmeiegu20001lb3xdqi82ncn, step 2
+prisma:query SELECT `u825197931_email_app`.`sequence_triggers`.`id`, `u825197931_email_app`.`sequence_triggers`.`sequenceId`, `u825197931_email_app`.`sequence_triggers`.`triggerStepId`, `u825197931_email_app`.`sequence_triggers`.`createdAt`, `u825197931_email_app`.`sequence_triggers`.`updatedAt` FROM `u825197931_email_app`.`sequence_triggers` WHERE (`u825197931_email_app`.`sequence_triggers`.`sequenceId` = ? AND 1=1) LIMIT ? OFFSET ?
+?????? No trigger configured, using delay-based logic
+?????? Skipping enrollment cmmeiegu20001lb3xdqi82ncn: Error checking delay conditions: Unterminated string in JSON at position 191 (line 1 column 192)
+prisma:query BEGIN
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1)
+prisma:query UPDATE `u825197931_email_app`.`enrollments` SET `nextSendAt` = ?, `updatedAt` = ? WHERE (`u825197931_email_app`.`enrollments`.`id` IN (?) AND (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1))
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE `u825197931_email_app`.`enrollments`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+???? Checking send conditions for enrollment cmmlp1ib1000614bwof0uwtra, step 1
+prisma:query SELECT `u825197931_email_app`.`sequence_triggers`.`id`, `u825197931_email_app`.`sequence_triggers`.`sequenceId`, `u825197931_email_app`.`sequence_triggers`.`triggerStepId`, `u825197931_email_app`.`sequence_triggers`.`createdAt`, `u825197931_email_app`.`sequence_triggers`.`updatedAt` FROM `u825197931_email_app`.`sequence_triggers` WHERE (`u825197931_email_app`.`sequence_triggers`.`sequenceId` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `u825197931_email_app`.`contacts`.`id`, `u825197931_email_app`.`contacts`.`userId`, `u825197931_email_app`.`contacts`.`email`, `u825197931_email_app`.`contacts`.`firstName`, `u825197931_email_app`.`contacts`.`lastName`, `u825197931_email_app`.`contacts`.`company`, `u825197931_email_app`.`contacts`.`timezone`, `u825197931_email_app`.`contacts`.`status`, `u825197931_email_app`.`contacts`.`createdAt`, `u825197931_email_app`.`contacts`.`updatedAt` FROM `u825197931_email_app`.`contacts` WHERE `u825197931_email_app`.`contacts`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`sequences`.`id`, `u825197931_email_app`.`sequences`.`name`, `u825197931_email_app`.`sequences`.`description`, `u825197931_email_app`.`sequences`.`isActive`, `u825197931_email_app`.`sequences`.`userId`, `u825197931_email_app`.`sequences`.`createdAt`, `u825197931_email_app`.`sequences`.`updatedAt` FROM `u825197931_email_app`.`sequences` WHERE `u825197931_email_app`.`sequences`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`sequence_steps`.`id`, `u825197931_email_app`.`sequence_steps`.`sequenceId`, `u825197931_email_app`.`sequence_steps`.`templateId`, `u825197931_email_app`.`sequence_steps`.`stepOrder`, `u825197931_email_app`.`sequence_steps`.`delayDays`, `u825197931_email_app`.`sequence_steps`.`delayHours`, `u825197931_email_app`.`sequence_steps`.`scheduleType`, `u825197931_email_app`.`sequence_steps`.`dayOfWeek`, `u825197931_email_app`.`sequence_steps`.`dayOfMonth`, `u825197931_email_app`.`sequence_steps`.`subject`, `u825197931_email_app`.`sequence_steps`.`body`, `u825197931_email_app`.`sequence_steps`.`triggerType`, `u825197931_email_app`.`sequence_steps`.`triggerStepId`, `u825197931_email_app`.`sequence_steps`.`delayMinutes`, `u825197931_email_app`.`sequence_steps`.`isActive`, `u825197931_email_app`.`sequence_steps`.`createdAt`, `u825197931_email_app`.`sequence_steps`.`updatedAt` FROM `u825197931_email_app`.`sequence_steps` WHERE (`u825197931_email_app`.`sequence_steps`.`stepOrder` = ? AND `u825197931_email_app`.`sequence_steps`.`sequenceId` IN (?))
+prisma:query SELECT `u825197931_email_app`.`users`.`id`, `u825197931_email_app`.`users`.`signature`, `u825197931_email_app`.`users`.`firstName`, `u825197931_email_app`.`users`.`lastName`, `u825197931_email_app`.`users`.`email`, `u825197931_email_app`.`users`.`smtpHost`, `u825197931_email_app`.`users`.`smtpPort`, `u825197931_email_app`.`users`.`smtpSecure`, `u825197931_email_app`.`users`.`smtpUser`, `u825197931_email_app`.`users`.`smtpPass`, `u825197931_email_app`.`users`.`fromEmail`, `u825197931_email_app`.`users`.`fromName`, `u825197931_email_app`.`users`.`imapHost`, `u825197931_email_app`.`users`.`imapPort` FROM `u825197931_email_app`.`users` WHERE `u825197931_email_app`.`users`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`email_configs`.`id`, `u825197931_email_app`.`email_configs`.`userId`, `u825197931_email_app`.`email_configs`.`smtpHost`, `u825197931_email_app`.`email_configs`.`smtpPort`, `u825197931_email_app`.`email_configs`.`smtpSecure`, `u825197931_email_app`.`email_configs`.`smtpUser`, `u825197931_email_app`.`email_configs`.`smtpPassword`, `u825197931_email_app`.`email_configs`.`fromEmail`, `u825197931_email_app`.`email_configs`.`fromName`, `u825197931_email_app`.`email_configs`.`imapHost`, `u825197931_email_app`.`email_configs`.`imapPort`, `u825197931_email_app`.`email_configs`.`imapTls`, `u825197931_email_app`.`email_configs`.`imapUser`, `u825197931_email_app`.`email_configs`.`imapPassword`, `u825197931_email_app`.`email_configs`.`createdAt`, `u825197931_email_app`.`email_configs`.`updatedAt` FROM `u825197931_email_app`.`email_configs` WHERE `u825197931_email_app`.`email_configs`.`userId` IN (?)
+???? EMAIL BODY VALIDATION - Step 1
+DB retrieved email body length: 816
+DB retrieved email body type: string
+Has custom body: true
+Has template body: false
+Email body source: Custom Step
+Email body preview (first 100 chars): Hi {{firstName}},<br><br>I hope you're having a productive week! I wanted to send a gentle reminder ...
+Email body preview (last 100 chars): ...y.
+
+<img src="/api/track-open?emailId=1773035291918-1" width="1" height="1" style="display:none;" />
+???? SENDMAIL INPUT VALIDATION
+Sending email body length: 816
+Sending email body type: string
+To: arya.sambre.cyb@ghrietn.raisoni.ne
+Has signature: true
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Final Processed Subject: "Quick reminder about our IT consultation offer - Arya"
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Body after token replacement length: 803
+???? Body after formatting length: 809
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Full final HTML length: 1441
+prisma:query BEGIN
+prisma:query INSERT INTO `u825197931_email_app`.`unsubscribe_tokens` (`id`,`token`,`contactId`,`createdAt`) VALUES (?,?,?,?)
+prisma:query SELECT `u825197931_email_app`.`unsubscribe_tokens`.`id`, `u825197931_email_app`.`unsubscribe_tokens`.`token`, `u825197931_email_app`.`unsubscribe_tokens`.`contactId`, `u825197931_email_app`.`unsubscribe_tokens`.`createdAt`, `u825197931_email_app`.`unsubscribe_tokens`.`usedAt` FROM `u825197931_email_app`.`unsubscribe_tokens` WHERE `u825197931_email_app`.`unsubscribe_tokens`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+???? SENDING EMAIL - Single sendMail call
+Final payload HTML length: 1630
+Final payload text length: 852
+Recipient: arya.sambre.cyb@ghrietn.raisoni.ne
+Subject: Quick reminder about our IT consultation offer - Arya
+???? INITIATING SENDMAIL TO: arya.sambre.cyb@ghrietn.raisoni.ne VIA natasha@boostnow.in
+??? EMAIL DELIVERY CONFIRMED BY SMTP SERVER
+???? Status: 250 2.0.0 Ok: queued as 4fW8Mh514zz1xq7
+Message ID: <35248ff2-7f61-4791-bdf9-371bfc0d84a1@boostnow.in>
+Accepted: arya.sambre.cyb@ghrietn.raisoni.ne
+--- END OF SEND_EMAIL LOG ---
+prisma:query BEGIN
+prisma:query INSERT INTO `u825197931_email_app`.`events` (`id`,`enrollmentId`,`contactId`,`campaignId`,`type`,`details`,`timestamp`,`emailId`) VALUES (?,?,?,?,?,?,?,?)
+prisma:query SELECT `u825197931_email_app`.`events`.`id`, `u825197931_email_app`.`events`.`enrollmentId`, `u825197931_email_app`.`events`.`contactId`, `u825197931_email_app`.`events`.`campaignId`, `u825197931_email_app`.`events`.`type`, `u825197931_email_app`.`events`.`details`, `u825197931_email_app`.`events`.`timestamp`, `u825197931_email_app`.`events`.`emailId` FROM `u825197931_email_app`.`events` WHERE `u825197931_email_app`.`events`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+?????? Socket.io not initialized. Real-time event not broadcasted.
+prisma:query BEGIN
+prisma:query UPDATE `u825197931_email_app`.`events` SET `details` = ? WHERE (`u825197931_email_app`.`events`.`enrollmentId` = ? AND `u825197931_email_app`.`events`.`emailId` = ? AND `u825197931_email_app`.`events`.`type` = ?)
+prisma:query COMMIT
+prisma:query SELECT `u825197931_email_app`.`sequence_steps`.`id`, `u825197931_email_app`.`sequence_steps`.`sequenceId`, `u825197931_email_app`.`sequence_steps`.`templateId`, `u825197931_email_app`.`sequence_steps`.`stepOrder`, `u825197931_email_app`.`sequence_steps`.`delayDays`, `u825197931_email_app`.`sequence_steps`.`delayHours`, `u825197931_email_app`.`sequence_steps`.`scheduleType`, `u825197931_email_app`.`sequence_steps`.`dayOfWeek`, `u825197931_email_app`.`sequence_steps`.`dayOfMonth`, `u825197931_email_app`.`sequence_steps`.`subject`, `u825197931_email_app`.`sequence_steps`.`body`, `u825197931_email_app`.`sequence_steps`.`triggerType`, `u825197931_email_app`.`sequence_steps`.`triggerStepId`, `u825197931_email_app`.`sequence_steps`.`delayMinutes`, `u825197931_email_app`.`sequence_steps`.`isActive`, `u825197931_email_app`.`sequence_steps`.`createdAt`, `u825197931_email_app`.`sequence_steps`.`updatedAt` FROM `u825197931_email_app`.`sequence_steps` WHERE (`u825197931_email_app`.`sequence_steps`.`sequenceId` = ? AND `u825197931_email_app`.`sequence_steps`.`stepOrder` = ? AND `u825197931_email_app`.`sequence_steps`.`isActive` = ?) LIMIT ? OFFSET ?
+prisma:query BEGIN
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1)
+prisma:query UPDATE `u825197931_email_app`.`enrollments` SET `lastSentStep` = ?, `status` = ?, `completedAt` = ?, `nextSendAt` = ?, `updatedAt` = ? WHERE (`u825197931_email_app`.`enrollments`.`id` IN (?) AND (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1))
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE `u825197931_email_app`.`enrollments`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+??? Sequence email sent to arya.sambre.cyb@ghrietn.raisoni.ne - Step 1
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+???? Checking send conditions for enrollment cmmlp3kqv000f14bwqbveimhf, step 1
+prisma:query SELECT `u825197931_email_app`.`sequence_triggers`.`id`, `u825197931_email_app`.`sequence_triggers`.`sequenceId`, `u825197931_email_app`.`sequence_triggers`.`triggerStepId`, `u825197931_email_app`.`sequence_triggers`.`createdAt`, `u825197931_email_app`.`sequence_triggers`.`updatedAt` FROM `u825197931_email_app`.`sequence_triggers` WHERE (`u825197931_email_app`.`sequence_triggers`.`sequenceId` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `u825197931_email_app`.`contacts`.`id`, `u825197931_email_app`.`contacts`.`userId`, `u825197931_email_app`.`contacts`.`email`, `u825197931_email_app`.`contacts`.`firstName`, `u825197931_email_app`.`contacts`.`lastName`, `u825197931_email_app`.`contacts`.`company`, `u825197931_email_app`.`contacts`.`timezone`, `u825197931_email_app`.`contacts`.`status`, `u825197931_email_app`.`contacts`.`createdAt`, `u825197931_email_app`.`contacts`.`updatedAt` FROM `u825197931_email_app`.`contacts` WHERE `u825197931_email_app`.`contacts`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`sequences`.`id`, `u825197931_email_app`.`sequences`.`name`, `u825197931_email_app`.`sequences`.`description`, `u825197931_email_app`.`sequences`.`isActive`, `u825197931_email_app`.`sequences`.`userId`, `u825197931_email_app`.`sequences`.`createdAt`, `u825197931_email_app`.`sequences`.`updatedAt` FROM `u825197931_email_app`.`sequences` WHERE `u825197931_email_app`.`sequences`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`sequence_steps`.`id`, `u825197931_email_app`.`sequence_steps`.`sequenceId`, `u825197931_email_app`.`sequence_steps`.`templateId`, `u825197931_email_app`.`sequence_steps`.`stepOrder`, `u825197931_email_app`.`sequence_steps`.`delayDays`, `u825197931_email_app`.`sequence_steps`.`delayHours`, `u825197931_email_app`.`sequence_steps`.`scheduleType`, `u825197931_email_app`.`sequence_steps`.`dayOfWeek`, `u825197931_email_app`.`sequence_steps`.`dayOfMonth`, `u825197931_email_app`.`sequence_steps`.`subject`, `u825197931_email_app`.`sequence_steps`.`body`, `u825197931_email_app`.`sequence_steps`.`triggerType`, `u825197931_email_app`.`sequence_steps`.`triggerStepId`, `u825197931_email_app`.`sequence_steps`.`delayMinutes`, `u825197931_email_app`.`sequence_steps`.`isActive`, `u825197931_email_app`.`sequence_steps`.`createdAt`, `u825197931_email_app`.`sequence_steps`.`updatedAt` FROM `u825197931_email_app`.`sequence_steps` WHERE (`u825197931_email_app`.`sequence_steps`.`stepOrder` = ? AND `u825197931_email_app`.`sequence_steps`.`sequenceId` IN (?))
+prisma:query SELECT `u825197931_email_app`.`users`.`id`, `u825197931_email_app`.`users`.`signature`, `u825197931_email_app`.`users`.`firstName`, `u825197931_email_app`.`users`.`lastName`, `u825197931_email_app`.`users`.`email`, `u825197931_email_app`.`users`.`smtpHost`, `u825197931_email_app`.`users`.`smtpPort`, `u825197931_email_app`.`users`.`smtpSecure`, `u825197931_email_app`.`users`.`smtpUser`, `u825197931_email_app`.`users`.`smtpPass`, `u825197931_email_app`.`users`.`fromEmail`, `u825197931_email_app`.`users`.`fromName`, `u825197931_email_app`.`users`.`imapHost`, `u825197931_email_app`.`users`.`imapPort` FROM `u825197931_email_app`.`users` WHERE `u825197931_email_app`.`users`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`email_configs`.`id`, `u825197931_email_app`.`email_configs`.`userId`, `u825197931_email_app`.`email_configs`.`smtpHost`, `u825197931_email_app`.`email_configs`.`smtpPort`, `u825197931_email_app`.`email_configs`.`smtpSecure`, `u825197931_email_app`.`email_configs`.`smtpUser`, `u825197931_email_app`.`email_configs`.`smtpPassword`, `u825197931_email_app`.`email_configs`.`fromEmail`, `u825197931_email_app`.`email_configs`.`fromName`, `u825197931_email_app`.`email_configs`.`imapHost`, `u825197931_email_app`.`email_configs`.`imapPort`, `u825197931_email_app`.`email_configs`.`imapTls`, `u825197931_email_app`.`email_configs`.`imapUser`, `u825197931_email_app`.`email_configs`.`imapPassword`, `u825197931_email_app`.`email_configs`.`createdAt`, `u825197931_email_app`.`email_configs`.`updatedAt` FROM `u825197931_email_app`.`email_configs` WHERE `u825197931_email_app`.`email_configs`.`userId` IN (?)
+???? EMAIL BODY VALIDATION - Step 1
+DB retrieved email body length: 755
+DB retrieved email body type: string
+Has custom body: true
+Has template body: false
+Email body source: Custom Step
+Email body preview (first 100 chars): Hi {{firstName}},<br><br>I hope this email finds you well. My name is {{firstName}} from {{companyNa...
+Email body preview (last 100 chars): ...
+
+
+
+<img src="/api/track-open?emailId=1772799615404-1" width="1" height="1" style="display:none;" />
+???? SENDMAIL INPUT VALIDATION
+Sending email body length: 755
+Sending email body type: string
+To: arya.sambre.cyb@ghrietn.raisoni.ne
+Has signature: true
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Final Processed Subject: "Transform Your Business with Custom IT Solutions - Arya"
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Body after token replacement length: 729
+???? Body after formatting length: 759
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Full final HTML length: 1391
+prisma:query BEGIN
+???? Email saved to Sent folder
+prisma:query INSERT INTO `u825197931_email_app`.`unsubscribe_tokens` (`id`,`token`,`contactId`,`createdAt`) VALUES (?,?,?,?)
+prisma:query SELECT `u825197931_email_app`.`unsubscribe_tokens`.`id`, `u825197931_email_app`.`unsubscribe_tokens`.`token`, `u825197931_email_app`.`unsubscribe_tokens`.`contactId`, `u825197931_email_app`.`unsubscribe_tokens`.`createdAt`, `u825197931_email_app`.`unsubscribe_tokens`.`usedAt` FROM `u825197931_email_app`.`unsubscribe_tokens` WHERE `u825197931_email_app`.`unsubscribe_tokens`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+???? SENDING EMAIL - Single sendMail call
+Final payload HTML length: 1580
+Final payload text length: 779
+Recipient: arya.sambre.cyb@ghrietn.raisoni.ne
+Subject: Transform Your Business with Custom IT Solutions - Arya
+???? INITIATING SENDMAIL TO: arya.sambre.cyb@ghrietn.raisoni.ne VIA natasha@boostnow.in
+??? EMAIL DELIVERY CONFIRMED BY SMTP SERVER
+???? Status: 250 2.0.0 Ok: queued as 4fW8Mm1v0rz1y22
+Message ID: <203c1431-5e67-4940-ad12-1d210acd5e69@boostnow.in>
+Accepted: arya.sambre.cyb@ghrietn.raisoni.ne
+--- END OF SEND_EMAIL LOG ---
+prisma:query BEGIN
+prisma:query INSERT INTO `u825197931_email_app`.`events` (`id`,`enrollmentId`,`contactId`,`campaignId`,`type`,`details`,`timestamp`,`emailId`) VALUES (?,?,?,?,?,?,?,?)
+prisma:query SELECT `u825197931_email_app`.`events`.`id`, `u825197931_email_app`.`events`.`enrollmentId`, `u825197931_email_app`.`events`.`contactId`, `u825197931_email_app`.`events`.`campaignId`, `u825197931_email_app`.`events`.`type`, `u825197931_email_app`.`events`.`details`, `u825197931_email_app`.`events`.`timestamp`, `u825197931_email_app`.`events`.`emailId` FROM `u825197931_email_app`.`events` WHERE `u825197931_email_app`.`events`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+?????? Socket.io not initialized. Real-time event not broadcasted.
+prisma:query BEGIN
+prisma:query UPDATE `u825197931_email_app`.`events` SET `details` = ? WHERE (`u825197931_email_app`.`events`.`enrollmentId` = ? AND `u825197931_email_app`.`events`.`emailId` = ? AND `u825197931_email_app`.`events`.`type` = ?)
+prisma:query COMMIT
+prisma:query SELECT `u825197931_email_app`.`sequence_steps`.`id`, `u825197931_email_app`.`sequence_steps`.`sequenceId`, `u825197931_email_app`.`sequence_steps`.`templateId`, `u825197931_email_app`.`sequence_steps`.`stepOrder`, `u825197931_email_app`.`sequence_steps`.`delayDays`, `u825197931_email_app`.`sequence_steps`.`delayHours`, `u825197931_email_app`.`sequence_steps`.`scheduleType`, `u825197931_email_app`.`sequence_steps`.`dayOfWeek`, `u825197931_email_app`.`sequence_steps`.`dayOfMonth`, `u825197931_email_app`.`sequence_steps`.`subject`, `u825197931_email_app`.`sequence_steps`.`body`, `u825197931_email_app`.`sequence_steps`.`triggerType`, `u825197931_email_app`.`sequence_steps`.`triggerStepId`, `u825197931_email_app`.`sequence_steps`.`delayMinutes`, `u825197931_email_app`.`sequence_steps`.`isActive`, `u825197931_email_app`.`sequence_steps`.`createdAt`, `u825197931_email_app`.`sequence_steps`.`updatedAt` FROM `u825197931_email_app`.`sequence_steps` WHERE (`u825197931_email_app`.`sequence_steps`.`sequenceId` = ? AND `u825197931_email_app`.`sequence_steps`.`stepOrder` = ? AND `u825197931_email_app`.`sequence_steps`.`isActive` = ?) LIMIT ? OFFSET ?
+prisma:query BEGIN
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1)
+prisma:query UPDATE `u825197931_email_app`.`enrollments` SET `lastSentStep` = ?, `currentStep` = ?, `nextSendAt` = ?, `updatedAt` = ? WHERE (`u825197931_email_app`.`enrollments`.`id` IN (?) AND (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1))
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE `u825197931_email_app`.`enrollments`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+??? Sequence email sent to arya.sambre.cyb@ghrietn.raisoni.ne - Step 1
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+???? Checking send conditions for enrollment cmmly6clq00077hee3hoajnyv, step 1
+prisma:query SELECT `u825197931_email_app`.`sequence_triggers`.`id`, `u825197931_email_app`.`sequence_triggers`.`sequenceId`, `u825197931_email_app`.`sequence_triggers`.`triggerStepId`, `u825197931_email_app`.`sequence_triggers`.`createdAt`, `u825197931_email_app`.`sequence_triggers`.`updatedAt` FROM `u825197931_email_app`.`sequence_triggers` WHERE (`u825197931_email_app`.`sequence_triggers`.`sequenceId` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `u825197931_email_app`.`contacts`.`id`, `u825197931_email_app`.`contacts`.`userId`, `u825197931_email_app`.`contacts`.`email`, `u825197931_email_app`.`contacts`.`firstName`, `u825197931_email_app`.`contacts`.`lastName`, `u825197931_email_app`.`contacts`.`company`, `u825197931_email_app`.`contacts`.`timezone`, `u825197931_email_app`.`contacts`.`status`, `u825197931_email_app`.`contacts`.`createdAt`, `u825197931_email_app`.`contacts`.`updatedAt` FROM `u825197931_email_app`.`contacts` WHERE `u825197931_email_app`.`contacts`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`sequences`.`id`, `u825197931_email_app`.`sequences`.`name`, `u825197931_email_app`.`sequences`.`description`, `u825197931_email_app`.`sequences`.`isActive`, `u825197931_email_app`.`sequences`.`userId`, `u825197931_email_app`.`sequences`.`createdAt`, `u825197931_email_app`.`sequences`.`updatedAt` FROM `u825197931_email_app`.`sequences` WHERE `u825197931_email_app`.`sequences`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`sequence_steps`.`id`, `u825197931_email_app`.`sequence_steps`.`sequenceId`, `u825197931_email_app`.`sequence_steps`.`templateId`, `u825197931_email_app`.`sequence_steps`.`stepOrder`, `u825197931_email_app`.`sequence_steps`.`delayDays`, `u825197931_email_app`.`sequence_steps`.`delayHours`, `u825197931_email_app`.`sequence_steps`.`scheduleType`, `u825197931_email_app`.`sequence_steps`.`dayOfWeek`, `u825197931_email_app`.`sequence_steps`.`dayOfMonth`, `u825197931_email_app`.`sequence_steps`.`subject`, `u825197931_email_app`.`sequence_steps`.`body`, `u825197931_email_app`.`sequence_steps`.`triggerType`, `u825197931_email_app`.`sequence_steps`.`triggerStepId`, `u825197931_email_app`.`sequence_steps`.`delayMinutes`, `u825197931_email_app`.`sequence_steps`.`isActive`, `u825197931_email_app`.`sequence_steps`.`createdAt`, `u825197931_email_app`.`sequence_steps`.`updatedAt` FROM `u825197931_email_app`.`sequence_steps` WHERE (`u825197931_email_app`.`sequence_steps`.`stepOrder` = ? AND `u825197931_email_app`.`sequence_steps`.`sequenceId` IN (?))
+prisma:query SELECT `u825197931_email_app`.`users`.`id`, `u825197931_email_app`.`users`.`signature`, `u825197931_email_app`.`users`.`firstName`, `u825197931_email_app`.`users`.`lastName`, `u825197931_email_app`.`users`.`email`, `u825197931_email_app`.`users`.`smtpHost`, `u825197931_email_app`.`users`.`smtpPort`, `u825197931_email_app`.`users`.`smtpSecure`, `u825197931_email_app`.`users`.`smtpUser`, `u825197931_email_app`.`users`.`smtpPass`, `u825197931_email_app`.`users`.`fromEmail`, `u825197931_email_app`.`users`.`fromName`, `u825197931_email_app`.`users`.`imapHost`, `u825197931_email_app`.`users`.`imapPort` FROM `u825197931_email_app`.`users` WHERE `u825197931_email_app`.`users`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`email_configs`.`id`, `u825197931_email_app`.`email_configs`.`userId`, `u825197931_email_app`.`email_configs`.`smtpHost`, `u825197931_email_app`.`email_configs`.`smtpPort`, `u825197931_email_app`.`email_configs`.`smtpSecure`, `u825197931_email_app`.`email_configs`.`smtpUser`, `u825197931_email_app`.`email_configs`.`smtpPassword`, `u825197931_email_app`.`email_configs`.`fromEmail`, `u825197931_email_app`.`email_configs`.`fromName`, `u825197931_email_app`.`email_configs`.`imapHost`, `u825197931_email_app`.`email_configs`.`imapPort`, `u825197931_email_app`.`email_configs`.`imapTls`, `u825197931_email_app`.`email_configs`.`imapUser`, `u825197931_email_app`.`email_configs`.`imapPassword`, `u825197931_email_app`.`email_configs`.`createdAt`, `u825197931_email_app`.`email_configs`.`updatedAt` FROM `u825197931_email_app`.`email_configs` WHERE `u825197931_email_app`.`email_configs`.`userId` IN (?)
+???? EMAIL BODY VALIDATION - Step 1
+DB retrieved email body length: 816
+DB retrieved email body type: string
+Has custom body: true
+Has template body: false
+Email body source: Custom Step
+Email body preview (first 100 chars): Hi {{firstName}},<br><br>I hope you're having a productive week! I wanted to send a gentle reminder ...
+Email body preview (last 100 chars): ...y.
+
+<img src="/api/track-open?emailId=1773035291918-1" width="1" height="1" style="display:none;" />
+???? SENDMAIL INPUT VALIDATION
+Sending email body length: 816
+Sending email body type: string
+To: natashakhandr05@gmail.com
+Has signature: true
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Final Processed Subject: "Quick reminder about our IT consultation offer - Natasha"
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Body after token replacement length: 803
+???? Body after formatting length: 809
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Full final HTML length: 1441
+prisma:query BEGIN
+prisma:query INSERT INTO `u825197931_email_app`.`unsubscribe_tokens` (`id`,`token`,`contactId`,`createdAt`) VALUES (?,?,?,?)
+prisma:query SELECT `u825197931_email_app`.`unsubscribe_tokens`.`id`, `u825197931_email_app`.`unsubscribe_tokens`.`token`, `u825197931_email_app`.`unsubscribe_tokens`.`contactId`, `u825197931_email_app`.`unsubscribe_tokens`.`createdAt`, `u825197931_email_app`.`unsubscribe_tokens`.`usedAt` FROM `u825197931_email_app`.`unsubscribe_tokens` WHERE `u825197931_email_app`.`unsubscribe_tokens`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+???? SENDING EMAIL - Single sendMail call
+Final payload HTML length: 1630
+Final payload text length: 852
+Recipient: natashakhandr05@gmail.com
+Subject: Quick reminder about our IT consultation offer - Natasha
+???? INITIATING SENDMAIL TO: natashakhandr05@gmail.com VIA natasha@boostnow.in
+???? Email saved to Sent folder
+??? EMAIL DELIVERY CONFIRMED BY SMTP SERVER
+???? Status: 250 2.0.0 Ok: queued as 4fW8Mr3DN2z1y3t
+Message ID: <7a7708b9-dbd0-4359-ae25-834f09c21546@boostnow.in>
+Accepted: natashakhandr05@gmail.com
+--- END OF SEND_EMAIL LOG ---
+prisma:query BEGIN
+prisma:query INSERT INTO `u825197931_email_app`.`events` (`id`,`enrollmentId`,`contactId`,`campaignId`,`type`,`details`,`timestamp`,`emailId`) VALUES (?,?,?,?,?,?,?,?)
+prisma:query SELECT `u825197931_email_app`.`events`.`id`, `u825197931_email_app`.`events`.`enrollmentId`, `u825197931_email_app`.`events`.`contactId`, `u825197931_email_app`.`events`.`campaignId`, `u825197931_email_app`.`events`.`type`, `u825197931_email_app`.`events`.`details`, `u825197931_email_app`.`events`.`timestamp`, `u825197931_email_app`.`events`.`emailId` FROM `u825197931_email_app`.`events` WHERE `u825197931_email_app`.`events`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+?????? Socket.io not initialized. Real-time event not broadcasted.
+prisma:query BEGIN
+prisma:query UPDATE `u825197931_email_app`.`events` SET `details` = ? WHERE (`u825197931_email_app`.`events`.`enrollmentId` = ? AND `u825197931_email_app`.`events`.`emailId` = ? AND `u825197931_email_app`.`events`.`type` = ?)
+prisma:query COMMIT
+prisma:query SELECT `u825197931_email_app`.`sequence_steps`.`id`, `u825197931_email_app`.`sequence_steps`.`sequenceId`, `u825197931_email_app`.`sequence_steps`.`templateId`, `u825197931_email_app`.`sequence_steps`.`stepOrder`, `u825197931_email_app`.`sequence_steps`.`delayDays`, `u825197931_email_app`.`sequence_steps`.`delayHours`, `u825197931_email_app`.`sequence_steps`.`scheduleType`, `u825197931_email_app`.`sequence_steps`.`dayOfWeek`, `u825197931_email_app`.`sequence_steps`.`dayOfMonth`, `u825197931_email_app`.`sequence_steps`.`subject`, `u825197931_email_app`.`sequence_steps`.`body`, `u825197931_email_app`.`sequence_steps`.`triggerType`, `u825197931_email_app`.`sequence_steps`.`triggerStepId`, `u825197931_email_app`.`sequence_steps`.`delayMinutes`, `u825197931_email_app`.`sequence_steps`.`isActive`, `u825197931_email_app`.`sequence_steps`.`createdAt`, `u825197931_email_app`.`sequence_steps`.`updatedAt` FROM `u825197931_email_app`.`sequence_steps` WHERE (`u825197931_email_app`.`sequence_steps`.`sequenceId` = ? AND `u825197931_email_app`.`sequence_steps`.`stepOrder` = ? AND `u825197931_email_app`.`sequence_steps`.`isActive` = ?) LIMIT ? OFFSET ?
+prisma:query BEGIN
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1)
+prisma:query UPDATE `u825197931_email_app`.`enrollments` SET `lastSentStep` = ?, `status` = ?, `completedAt` = ?, `nextSendAt` = ?, `updatedAt` = ? WHERE (`u825197931_email_app`.`enrollments`.`id` IN (?) AND (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1))
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE `u825197931_email_app`.`enrollments`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+??? Sequence email sent to natashakhandr05@gmail.com - Step 1
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+???? Checking send conditions for enrollment cmmly6clq00087hee0oi77n99, step 1
+prisma:query SELECT `u825197931_email_app`.`sequence_triggers`.`id`, `u825197931_email_app`.`sequence_triggers`.`sequenceId`, `u825197931_email_app`.`sequence_triggers`.`triggerStepId`, `u825197931_email_app`.`sequence_triggers`.`createdAt`, `u825197931_email_app`.`sequence_triggers`.`updatedAt` FROM `u825197931_email_app`.`sequence_triggers` WHERE (`u825197931_email_app`.`sequence_triggers`.`sequenceId` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `u825197931_email_app`.`contacts`.`id`, `u825197931_email_app`.`contacts`.`userId`, `u825197931_email_app`.`contacts`.`email`, `u825197931_email_app`.`contacts`.`firstName`, `u825197931_email_app`.`contacts`.`lastName`, `u825197931_email_app`.`contacts`.`company`, `u825197931_email_app`.`contacts`.`timezone`, `u825197931_email_app`.`contacts`.`status`, `u825197931_email_app`.`contacts`.`createdAt`, `u825197931_email_app`.`contacts`.`updatedAt` FROM `u825197931_email_app`.`contacts` WHERE `u825197931_email_app`.`contacts`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`sequences`.`id`, `u825197931_email_app`.`sequences`.`name`, `u825197931_email_app`.`sequences`.`description`, `u825197931_email_app`.`sequences`.`isActive`, `u825197931_email_app`.`sequences`.`userId`, `u825197931_email_app`.`sequences`.`createdAt`, `u825197931_email_app`.`sequences`.`updatedAt` FROM `u825197931_email_app`.`sequences` WHERE `u825197931_email_app`.`sequences`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`sequence_steps`.`id`, `u825197931_email_app`.`sequence_steps`.`sequenceId`, `u825197931_email_app`.`sequence_steps`.`templateId`, `u825197931_email_app`.`sequence_steps`.`stepOrder`, `u825197931_email_app`.`sequence_steps`.`delayDays`, `u825197931_email_app`.`sequence_steps`.`delayHours`, `u825197931_email_app`.`sequence_steps`.`scheduleType`, `u825197931_email_app`.`sequence_steps`.`dayOfWeek`, `u825197931_email_app`.`sequence_steps`.`dayOfMonth`, `u825197931_email_app`.`sequence_steps`.`subject`, `u825197931_email_app`.`sequence_steps`.`body`, `u825197931_email_app`.`sequence_steps`.`triggerType`, `u825197931_email_app`.`sequence_steps`.`triggerStepId`, `u825197931_email_app`.`sequence_steps`.`delayMinutes`, `u825197931_email_app`.`sequence_steps`.`isActive`, `u825197931_email_app`.`sequence_steps`.`createdAt`, `u825197931_email_app`.`sequence_steps`.`updatedAt` FROM `u825197931_email_app`.`sequence_steps` WHERE (`u825197931_email_app`.`sequence_steps`.`stepOrder` = ? AND `u825197931_email_app`.`sequence_steps`.`sequenceId` IN (?))
+prisma:query SELECT `u825197931_email_app`.`users`.`id`, `u825197931_email_app`.`users`.`signature`, `u825197931_email_app`.`users`.`firstName`, `u825197931_email_app`.`users`.`lastName`, `u825197931_email_app`.`users`.`email`, `u825197931_email_app`.`users`.`smtpHost`, `u825197931_email_app`.`users`.`smtpPort`, `u825197931_email_app`.`users`.`smtpSecure`, `u825197931_email_app`.`users`.`smtpUser`, `u825197931_email_app`.`users`.`smtpPass`, `u825197931_email_app`.`users`.`fromEmail`, `u825197931_email_app`.`users`.`fromName`, `u825197931_email_app`.`users`.`imapHost`, `u825197931_email_app`.`users`.`imapPort` FROM `u825197931_email_app`.`users` WHERE `u825197931_email_app`.`users`.`id` IN (?)
+prisma:query SELECT `u825197931_email_app`.`email_configs`.`id`, `u825197931_email_app`.`email_configs`.`userId`, `u825197931_email_app`.`email_configs`.`smtpHost`, `u825197931_email_app`.`email_configs`.`smtpPort`, `u825197931_email_app`.`email_configs`.`smtpSecure`, `u825197931_email_app`.`email_configs`.`smtpUser`, `u825197931_email_app`.`email_configs`.`smtpPassword`, `u825197931_email_app`.`email_configs`.`fromEmail`, `u825197931_email_app`.`email_configs`.`fromName`, `u825197931_email_app`.`email_configs`.`imapHost`, `u825197931_email_app`.`email_configs`.`imapPort`, `u825197931_email_app`.`email_configs`.`imapTls`, `u825197931_email_app`.`email_configs`.`imapUser`, `u825197931_email_app`.`email_configs`.`imapPassword`, `u825197931_email_app`.`email_configs`.`createdAt`, `u825197931_email_app`.`email_configs`.`updatedAt` FROM `u825197931_email_app`.`email_configs` WHERE `u825197931_email_app`.`email_configs`.`userId` IN (?)
+???? EMAIL BODY VALIDATION - Step 1
+DB retrieved email body length: 816
+DB retrieved email body type: string
+Has custom body: true
+Has template body: false
+Email body source: Custom Step
+Email body preview (first 100 chars): Hi {{firstName}},<br><br>I hope you're having a productive week! I wanted to send a gentle reminder ...
+Email body preview (last 100 chars): ...y.
+
+<img src="/api/track-open?emailId=1773035291918-1" width="1" height="1" style="display:none;" />
+???? SENDMAIL INPUT VALIDATION
+Sending email body length: 816
+Sending email body type: string
+To: idnew666111@gmail.com
+Has signature: true
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Final Processed Subject: "Quick reminder about our IT consultation offer - John"
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Body after token replacement length: 803
+???? Body after formatting length: 809
+???? replaceTokens data: firstName, lastName, email, company, companyName, fullName, firstNameCapitalized, lastNameCapitalized, fullNameCapitalized, currentDate, currentTime, currentYear
+???? Full final HTML length: 1441
+???? Email saved to Sent folder
+prisma:query BEGIN
+prisma:query INSERT INTO `u825197931_email_app`.`unsubscribe_tokens` (`id`,`token`,`contactId`,`createdAt`) VALUES (?,?,?,?)
+prisma:query SELECT `u825197931_email_app`.`unsubscribe_tokens`.`id`, `u825197931_email_app`.`unsubscribe_tokens`.`token`, `u825197931_email_app`.`unsubscribe_tokens`.`contactId`, `u825197931_email_app`.`unsubscribe_tokens`.`createdAt`, `u825197931_email_app`.`unsubscribe_tokens`.`usedAt` FROM `u825197931_email_app`.`unsubscribe_tokens` WHERE `u825197931_email_app`.`unsubscribe_tokens`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+???? SENDING EMAIL - Single sendMail call
+Final payload HTML length: 1630
+Final payload text length: 852
+Recipient: idnew666111@gmail.com
+Subject: Quick reminder about our IT consultation offer - John
+???? INITIATING SENDMAIL TO: idnew666111@gmail.com VIA natasha@boostnow.in
+??? EMAIL DELIVERY CONFIRMED BY SMTP SERVER
+???? Status: 250 2.0.0 Ok: queued as 4fW8Mw5lPjz3wmk
+Message ID: <f0ab75cd-f978-4d95-9540-039746f20ad7@boostnow.in>
+Accepted: idnew666111@gmail.com
+--- END OF SEND_EMAIL LOG ---
+prisma:query SELECT 1
+prisma:query BEGIN
+prisma:query INSERT INTO `u825197931_email_app`.`events` (`id`,`enrollmentId`,`contactId`,`campaignId`,`type`,`details`,`timestamp`,`emailId`) VALUES (?,?,?,?,?,?,?,?)
+prisma:query SELECT `u825197931_email_app`.`events`.`id`, `u825197931_email_app`.`events`.`enrollmentId`, `u825197931_email_app`.`events`.`contactId`, `u825197931_email_app`.`events`.`campaignId`, `u825197931_email_app`.`events`.`type`, `u825197931_email_app`.`events`.`details`, `u825197931_email_app`.`events`.`timestamp`, `u825197931_email_app`.`events`.`emailId` FROM `u825197931_email_app`.`events` WHERE `u825197931_email_app`.`events`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+?????? Socket.io not initialized. Real-time event not broadcasted.
+prisma:query BEGIN
+prisma:query UPDATE `u825197931_email_app`.`events` SET `details` = ? WHERE (`u825197931_email_app`.`events`.`enrollmentId` = ? AND `u825197931_email_app`.`events`.`emailId` = ? AND `u825197931_email_app`.`events`.`type` = ?)
+prisma:query COMMIT
+prisma:query SELECT `u825197931_email_app`.`sequence_steps`.`id`, `u825197931_email_app`.`sequence_steps`.`sequenceId`, `u825197931_email_app`.`sequence_steps`.`templateId`, `u825197931_email_app`.`sequence_steps`.`stepOrder`, `u825197931_email_app`.`sequence_steps`.`delayDays`, `u825197931_email_app`.`sequence_steps`.`delayHours`, `u825197931_email_app`.`sequence_steps`.`scheduleType`, `u825197931_email_app`.`sequence_steps`.`dayOfWeek`, `u825197931_email_app`.`sequence_steps`.`dayOfMonth`, `u825197931_email_app`.`sequence_steps`.`subject`, `u825197931_email_app`.`sequence_steps`.`body`, `u825197931_email_app`.`sequence_steps`.`triggerType`, `u825197931_email_app`.`sequence_steps`.`triggerStepId`, `u825197931_email_app`.`sequence_steps`.`delayMinutes`, `u825197931_email_app`.`sequence_steps`.`isActive`, `u825197931_email_app`.`sequence_steps`.`createdAt`, `u825197931_email_app`.`sequence_steps`.`updatedAt` FROM `u825197931_email_app`.`sequence_steps` WHERE (`u825197931_email_app`.`sequence_steps`.`sequenceId` = ? AND `u825197931_email_app`.`sequence_steps`.`stepOrder` = ? AND `u825197931_email_app`.`sequence_steps`.`isActive` = ?) LIMIT ? OFFSET ?
+prisma:query BEGIN
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id` FROM `u825197931_email_app`.`enrollments` WHERE (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1)
+prisma:query UPDATE `u825197931_email_app`.`enrollments` SET `lastSentStep` = ?, `status` = ?, `completedAt` = ?, `nextSendAt` = ?, `updatedAt` = ? WHERE (`u825197931_email_app`.`enrollments`.`id` IN (?) AND (`u825197931_email_app`.`enrollments`.`id` = ? AND 1=1))
+prisma:query SELECT `u825197931_email_app`.`enrollments`.`id`, `u825197931_email_app`.`enrollments`.`contactId`, `u825197931_email_app`.`enrollments`.`sequenceId`, `u825197931_email_app`.`enrollments`.`campaignId`, `u825197931_email_app`.`enrollments`.`currentStep`, `u825197931_email_app`.`enrollments`.`lastSentStep`, `u825197931_email_app`.`enrollments`.`nextSendAt`, `u825197931_email_app`.`enrollments`.`status`, `u825197931_email_app`.`enrollments`.`startedAt`, `u825197931_email_app`.`enrollments`.`completedAt`, `u825197931_email_app`.`enrollments`.`createdAt`, `u825197931_email_app`.`enrollments`.`updatedAt` FROM `u825197931_email_app`.`enrollments` WHERE `u825197931_email_app`.`enrollments`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+??? Sequence email sent to idnew666111@gmail.com - Step 1
+??? Email processing completed: 4 sent, 0 failed
+Finished.

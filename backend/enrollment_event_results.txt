@@ -1,0 +1,7 @@
+Enrollment cmmds0hd1000g11epumcf9mi6: 1 events.
+  - [2026-03-05T18:06:09.269Z] SENT {"to":"darpans760@gmail.com","subject":"Transform 
+Enrollment cmmeiegu20001lb3xdqi82ncn: 2 events.
+  - [2026-03-07T07:14:14.575Z] OPENED {"openedAt":"2026-03-07T07:14:14.575Z","userAgent"
+  - [2026-03-06T06:24:37.960Z] SENT {"to":"sharmakanchan0209@gmail.com","subject":"Tra
+Enrollment cmmlp1ib1000614bwof0uwtra: 0 events.
+Enrollment cmmlp3kqv000f14bwqbveimhf: 0 events.
