@@ -280,3 +280,15 @@ Total matches in last 30 days: 8
 => 'IDLE IDLE'
 <= '+ idling'
 <= '* OK Still here'
+=> DONE
+<= '* OK [HIGHESTMODSEQ 48] Highest'
+<= 'IDLE OK Idle completed.'
+=> 'IDLE IDLE'
+<= '+ idling'
+<= '* OK Still here'
+=> DONE
+<= '* OK [HIGHESTMODSEQ 48] Highest'
+<= 'IDLE OK Idle completed.'
+=> 'IDLE IDLE'
+<= '+ idling'
+<= '* OK Still here'
