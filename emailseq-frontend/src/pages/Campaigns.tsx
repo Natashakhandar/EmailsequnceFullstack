@@ -85,6 +85,7 @@ const Campaigns = () => {
   // Load data on component mount
   useEffect(() => {
     loadCampaigns();
+    loadSequences(); // Load sequences so they are available for mapping names in the table
   }, []);
 
   // Validate form whenever formData changes
@@ -260,9 +261,9 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
   const loadSequences = async () => {
     try {
       setLoadingSequences(true);
-      const response = await api.getSequences({ isActive: true });
-      const activeSequences = response.sequences.filter(seq => seq.isActive === true);
-      setSequences(activeSequences);
+      // Fetch all sequences (not just active ones) for proper name mapping in the campaigns list
+      const response = await api.getSequences({ limit: 100 });
+      setSequences(response.sequences);
     } catch (error) {
       console.error("Error loading sequences:", error);
       toast.error("Failed to load sequences");
@@ -385,7 +386,7 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
     setShowCreateForm(true);
     setLeadsSearchTerm(""); // Reset search term when opening modal
     loadLeads();
-    loadSequences();
+    loadSequences(); // Load all sequences for mapping purposes
   };
 
   const getStatusBadge = (campaign: Campaign) => {
@@ -573,8 +574,10 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Mail className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-sm">
-                                {sequences.find(s => s.id === campaign.sequenceId)?.name || 'Unknown'}
+                              <span className="text-sm font-medium">
+                                {campaign.sequence?.name || 
+                                 sequences.find(s => s.id === campaign.sequenceId)?.name || 
+                                 (campaign.sequenceId ? `ID: ${campaign.sequenceId.substring(0, 8)}...` : 'Unknown Sequence')}
                               </span>
                             </div>
                           </TableCell>
@@ -993,10 +996,9 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
                 <Label className="text-sm font-medium text-gray-600">Email Sequence</Label>
                 <p className="mt-2 text-lg font-semibold text-gray-900 flex items-center gap-2">
                   <Mail className="w-5 h-5 text-teal-600" />
-                 {selectedCampaign.sequence?.name ||
- sequences.find((s) => s.id === selectedCampaign.sequenceId)?.name ||
- `Sequence ID: ${selectedCampaign.sequenceId}` ||
- 'Unknown Sequence'}
+                  {selectedCampaign.sequence?.name || 
+                   sequences.find((s) => s.id === selectedCampaign.sequenceId)?.name || 
+                   (selectedCampaign.sequenceId ? `ID: ${selectedCampaign.sequenceId.substring(0, 8)}...` : 'Unknown Sequence')}
                 </p>
                 {selectedCampaign.sequence?.description && (
                   <p className="mt-1 text-sm text-gray-600">

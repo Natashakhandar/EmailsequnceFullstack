@@ -250,29 +250,32 @@ async function processDueEmails() {
     // Process each enrollment
     for (const enrollment of dueEnrollments) {
       try {
-        // Double-check status and lastSentStep just before processing to catch race conditions 
-        const freshEnrollment = await prisma.enrollment.findUnique({
-          where: { id: enrollment.id }
+        // ATOMIC CLAIM: Try to claim this enrollment for processing by this instance
+        // We push nextSendAt 5 minutes into the future and check status in one operation.
+        // This is the most reliable way to prevent duplicate sends across multiple processes.
+        const claimResult = await prisma.enrollment.updateMany({
+          where: {
+            id: enrollment.id,
+            status: 'ACTIVE',
+            nextSendAt: {
+              lte: new Date()
+            }
+          },
+          data: {
+            // Push nextSendAt forward slightly to "lock" it while we process
+            nextSendAt: new Date(Date.now() + 5 * 60 * 1000), 
+            updatedAt: new Date()
+          }
         });
-        
-        if (!freshEnrollment || freshEnrollment.status !== 'ACTIVE') {
-          console.log(`🔍 skipping enrollment ${enrollment.id} - no longer active`);
-          continue;
-        }
 
-        // For locking, we check if it was processed VERY recently (within 5 seconds)
-        // to prevent double-processing by multiple instances. 
-        // We use updatedAt for this check.
-        const now = new Date();
-        if (freshEnrollment.lastSentStep === enrollment.currentStep && 
-            (now - new Date(freshEnrollment.updatedAt)) < 5000) {
-          console.log(`🔍 skipping enrollment ${enrollment.id} - already being processed by another instance`);
+        if (claimResult.count === 0) {
+          console.log(`🔍 skipping enrollment ${enrollment.id} - already claimed or no longer due`);
           continue;
         }
 
         // Add a small delay between emails to avoid overwhelming SMTP server
         if (successCount > 0) {
-          await new Promise(resolve => setTimeout(resolve, 300)); 
+          await new Promise(resolve => setTimeout(resolve, 500)); 
         }
         
         // Check if this step should be sent based on sequence logic
