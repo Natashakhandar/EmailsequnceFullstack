@@ -85,8 +85,7 @@ const CampaignCreate = () => {
     try {
       setLoadingSequences(true);
       const response = await api.getSequences({ isActive: true });
-      const activeSequences = response.sequences.filter(seq => seq.isActive === true);
-      setSequences(activeSequences);
+      setSequences(response.sequences);
     } catch (error) {
       console.error("Error loading sequences:", error);
       toast.error("Failed to load sequences");

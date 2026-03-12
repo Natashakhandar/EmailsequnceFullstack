@@ -64,52 +64,55 @@ router.get('/track/open', async (req, res) => {
       return sendPixel();
     }
 
-    // UNIQUE OPEN CHECK: Check if already opened (using fuzzy search as well)
-    const alreadyOpened = await prisma.event.findFirst({
-      where: {
-        type: 'OPENED',
-        OR: [
-          { emailId: cleanId },
-          { emailId: idWithBrackets },
-          { emailId: idWithoutBrackets }
-        ]
-      }
-    });
-
-    if (!alreadyOpened) {
-      // Record the NEW open event
-      const newEvent = await prisma.event.create({
-        data: {
-          enrollmentId: sentEvent.enrollmentId,
-          contactId: sentEvent.contactId,
-          campaignId: sentEvent.campaignId,
+    // Use a transaction to ensure we don't create duplicate open events during race conditions
+    await prisma.$transaction(async (tx) => {
+      // UNIQUE OPEN CHECK: Check if already opened (using fuzzy search as well)
+      const alreadyOpened = await tx.event.findFirst({
+        where: {
           type: 'OPENED',
-          emailId: sentEvent.emailId, // Use the ID from the database for consistency
-          details: JSON.stringify({
-            openedAt: new Date().toISOString(),
-            userAgent: req.get('User-Agent') || 'Unknown',
-            ip: ip,
-            referer: req.get('Referer') || 'Direct',
-            originalQueryId: emailId
-          })
+          OR: [
+            { emailId: cleanId },
+            { emailId: idWithBrackets },
+            { emailId: idWithoutBrackets }
+          ]
         }
       });
 
-      console.log(`✅ [TRACKER] FIRST OPEN LOGGED: Contact ${sentEvent.contact.email} opened email ${sentEvent.emailId}`);
+      if (!alreadyOpened) {
+        // Record the NEW open event
+        const newEvent = await tx.event.create({
+          data: {
+            enrollmentId: sentEvent.enrollmentId,
+            contactId: sentEvent.contactId,
+            campaignId: sentEvent.campaignId,
+            type: 'OPENED',
+            emailId: sentEvent.emailId, // Use the ID from the database for consistency
+            details: JSON.stringify({
+              openedAt: new Date().toISOString(),
+              userAgent: req.get('User-Agent') || 'Unknown',
+              ip: ip,
+              referer: req.get('Referer') || 'Direct',
+              originalQueryId: emailId
+            })
+          }
+        });
 
-      // Broadcast via socket for real-time UI updates
-      broadcastRealTimeEvent({
-        id: newEvent.id,
-        type: 'OPENED',
-        campaignId: sentEvent.campaignId,
-        contactId: sentEvent.contactId,
-        enrollmentId: sentEvent.enrollmentId,
-        to: sentEvent.contact.email,
-        timestamp: newEvent.timestamp || new Date().toISOString()
-      });
-    } else {
-      console.log(`ℹ️ [TRACKER] Repeat open for ID: ${emailId} (Contact: ${sentEvent.contact.email}). Skipping log.`);
-    }
+        console.log(`✅ [TRACKER] FIRST OPEN LOGGED: Contact ${sentEvent.contact.email} opened email ${sentEvent.emailId}`);
+
+        // Broadcast via socket for real-time UI updates
+        broadcastRealTimeEvent({
+          id: newEvent.id,
+          type: 'OPENED',
+          campaignId: sentEvent.campaignId,
+          contactId: sentEvent.contactId,
+          enrollmentId: sentEvent.enrollmentId,
+          to: sentEvent.contact.email,
+          timestamp: newEvent.timestamp || new Date().toISOString()
+        });
+      } else {
+        console.log(`ℹ️ [TRACKER] Repeat open for ID: ${emailId} (Contact: ${sentEvent.contact.email}). skipping log.`);
+      }
+    });
 
     return sendPixel();
 

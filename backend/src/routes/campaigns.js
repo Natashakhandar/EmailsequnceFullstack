@@ -321,13 +321,24 @@ router.get('/', async (req, res) => {
       prisma.campaign.count({ where })
     ]);
 
-    // Get stats for each campaign
+    // Get stats for each campaign and ensure relation data is preserved
     const campaignsWithStats = await Promise.all(
       campaigns.map(async (campaign) => {
         const stats = await getCampaignStats(campaign.id, req.user.id);
+        
+        // Log for debugging if sequence is missing
+        if (!campaign.sequence) {
+          console.warn(`⚠️ Campaign ${campaign.id} is missing sequence relation in fetch!`);
+        }
+
         return {
           ...campaign,
-          stats
+          stats,
+          // Explicitly ensure sequence is included in the returned object
+          sequence: campaign.sequence ? {
+            id: campaign.sequence.id,
+            name: campaign.sequence.name
+          } : null
         };
       })
     );
