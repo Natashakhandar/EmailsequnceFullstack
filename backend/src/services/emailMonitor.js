@@ -170,14 +170,21 @@ class EmailMonitorService {
         'undeliverable:', 'undelivered mail', 'delivery status notification', 
         'failure notice', 'returned mail', 'mail delivery failed', 
         'bounced', 'mailbox full', 'blocked', 'rejected', 'delivery failure',
-        'non-delivery', 'not delivered', 'not reached', 'could not be delivered'
+        'non-delivery', 'not delivered', 'not reached', 'could not be delivered',
+        'delivery has failed', 'diagnostic-code', 'failure report', 'permanent failure'
       ];
       
       const isPotentialBounce = bounceKeywords.some(kw => subject.includes(kw)) || 
                                 fromEmail.includes('mailer-daemon') || 
                                 fromEmail.includes('postmaster') ||
                                 fromEmail.includes('mta') ||
-                                fromEmail.includes('relay');
+                                fromEmail.includes('relay') ||
+                                !!parsed.headers?.['x-failed-recipients'] ||
+                                !!parsed.headers?.['x-failed-recipient'];
+
+      if (isPotentialBounce) {
+        console.log(`🚩 Potential bounce detected: "${subject}" from ${fromEmail}`);
+      }
 
       if (!isPotentialBounce && ignorePrefixes.some(prefix => subject.startsWith(prefix))) {
         return { isReply: false, reason: 'automated_system_email' };
@@ -202,6 +209,7 @@ class EmailMonitorService {
         });
 
         if (sentEvent) {
+          console.log(`🔗 Matched via Header Message-ID: ${sentEvent.emailId}`);
           return { 
             isReply: true, 
             type: isPotentialBounce ? 'BOUNCED' : 'REPLIED',
@@ -212,8 +220,8 @@ class EmailMonitorService {
 
       // 3. BODY MATCH: Look for our email Message-IDs inside the text (common for bounces)
       const body = (parsed.text || parsed.html || '').toLowerCase();
-      // Regex to find Message-IDs like <uuid@domain.com>
-      const messageIdRegex = /<[a-f0-9-]+@[a-z0-9.-]+>/gi;
+      // Regex to find Message-IDs like <uuid@domain.com> or just the uuid part
+      const messageIdRegex = /<?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}@[a-z0-9.-]+)>?/gi;
       const foundIdsInBody = body.match(messageIdRegex) || [];
       
       if (foundIdsInBody.length > 0) {
@@ -229,6 +237,7 @@ class EmailMonitorService {
         });
 
         if (bodyMatchEvent) {
+          console.log(`🔗 Matched via Body Message-ID: ${bodyMatchEvent.emailId}`);
           return { 
             isReply: true, 
             type: isPotentialBounce ? 'BOUNCED' : 'REPLIED',
@@ -238,6 +247,7 @@ class EmailMonitorService {
       }
 
       // 4. FALLBACK: Match by contact and timing if it LOOKS like a reply
+      const replyDate = parsed.date ? new Date(parsed.date) : new Date();
       const bounceData = isPotentialBounce ? this.extractBounceRecipient(parsed) : null;
       const targetEmail = bounceData ? bounceData.recipient : fromEmail;
 
@@ -245,16 +255,29 @@ class EmailMonitorService {
         // Only consider it a reply if it has "Re:" or "Fwd:" or is a standard thread
         // OR if it's a potential bounce (where "reply" markers don't apply)
         const looksLikeReply = subject.startsWith('re:') || subject.startsWith('fwd:') || subject.startsWith('aw:');
+        
+        if (!looksLikeReply && !isPotentialBounce) {
+          return { isReply: false, reason: 'not_a_thread' };
+        }
 
-        const contact = await prisma.contact.findFirst({
-          where: { email: targetEmail }
+        // Find contact(s) with this email (using startsWith as fallback for truncation)
+        const contacts = await prisma.contact.findMany({
+          where: { 
+            OR: [
+              { email: targetEmail },
+              { email: { startsWith: targetEmail } }
+            ]
+          }
         });
 
-        if (contact) {
+        if (contacts.length > 0) {
+          // Look for the most recent SENT event across any matching contact 
+          // that happened BEFORE the reply/bounce date
           const recentSentEvent = await prisma.event.findFirst({
             where: {
-              contactId: contact.id,
-              type: 'SENT'
+              contactId: { in: contacts.map(c => c.id) },
+              type: 'SENT',
+              timestamp: { lte: replyDate }
             },
             orderBy: { timestamp: 'desc' },
             include: {
@@ -264,17 +287,14 @@ class EmailMonitorService {
           });
 
           if (recentSentEvent) {
-            const replyDate = parsed.date ? new Date(parsed.date) : new Date();
-            const sentDate = new Date(recentSentEvent.timestamp);
-
-            // Must be after sent date
-            if (replyDate > sentDate && (looksLikeReply || isPotentialBounce)) {
-              return { 
-                isReply: true, 
-                type: isPotentialBounce ? 'BOUNCED' : 'REPLIED', 
-                originalEvent: recentSentEvent 
-              };
-            }
+            console.log(`🔗 Matched via fallback Contact+Timing: ${recentSentEvent.contact?.email} (Sent at ${recentSentEvent.timestamp})`);
+            return { 
+              isReply: true, 
+              type: isPotentialBounce ? 'BOUNCED' : 'REPLIED', 
+              originalEvent: recentSentEvent 
+            };
+          } else {
+            console.log(`⚠️ Found contact ${targetEmail} but no SENT event prior to ${replyDate}`);
           }
         }
       }
@@ -339,40 +359,57 @@ class EmailMonitorService {
     // 2. Scan body for email addresses near bounce markers
     if (!recipient) {
       // Look for common patterns like "Final-Recipient: rfc822; user@example.com"
-      const recipientRegex = /final-recipient: rfc822;\s*([^\s@<>]+@[^\s@<>.]+\.[^\s@<>.]+)/i;
+      const recipientRegex = /final-recipient: rfc822;\s*([^\s;@<>]+@[^\s;@<>]+)/i;
       const matchFound = body.match(recipientRegex);
       if (matchFound?.[1]) recipient = matchFound[1].toLowerCase().replace(/[<>]/g, '').trim();
     }
 
     if (!recipient) {
       // Secondary scan: looking for "to: <email>" mentioned in the rejection part
-      const toMatch = body.match(/to:.*?([^\s@<>]+@[^\s@<>.]+\.[^\s@<>.]+)/i);
+      const toMatch = body.match(/to:.*?([^\s@<>;,]+@[^\s@<>;,]+)/i);
       if (toMatch?.[1]) recipient = toMatch[1].toLowerCase().replace(/[<>]/g, '').trim();
     }
 
     if (!recipient) {
       // Third scan: Look for common "failed to deliver to USER@DOMAIN.COM" patterns
-      const failToMatch = body.match(/(?:failed|undeliverable|delivery to|address rejected|message not delivered|could not be delivered to|could not reach).*?\s+([^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)/i);
+      const failToMatch = body.match(/(?:failed|undeliverable|delivery to|address rejected|message not delivered|could not be delivered to|could not reach).*?\s+([^\s@<>;,]+@[^\s@<>;,]+)/i);
       if (failToMatch?.[1]) recipient = failToMatch[1].toLowerCase().replace(/[<>]/g, '').trim();
     }
 
     if (!recipient) {
       // Fourth scan: Looking for Remote-MTA reports
-      const mtaMatch = body.match(/remote-mta:.*?;\s*([^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)/i);
+      const mtaMatch = body.match(/remote-mta:.*?;\s*([^\s@<>;,]+@[^\s@<>;,]+)/i);
       if (mtaMatch?.[1]) recipient = mtaMatch[1].toLowerCase().replace(/[<>]/g, '').trim();
     }
 
     // Fifth scan: Look for standard email patterns anywhere if it's a MAILER-DAEMON
     if (!recipient) {
       const fromEmail = (parsed.from?.value?.[0]?.address || '').toLowerCase();
-      if (fromEmail.includes('mailer-daemon') || fromEmail.includes('postmaster')) {
-        const allEmails = body.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi);
+      if (fromEmail.includes('mailer-daemon') || fromEmail.includes('postmaster') || fromEmail.includes('mta')) {
+        // More permissive regex to capture potential malformed/truncated emails
+        const allEmails = body.match(/[a-z0-9._%+-]+@[a-z0-9.-]+/gi);
         if (allEmails && allEmails.length > 0) {
           const ourEmail = (this.config.imapUser || '').toLowerCase();
-          const externalEmails = allEmails.filter(e => e.toLowerCase() !== ourEmail);
-          if (externalEmails.length > 0) recipient = externalEmails[0].toLowerCase();
+          const excludeKeywords = ['daemon', 'postmaster', 'no-reply', 'noreply', 'support', 'mta', 'relay', 'mailchannels', 'hostinger'];
+          
+          const externalEmails = allEmails.filter(e => {
+            const lowE = e.toLowerCase();
+            return lowE !== ourEmail && 
+                   !excludeKeywords.some(kw => lowE.includes(kw)) &&
+                   lowE.includes('.'); // Must at least have a dot in the domain part
+          });
+          
+          if (externalEmails.length > 0) {
+            recipient = externalEmails[0].toLowerCase();
+            console.log(`🔍 Extracted recipient from daemon body: ${recipient}`);
+          }
         }
       }
+    }
+
+    // Final cleanup: remove any trailing dots or punctuation that might have been caught
+    if (recipient) {
+      recipient = recipient.replace(/[.>]$/, '').trim();
     }
 
     return recipient ? { recipient, reason } : null;
@@ -429,7 +466,7 @@ class EmailMonitorService {
             );
 
             // Determine event type (REPLIED or BOUNCED)
-            const eventType = replyCheck.type || 'REPLIED';
+            // eventType is already declared above
 
             // Create the event
             const bounceData = eventType === 'BOUNCED' ? this.extractBounceRecipient(parsed) : null;
