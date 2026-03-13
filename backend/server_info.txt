@@ -1,0 +1,4 @@
+START: 2026-03-13T10:23:39.894Z
+PORT: 3001
+CWD: C:\Users\natas\OneDrive\Desktop\EmailsequnceFullstack\backend
+FE: C:\Users\natas\OneDrive\Desktop\EmailsequnceFullstack\backend\dist

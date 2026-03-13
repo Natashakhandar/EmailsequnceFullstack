@@ -1,23 +1,14 @@
 // API configuration and utilities for the email sequencing backend
 
 const getApiBaseUrl = () => {
-  const envUrl = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_API_BASE_URL;
-
-  if (import.meta.env.DEV) {
-    if (envUrl && !envUrl.includes('placeholder')) return envUrl;
-    return 'http://localhost:3001';
-  }
-
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
-  }
-
-  return envUrl || '';
+  // Use relative path to leverage Vite proxy in DEV and same-origin in PROD
+  return '/api';
 };
 
-export const RAW_BASE = getApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
+export const RAW_BASE = window.location.origin;
 
-export const API_BASE_URL = RAW_BASE.replace(/\/$/, '') + '/api';
+console.log('🌐 API_BASE_URL (Relative):', API_BASE_URL);
 
 console.log('🌐 API_BASE_URL:', API_BASE_URL);
 

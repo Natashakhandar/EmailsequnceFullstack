@@ -1,9 +1,9 @@
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const prisma = require('./db/prismaClient');
 
 // Import routes
@@ -22,42 +22,33 @@ const profileRouter = require('./routes/profile');
 const dashboardRouter = require('./routes/dashboard');
 const reportsRouter = require('./routes/reports');
 const campaignsRouter = require('./routes/campaigns');
-const fixEventDetailsRouter = require('./routes/fixEventDetails');
 const smtpRouter = require('./routes/smtp');
 
-// Import scheduler and email monitor
 const { startScheduler } = require('./jobs/scheduler');
-const { startEmailMonitoring } = require('./jobs/emailMonitorJob');
 const { initializeSocket } = require('./services/socketService');
 
 const app = express();
 const http = require('http');
 const server = http.createServer(app);
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
-// 1. GLOBAL DIAGNOSTICS - Catch everything first
+// --- CRITICAL: Diagnostic Routes (Before everything) ---
+app.get('/ping', (req, res) => res.status(200).send('pong-v5-stable-final'));
+app.get('/api/ping', (req, res) => res.status(200).send('pong-api-v5-stable-final'));
+
+// --- GLOBAL MIDDLEWARE ---
+app.use(cors({ origin: '*', credentials: true }));
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
 app.use((req, res, next) => {
-  const timestamp = new Date().toLocaleTimeString();
-  
-  // Custom headers to identify Node.js is handling it
-  res.setHeader('X-Powered-By', 'BoostNow-Email-Suite');
-  res.setHeader('X-Node-Port', PORT);
-  res.setHeader('X-Origin-File', 'backend/src/index.js');
-  
-  // Quick pong for ANY /ping path
-  if (req.path === '/ping' || req.path === '/api/ping') {
-    return res.status(200).send('pong-stable-v3-final');
-  }
-  
-  // Direct health check
-  if (req.path === '/health' || req.path === '/api/health') {
-    return res.status(200).json({ status: 'OK', message: 'Core API Stable' });
-  }
-
+  res.setHeader('X-Backend-Server', 'NodeJS');
+  res.setHeader('X-API-Path', req.path);
   next();
 });
 
-// 2. CORE API ROUTES - Prioritized
+// --- API ROUTES ---
 app.use('/api/auth', authRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/leads', contactsRouter);
@@ -75,72 +66,61 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/smtp', smtpRouter);
 
-// Fallback for auth if /api is missing
+// Fallback for auth if /api is missing (common in some configs)
 app.use('/auth', authRouter);
 
-// Base API route
-app.get('/api', (req, res) => res.json({ message: 'API active', version: '1.2.0' }));
-
-// 3. SECURITY & CORS
-app.use(cors({ origin: '*', credentials: true }));
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// 4. FRONTEND SERVING
-const fs = require('fs');
-const frontendPath = [
-  path.join(process.cwd(), 'public'),
+// --- FRONTEND SERVING ---
+// Discovery of frontend assets
+const possiblePaths = [
   path.join(process.cwd(), 'dist'),
-  path.join(process.cwd(), '../dist'), // Relative to backend
+  path.join(process.cwd(), 'public'),
+  path.join(process.cwd(), 'backend/dist'),
   path.join(process.cwd(), 'backend/public'),
   path.join(__dirname, '../../dist'),
   path.join(__dirname, '../public')
-].find(p => fs.existsSync(path.join(p, 'index.html'))) || path.join(process.cwd(), 'public');
+];
 
-console.log(`📂 Serving frontend from: ${frontendPath}`);
-app.use(express.static(frontendPath));
-
-// 5. CATCH-ALL FOR SPA
-app.get('*', (req, res) => {
-  // Never serve index.html for API paths
-  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
-    return res.status(404).json({ error: 'API route not found', path: req.path });
+let frontendPath = null;
+for (const p of possiblePaths) {
+  if (fs.existsSync(path.join(p, 'index.html'))) {
+    frontendPath = p;
+    console.log(`✅ Found Frontend Assets at: ${p}`);
+    break;
   }
-  res.sendFile(path.join(frontendPath, 'index.html'));
-});
+}
 
-// Start server
+if (frontendPath) {
+  app.use(express.static(frontendPath));
+  
+  // SPA Catch-all
+  app.get('*', (req, res, next) => {
+    // If it's an API request that failed all routes, return 404 JSON, not HTML
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: 'API route not found', path: req.path });
+    }
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+} else {
+  console.warn('⚠️ Frontend assets NOT found. Only API routes will work.');
+  app.get('/', (req, res) => res.send('API is running, but UI assets were not found.'));
+}
+
+// --- START SERVER ---
 initializeSocket(server);
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🚀 Server listening on port ${PORT}`);
   
+  // Write diagnostic file
   try {
-    fs.writeFileSync(path.join(process.cwd(), 'startup_diagnostics.txt'), 
-      `DATE: ${new Date().toISOString()}\nPORT: ${PORT}\nCWD: ${process.cwd()}\nENV: ${process.env.NODE_ENV}`);
+    fs.writeFileSync(path.join(process.cwd(), 'server_info.txt'), 
+      `START: ${new Date().toISOString()}\nPORT: ${PORT}\nCWD: ${process.cwd()}\nFE: ${frontendPath}`);
   } catch (e) {}
 
   try { 
-    prisma.$connect().catch(e => console.error('DB Warmup Error:', e.message));
+    prisma.$connect().catch(e => console.error('Prisma Error:', e.message));
     startScheduler(); 
-  } catch (e) { console.error('Scheduler error:', e.message); }
+  } catch (e) {}
 });
-
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error.message);
-  if (error.code === 'ERR_INTERNAL_ASSERTION') process.exit(1);
-});
-
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Rejection:', reason);
-});
-
-const shutdown = () => {
-  server.close(() => process.exit(0));
-};
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
 
 module.exports = app;
