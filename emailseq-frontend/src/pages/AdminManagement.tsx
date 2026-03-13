@@ -47,6 +47,10 @@ const AdminManagement = () => {
     isActive: true
   });
 
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [passwordUserId, setPasswordUserId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -160,6 +164,27 @@ const AdminManagement = () => {
     } catch (error) {
       console.error('Impersonation failed:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to view user work');
+    }
+  };
+
+  const handlePasswordClick = (user: User) => {
+    setPasswordUserId(user.id);
+    setNewPassword("");
+    setIsPasswordDialogOpen(true);
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordUserId || !newPassword) return;
+
+    try {
+      await api.changeUserPassword(passwordUserId, newPassword);
+      toast.success('Password updated successfully!');
+      setIsPasswordDialogOpen(false);
+      setNewPassword("");
+      setPasswordUserId(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update password');
     }
   };
 
@@ -383,6 +408,44 @@ const AdminManagement = () => {
                 </form>
               </DialogContent>
             </Dialog>
+
+            <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+              <DialogContent className="sm:max-w-md text-foreground">
+                <DialogHeader>
+                  <DialogTitle>Change User Password</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handlePasswordChange} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="newPassword"
+                        type={showPassword ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Enter new password"
+                        required
+                        minLength={6}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Minimum 6 characters</p>
+                  </div>
+                  <div className="flex gap-2 pt-4">
+                    <Button type="submit" className="flex-1 gradient-primary text-white">Update Password</Button>
+                    <Button type="button" variant="outline" onClick={() => setIsPasswordDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </motion.div>
 
@@ -451,6 +514,13 @@ const AdminManagement = () => {
                               >
                                 <Trash2 className="w-4 h-4" />
                                 <span>Delete User</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer flex items-center gap-2 text-yellow-600 focus:text-yellow-600 focus:bg-yellow-50"
+                                onClick={() => handlePasswordClick(user)}
+                              >
+                                <AlertCircle className="w-4 h-4" />
+                                <span>Change Password</span>
                               </DropdownMenuItem>
                             </>
                           )}
