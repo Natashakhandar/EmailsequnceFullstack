@@ -105,6 +105,18 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Added for easier debugging on Hostinger
+app.use('/api', (req, res, next) => {
+  if (process.env.NODE_ENV !== 'production' || req.path === '/health') {
+    console.log(`📡 [API] ${req.method} ${req.path}`);
+  }
+  next();
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', message: 'API is running' });
+});
+
 
 // API routes
 app.use('/api/auth', authRouter);
