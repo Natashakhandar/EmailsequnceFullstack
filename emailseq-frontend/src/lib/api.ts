@@ -8,9 +8,12 @@ const getApiBaseUrl = () => {
     return 'http://localhost:3001';
   }
 
-  // In production, always use relative path if we're on the same server
-  // This is the most reliable way to handle subdomains and proxies
-  return '';
+  // In production, always use the current origin to ensure we talk to the same server
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return envUrl || '';
 };
 
 export const RAW_BASE = getApiBaseUrl();
