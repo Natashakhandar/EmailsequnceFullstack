@@ -97,6 +97,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint
+// Health check for load balancers/monitors
 app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
@@ -105,18 +106,22 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Added for easier debugging on Hostinger
-app.use('/api', (req, res, next) => {
-  if (process.env.NODE_ENV !== 'production' || req.path === '/health') {
-    console.log(`📡 [API] ${req.method} ${req.path}`);
+// Detailed logging for API/Auth requests to help debug 404s on Hostinger
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.includes('auth')) {
+    console.log(`📡 [${new Date().toLocaleTimeString()}] ${req.method} ${req.url} - IP: ${req.ip}`);
   }
   next();
 });
 
+// API-specific health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'API is running' });
+  res.json({ 
+    status: 'OK', 
+    message: 'API is functional',
+    timestamp: new Date().toISOString()
+  });
 });
-
 
 // API routes
 app.use('/api/auth', authRouter);
@@ -138,21 +143,27 @@ app.use('/api/campaigns', campaignsRouter);
 app.use('/api/fix-event-details', fixEventDetailsRouter);
 app.use('/api/smtp', smtpRouter);
 
+// FALLBACK: If prefix /api is missing but it's an auth request, handle it
+// This helps if the proxy strips /api or if the frontend somehow omits it
+app.use('/auth', authRouter);
+
 // Static file serving - Serve frontend build
 const fs = require('fs');
 const possibleFrontendPaths = [
+  path.join(process.cwd(), 'backend/public'),
+  path.join(process.cwd(), 'backend/dist'),
+  path.join(process.cwd(), 'emailseq-frontend/dist'),
   path.join(__dirname, '../public'),
-  path.join(__dirname, '../../public'),
+  path.join(__dirname, '../../emailseq-frontend/dist'),
   path.join(__dirname, '../dist'),
-  path.join(process.cwd(), 'public'),
-  path.join(process.cwd(), 'backend/public')
+  path.join(process.cwd(), 'public')
 ];
 
 let frontendPath = possibleFrontendPaths[0];
 for (const p of possibleFrontendPaths) {
-  if (fs.existsSync(path.join(p, 'index.html'))) {
+  if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) {
     frontendPath = p;
-    console.log(`✅ Serving frontend from: ${frontendPath}`);
+    console.log(`✅ SUCCESS: Found frontend assets at: ${frontendPath}`);
     break;
   }
 }
