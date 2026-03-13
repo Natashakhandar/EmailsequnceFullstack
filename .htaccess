@@ -1,3 +1,5 @@
-# Hostinger Node.js Web App - htaccess not needed
-# The Node.js app handles all routing (API + SPA frontend)
-# Hostinger automatically proxies traffic to the Node.js process
+RewriteEngine On
+RewriteRule ^$ http://127.0.0.1:XXXXXXXX%{REQUEST_URI} [P,L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ http://127.0.0.1:XXXXXXXX/$1 [P,L]

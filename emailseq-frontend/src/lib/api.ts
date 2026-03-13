@@ -8,7 +8,6 @@ const getApiBaseUrl = () => {
     return 'http://localhost:3001';
   }
 
-  // In production, always use the current origin to ensure we talk to the same server
   if (typeof window !== 'undefined') {
     return window.location.origin;
   }
@@ -18,9 +17,7 @@ const getApiBaseUrl = () => {
 
 export const RAW_BASE = getApiBaseUrl();
 
-export const API_BASE_URL = RAW_BASE.endsWith('/api')
-  ? RAW_BASE
-  : `${RAW_BASE.replace(/\/$/, '')}/api`;
+export const API_BASE_URL = RAW_BASE.replace(/\/$/, '') + '/api';
 
 console.log('🌐 API_BASE_URL:', API_BASE_URL);
 

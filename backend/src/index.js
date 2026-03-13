@@ -96,40 +96,28 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
-// Health check for load balancers/monitors
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  });
-});
-
-// Detailed logging for API/Auth requests to help debug 404s on Hostinger
+// 1. DIAGNOSTICS & LOGGING - At the very top
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.includes('auth')) {
-    console.log(`📡 [${new Date().toLocaleTimeString()}] ${req.method} ${req.url} - IP: ${req.ip}`);
+  const timestamp = new Date().toLocaleTimeString();
+  if (req.path.startsWith('/api') || req.path === '/ping' || req.path === '/health-check') {
+    console.log(`[${timestamp}] 🚀 ${req.method} ${req.url} - IP: ${req.ip}`);
   }
   next();
 });
 
-// API-specific health check
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'API is functional',
-    timestamp: new Date().toISOString()
-  });
-});
+// Root-level diagnostics (No /api prefix)
+app.get('/ping', (req, res) => res.send('pong-root'));
+app.get('/health', (req, res) => res.json({ status: 'OK', environment: process.env.NODE_ENV }));
+app.get('/health-check', (req, res) => res.json({ 
+  status: 'OK', 
+  message: 'Root backend is reachable',
+  time: new Date().toISOString()
+}));
 
-// Quick ping for connectivity test
-app.get('/api/ping', (req, res) => res.send('pong'));
-
-// API routes
+// 2. API ROUTES - Explicitly defined before static serving
 app.use('/api/auth', authRouter);
 app.use('/api/contacts', contactsRouter);
-app.use('/api/leads', contactsRouter); // Alias for contacts (leads)
+app.use('/api/leads', contactsRouter);
 app.use('/api/templates', templatesRouter);
 app.use('/api/sequences', sequencesRouter);
 app.use('/api/enrollments', enrollmentsRouter);
@@ -146,9 +134,12 @@ app.use('/api/campaigns', campaignsRouter);
 app.use('/api/fix-event-details', fixEventDetailsRouter);
 app.use('/api/smtp', smtpRouter);
 
-// FALLBACK: If prefix /api is missing but it's an auth request, handle it
-// This helps if the proxy strips /api or if the frontend somehow omits it
-app.use('/auth', authRouter);
+// API Logic routes & Health check
+app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'API is functional' }));
+app.get('/api/ping', (req, res) => res.send('pong-api'));
+
+// 3. FALLBACKS
+app.use('/auth', authRouter); // External fallback
 
 // Static file serving - Serve frontend build
 const fs = require('fs');
@@ -174,6 +165,16 @@ for (const p of possibleFrontendPaths) {
 // Serve static files from the React app
 app.use(express.static(frontendPath));
 
+// Catch-all for React SPA routing
+// This must be AFTER static files and API routes
+app.get('*', (req, res, next) => {
+  // If it's an API request that didn't match, don't send index.html
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  res.sendFile(path.join(frontendPath, 'index.html'));
+});
+
 // API routes Documentation
 app.get('/api', (req, res) => {
   res.json({
@@ -197,20 +198,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// For all other requests, send back index.html (React routing)
-// BUT exclude /api routes so they still trigger 404 or their respective handlers
-app.get(/^(?!\/api).*/, (req, res) => {
-  res.sendFile(path.join(frontendPath, 'index.html'));
-});
-
-// 404 handler for API routes - gives a JSON response
+// API 404 handler
 app.all('/api/*', (req, res) => {
-  console.log(`❌ [404] No route matched for ${req.method} ${req.url}`);
-  res.status(404).json({ 
-    error: 'API Route not found', 
-    path: req.originalUrl,
-    method: req.method
-  });
+  res.status(404).json({ error: 'API Route Not Found' });
 });
 
 // Start server
