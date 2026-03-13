@@ -35,58 +35,34 @@ const http = require('http');
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
-// Add identifying header to all responses
-app.use((req, res, next) => {
-  res.setHeader('X-Backend-Server', 'NodeJS-Express');
-  next();
-});
-
-// 1. ABSOLUTE TOP DIAGNOSTICS - Before any other middleware
-app.get('/ping', (req, res) => res.send('pong-root-v2'));
-app.get('/debug-env', (req, res) => {
-  res.json({
-    cwd: process.cwd(),
-    dirname: __dirname,
-    node_version: process.version,
-    env: process.env.NODE_ENV,
-    url: req.url,
-    path: req.path
-  });
-});
-
-app.set('trust proxy', true);
-
-// Body parsing early for diagnostics
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// 2. LOGGING
+// 1. GLOBAL DIAGNOSTICS - Catch everything first
 app.use((req, res, next) => {
   const timestamp = new Date().toLocaleTimeString();
-  console.log(`📡 [${timestamp}] ${req.method} ${req.url}`);
-  next();
-});
-
-// 1. DIAGNOSTICS & LOGGING - At the very top
-app.use((req, res, next) => {
-  const timestamp = new Date().toLocaleTimeString();
-  if (req.path.startsWith('/api') || req.path === '/ping' || req.path === '/health-check') {
-    console.log(`[${timestamp}] 🚀 ${req.method} ${req.url} - IP: ${req.ip}`);
+  console.log(`📡 [${timestamp}] ${req.method} ${req.path}`);
+  
+  // Custom headers to identify Node.js is handling it
+  res.setHeader('X-Powered-By', 'BoostNow-Email-Suite');
+  res.setHeader('X-Node-Port', PORT);
+  
+  // Quick pong for ANY /ping path
+  if (req.path === '/ping' || req.path === '/api/ping') {
+    return res.status(200).send('pong-stable-v3');
   }
+  
+  // Direct health check
+  if (req.path === '/health' || req.path === '/api/health') {
+    return res.status(200).json({ status: 'OK', message: 'Core API Stable' });
+  }
+
   next();
 });
 
-// Root-level diagnostics (No /api prefix)
-app.get('/ping', (req, res) => res.send('pong-root'));
-app.get('/health', (req, res) => res.json({ status: 'OK', environment: process.env.NODE_ENV }));
-app.get('/health-check', (req, res) => res.json({ 
-  status: 'OK', 
-  message: 'Root backend is reachable',
-  time: new Date().toISOString()
-}));
+// 2. CORE API ROUTES - Prioritized
+app.use('/api/auth', (req, res, next) => {
+  res.setHeader('X-API-Category', 'auth');
+  next();
+}, authRouter);
 
-// 3. API ROUTES
-app.use('/api/auth', authRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/leads', contactsRouter);
 app.use('/api/templates', templatesRouter);
@@ -95,58 +71,50 @@ app.use('/api/enrollments', enrollmentsRouter);
 app.use('/api/events', eventsRouter);
 app.use('/api/unsubscribe', unsubscribeRouter);
 app.use('/api/scheduler', schedulerRouter);
-app.use('/api', emailRouter);
 app.use('/api/email-activity', emailActivityRouter);
 app.use('/api/email-monitoring', emailMonitoringRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/campaigns', campaignsRouter);
-app.use('/api/fix-event-details', fixEventDetailsRouter);
 app.use('/api/smtp', smtpRouter);
 
-// API Logic routes & Health check
-app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'API is functional' }));
-app.get('/api/ping', (req, res) => res.send('pong-api'));
+// Fallback for auth if /api is missing
+app.use('/auth', authRouter);
 
-// CORS & Rate Limit for existing routes (after basic diagnostics)
-app.use(cors({
-    origin: '*', // Simplified for testing
-    credentials: true
-}));
+// Base API route
+app.get('/api', (req, res) => res.json({ message: 'API active', version: '1.2.0' }));
 
-// Static file serving - Serve frontend build
+// 3. SECURITY & CORS (After basic diagnostics to avoid blocking them)
+app.use(cors({ origin: '*', credentials: true }));
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 4. FRONTEND SERVING
 const fs = require('fs');
-const possibleFrontendPaths = [
+const frontendPath = [
+  path.join(process.cwd(), 'public'),
+  path.join(process.cwd(), 'dist'),
   path.join(process.cwd(), 'backend/public'),
-  path.join(process.cwd(), 'backend/dist'),
-  path.join(process.cwd(), 'emailseq-frontend/dist'),
   path.join(__dirname, '../public'),
-  path.join(__dirname, '../../emailseq-frontend/dist'),
-  path.join(__dirname, '../dist'),
-  path.join(process.cwd(), 'public')
-];
+  path.join(__dirname, '../../emailseq-frontend/dist')
+].find(p => fs.existsSync(path.join(p, 'index.html'))) || path.join(process.cwd(), 'public');
 
-let frontendPath = possibleFrontendPaths[0];
-for (const p of possibleFrontendPaths) {
-  if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) {
-    frontendPath = p;
-    console.log(`✅ SUCCESS: Found frontend assets at: ${frontendPath}`);
-    break;
-  }
-}
-
-// Serve static files from the React app
 app.use(express.static(frontendPath));
 
-// Catch-all for React SPA routing
-// This must be AFTER static files and API routes
+// 5. CATCH-ALL FOR SPA
 app.get('*', (req, res, next) => {
-  // If it's an API request that didn't match, don't send index.html
-  if (req.path.startsWith('/api')) {
+  // Never serve index.html for API paths
+  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
     return next();
   }
   res.sendFile(path.join(frontendPath, 'index.html'));
+});
+
+// 6. FINAL 404 FOR API
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ error: 'API route not found', path: req.path });
 });
 
 // API routes Documentation
@@ -183,6 +151,12 @@ initializeSocket(server);
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Write port to file so user can find it for .htaccess if needed
+  try {
+    fs.writeFileSync(path.join(process.cwd(), 'startup_diagnostics.txt'), 
+      `DATE: ${new Date().toISOString()}\nPORT: ${PORT}\nCWD: ${process.cwd()}\nENV: ${process.env.NODE_ENV}`);
+  } catch (e) {}
 
   try { 
     prisma.$connect().catch(e => console.error('DB Warmup Error:', e.message));

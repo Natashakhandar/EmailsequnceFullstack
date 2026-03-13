@@ -1,0 +1,4 @@
+DATE: 2026-03-13T10:02:19.698Z
+PORT: 3000
+CWD: C:\Users\natas\OneDrive\Desktop\EmailsequnceFullstack\backend
+ENV: development
