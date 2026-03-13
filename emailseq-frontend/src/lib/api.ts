@@ -8,9 +8,7 @@ const getApiBaseUrl = () => {
 export const API_BASE_URL = getApiBaseUrl();
 export const RAW_BASE = window.location.origin;
 
-console.log('🌐 API_BASE_URL (Relative):', API_BASE_URL);
-
-console.log('🌐 API_BASE_URL:', API_BASE_URL);
+console.log('🌐 API Config:', { API_BASE_URL, RAW_BASE });
 
 // API response types
 export interface Contact {

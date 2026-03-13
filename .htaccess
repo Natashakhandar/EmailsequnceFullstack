@@ -1,0 +1,15 @@
+RewriteEngine On
+
+# 1. Forward ALL requests to Node.js (Proxy)
+# Hostinger Node.js processes usually listen on a port stored in an env var or common ports like 3000-3001
+# But if you use the Node.js Selector, the Proxying is handled automatically IF the server knows which folder to watch.
+
+# Ensure the /api and /ping are NOT intercepted by static rules
+RewriteCond %{REQUEST_URI} ^/api [OR]
+RewriteCond %{REQUEST_URI} ^/ping
+RewriteRule ^(.*)$ http://127.0.0.1:%{PORT}/$1 [P,L]
+
+# For React SPA
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
