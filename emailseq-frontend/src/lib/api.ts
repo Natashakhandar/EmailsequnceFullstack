@@ -11,9 +11,9 @@ const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
 
-    // REDIRECT API: If on boostnow domain, talk to the silver-tapir backend
-    // This is because boostnow is likely configured as static-only in some environments
-    if (hostname.includes('boostnow.in')) {
+    // REDIRECT API: If on main boostnow domain, talk to the silver-tapir backend
+    // Since email.boostnow.in is a different host, we check for main domain specifically
+    if (hostname === 'boostnow.in' || hostname === 'www.boostnow.in') {
       return 'https://silver-tapir-929419.hostingersite.com';
     }
 
@@ -22,7 +22,7 @@ const getApiBaseUrl = () => {
     }
   }
 
-  return envUrl || 'https://silver-tapir-929419.hostingersite.com';
+  return envUrl || window.location.origin;
 };
 
 export const RAW_BASE = getApiBaseUrl();
