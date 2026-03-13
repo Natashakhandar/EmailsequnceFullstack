@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const prisma = require('./db/prismaClient');
 
 // Import routes
 const authRouter = require('./routes/auth');
