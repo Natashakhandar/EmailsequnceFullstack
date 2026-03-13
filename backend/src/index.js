@@ -188,7 +188,10 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
+  try { 
+    prisma.$connect().catch(e => console.error('DB Warmup Error:', e.message));
+    startScheduler(); 
+  } catch (e) { console.error('Scheduler error:', e.message); }
   // Removed redundant startEmailMonitoring here as it is started by the scheduler
 });
 
