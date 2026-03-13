@@ -96,23 +96,30 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 1. DIAGNOSTICS & LOGGING - At the very top
+// 1. ABSOLUTE TOP DIAGNOSTICS - No dependency, no middleware
+app.get('/ping', (req, res) => res.status(200).send('pong-backend-src-stable'));
+app.get('/api/ping', (req, res) => res.status(200).send('pong-api-stable'));
+app.get('/debug-route', (req, res) => res.json({
+  message: 'Backend index.js is reachable',
+  cwd: process.cwd(),
+  dirname: __dirname,
+  port: PORT
+}));
+
+// Identifying Header
 app.use((req, res, next) => {
-  const timestamp = new Date().toLocaleTimeString();
-  if (req.path.startsWith('/api') || req.path === '/ping' || req.path === '/health-check') {
-    console.log(`[${timestamp}] 🚀 ${req.method} ${req.url} - IP: ${req.ip}`);
-  }
+  res.setHeader('X-Origin-File', 'backend/src/index.js');
+  res.setHeader('X-Handled-By', 'Express');
   next();
 });
 
-// Root-level diagnostics (No /api prefix)
-app.get('/ping', (req, res) => res.send('pong-root'));
-app.get('/health', (req, res) => res.json({ status: 'OK', environment: process.env.NODE_ENV }));
-app.get('/health-check', (req, res) => res.json({ 
-  status: 'OK', 
-  message: 'Root backend is reachable',
-  time: new Date().toISOString()
-}));
+// Logging
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.includes('auth')) {
+    console.log(`📡 [${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+  }
+  next();
+});
 
 // 2. API ROUTES - Explicitly defined before static serving
 app.use('/api/auth', authRouter);
@@ -141,35 +148,23 @@ app.get('/api/ping', (req, res) => res.send('pong-api'));
 // 3. FALLBACKS
 app.use('/auth', authRouter); // External fallback
 
-// Static file serving - Serve frontend build
+// 4. FRONTEND SERVING
 const fs = require('fs');
-const possibleFrontendPaths = [
-  path.join(process.cwd(), 'backend/public'),
-  path.join(process.cwd(), 'backend/dist'),
-  path.join(process.cwd(), 'emailseq-frontend/dist'),
-  path.join(__dirname, '../public'),
-  path.join(__dirname, '../../emailseq-frontend/dist'),
-  path.join(__dirname, '../dist'),
-  path.join(process.cwd(), 'public')
-];
+const frontendPath = [
+  path.join(process.cwd(), 'public'),
+  path.join(process.cwd(), '../dist'), // Relative to backend
+  path.join(process.cwd(), 'dist'),
+  path.join(__dirname, '../../dist'),
+  path.join(__dirname, '../public')
+].find(p => fs.existsSync(path.join(p, 'index.html'))) || path.join(process.cwd(), 'public');
 
-let frontendPath = possibleFrontendPaths[0];
-for (const p of possibleFrontendPaths) {
-  if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) {
-    frontendPath = p;
-    console.log(`✅ SUCCESS: Found frontend assets at: ${frontendPath}`);
-    break;
-  }
-}
-
-// Serve static files from the React app
+console.log(`📂 Serving frontend from: ${frontendPath}`);
 app.use(express.static(frontendPath));
 
-// Catch-all for React SPA routing
-// This must be AFTER static files and API routes
+// 5. CATCH-ALL FOR SPA
 app.get('*', (req, res, next) => {
-  // If it's an API request that didn't match, don't send index.html
-  if (req.path.startsWith('/api')) {
+  // Never serve index.html for API paths
+  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
     return next();
   }
   res.sendFile(path.join(frontendPath, 'index.html'));
