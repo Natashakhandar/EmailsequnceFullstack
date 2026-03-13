@@ -123,6 +123,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Quick ping for connectivity test
+app.get('/api/ping', (req, res) => res.send('pong'));
+
 // API routes
 app.use('/api/auth', authRouter);
 app.use('/api/contacts', contactsRouter);
@@ -200,9 +203,14 @@ app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
-// 404 handler for API routes
-app.use('/api/*', (req, res) => {
-  res.status(404).json({ error: 'API Route not found' });
+// 404 handler for API routes - gives a JSON response
+app.all('/api/*', (req, res) => {
+  console.log(`❌ [404] No route matched for ${req.method} ${req.url}`);
+  res.status(404).json({ 
+    error: 'API Route not found', 
+    path: req.originalUrl,
+    method: req.method
+  });
 });
 
 // Start server
