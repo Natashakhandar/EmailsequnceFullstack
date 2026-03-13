@@ -59,16 +59,11 @@ router.post('/login', async (req, res) => {
       token
     });
   } catch (error) {
-    console.error('❌ Login error details:', {
-      message: error.message,
-      stack: error.stack,
-      code: error.code
-    });
     res.status(500).json({ 
-      error: error.message || 'Internal server error', 
+      error: 'Backend Error: ' + (error.message || 'Internal server error'), 
       message: error.message,
       code: error.code,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: process.env.NODE_ENV !== 'production' ? error.stack : undefined
     });
   }
 });
