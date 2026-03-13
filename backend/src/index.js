@@ -34,67 +34,38 @@ const app = express();
 const http = require('http');
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
-app.set('trust proxy', true); // Trust Hostinger proxy for accurate IP tracking
 
-
-if (!process.env.DATABASE_URL) {
-  console.error('❌ DATABASE_URL is not defined in environment variables');
-} else {
-  console.log('✅ DATABASE_URL is configured');
-}
-
-// CORS configuration - MUST be before helmet
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    
-    const allowedPatterns = [
-      'localhost',
-      '127.0.0.1',
-      'boostnow.in',
-      'hostingersite.com'
-    ];
-    
-    const isAllowed = allowedPatterns.some(pattern => origin.includes(pattern));
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.log('🚫 CORS Blocked Origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  credentials: true,
-  maxAge: 86400 // Cache preflight for 24 hours
-}));
-
-// Security middleware - after CORS so it doesn't block cross-origin requests
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-  crossOriginOpenerPolicy: false,
-  contentSecurityPolicy: false
-}));
-
-// Rate limiting
-// Rate limiting - increased for production because Hostinger triggers it often
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 2000, // Significantly increased to avoid proxy IP issues
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: 'Too many requests, please try again later.',
-  skip: (req) => req.method === 'OPTIONS', // Never rate limit preflights
+// Add identifying header to all responses
+app.use((req, res, next) => {
+  res.setHeader('X-Backend-Server', 'NodeJS-Express');
+  next();
 });
-app.use(limiter);
 
-// CORS configuration is already set up above
+// 1. ABSOLUTE TOP DIAGNOSTICS - Before any other middleware
+app.get('/ping', (req, res) => res.send('pong-root-v2'));
+app.get('/debug-env', (req, res) => {
+  res.json({
+    cwd: process.cwd(),
+    dirname: __dirname,
+    node_version: process.version,
+    env: process.env.NODE_ENV,
+    url: req.url,
+    path: req.path
+  });
+});
 
-// Body parsing middleware
+app.set('trust proxy', true);
+
+// Body parsing early for diagnostics
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 2. LOGGING
+app.use((req, res, next) => {
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`📡 [${timestamp}] ${req.method} ${req.url}`);
+  next();
+});
 
 // 1. DIAGNOSTICS & LOGGING - At the very top
 app.use((req, res, next) => {
@@ -114,7 +85,7 @@ app.get('/health-check', (req, res) => res.json({
   time: new Date().toISOString()
 }));
 
-// 2. API ROUTES - Explicitly defined before static serving
+// 3. API ROUTES
 app.use('/api/auth', authRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/leads', contactsRouter);
@@ -138,8 +109,11 @@ app.use('/api/smtp', smtpRouter);
 app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'API is functional' }));
 app.get('/api/ping', (req, res) => res.send('pong-api'));
 
-// 3. FALLBACKS
-app.use('/auth', authRouter); // External fallback
+// CORS & Rate Limit for existing routes (after basic diagnostics)
+app.use(cors({
+    origin: '*', // Simplified for testing
+    credentials: true
+}));
 
 // Static file serving - Serve frontend build
 const fs = require('fs');
