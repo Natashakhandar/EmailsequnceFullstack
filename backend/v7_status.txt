@@ -1,0 +1,4 @@
+STATUS: STABLE
+PORT: 3001
+TIME: 2026-03-13T10:33:45.674Z
+FE: C:\Users\natas\OneDrive\Desktop\EmailsequnceFullstack\backend\dist

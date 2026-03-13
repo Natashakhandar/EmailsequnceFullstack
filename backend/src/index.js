@@ -32,23 +32,24 @@ const http = require('http');
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
 
-// --- CRITICAL: Diagnostic Routes (Before everything) ---
-app.get('/ping', (req, res) => res.status(200).send('pong-v5-stable-final'));
-app.get('/api/ping', (req, res) => res.status(200).send('pong-api-v5-stable-final'));
+// --- 1. ABSOLUTE TOP: Diagnostics (Bypass all middleware) ---
+app.get('/ping', (req, res) => res.status(200).send('pong-v7-master-stable'));
+app.get('/api/ping', (req, res) => res.status(200).send('pong-api-v7-master-stable'));
 
-// --- GLOBAL MIDDLEWARE ---
+// --- 2. GLOBAL MIDDLEWARE (Security & Parsers) ---
 app.use(cors({ origin: '*', credentials: true }));
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
+// Custom Response Headers
 app.use((req, res, next) => {
-  res.setHeader('X-Backend-Server', 'NodeJS');
-  res.setHeader('X-API-Path', req.path);
+  res.setHeader('X-Power-Source', 'NodeJS-Master-V7');
+  res.setHeader('X-Active-Port', PORT);
   next();
 });
 
-// --- API ROUTES ---
+// --- 3. API ROUTES ---
 app.use('/api/auth', authRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/leads', contactsRouter);
@@ -66,59 +67,44 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/smtp', smtpRouter);
 
-// Fallback for auth if /api is missing (common in some configs)
+// Fallback for missing /api
 app.use('/auth', authRouter);
 
-// --- FRONTEND SERVING ---
-// Discovery of frontend assets
-const possiblePaths = [
+// --- 4. FRONTEND SERVING ---
+// Robust discovery of static assets
+const feAssets = [
   path.join(process.cwd(), 'dist'),
   path.join(process.cwd(), 'public'),
-  path.join(process.cwd(), 'backend/dist'),
-  path.join(process.cwd(), 'backend/public'),
+  path.join(process.cwd(), '../dist'),
   path.join(__dirname, '../../dist'),
   path.join(__dirname, '../public')
-];
+].find(p => fs.existsSync(path.join(p, 'index.html'))) || path.join(process.cwd(), 'public');
 
-let frontendPath = null;
-for (const p of possiblePaths) {
-  if (fs.existsSync(path.join(p, 'index.html'))) {
-    frontendPath = p;
-    console.log(`✅ Found Frontend Assets at: ${p}`);
-    break;
+app.use(express.static(feAssets));
+
+// --- 5. SPA CATCH-ALL ---
+app.get('*', (req, res, next) => {
+  // Never serve HTML for API requests
+  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
+    return res.status(404).json({ error: 'API endpoint not found', path: req.path });
   }
-}
+  res.sendFile(path.join(feAssets, 'index.html'));
+});
 
-if (frontendPath) {
-  app.use(express.static(frontendPath));
-  
-  // SPA Catch-all
-  app.get('*', (req, res, next) => {
-    // If it's an API request that failed all routes, return 404 JSON, not HTML
-    if (req.path.startsWith('/api/')) {
-      return res.status(404).json({ error: 'API route not found', path: req.path });
-    }
-    res.sendFile(path.join(frontendPath, 'index.html'));
-  });
-} else {
-  console.warn('⚠️ Frontend assets NOT found. Only API routes will work.');
-  app.get('/', (req, res) => res.send('API is running, but UI assets were not found.'));
-}
-
-// --- START SERVER ---
+// --- 6. START SERVER ---
 initializeSocket(server);
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server listening on port ${PORT}`);
+  console.log(`🚀 MASTER STABLE V7: Running on port ${PORT}`);
   
-  // Write diagnostic file
+  // Write persistent diagnostic file
   try {
-    fs.writeFileSync(path.join(process.cwd(), 'server_info.txt'), 
-      `START: ${new Date().toISOString()}\nPORT: ${PORT}\nCWD: ${process.cwd()}\nFE: ${frontendPath}`);
+    fs.writeFileSync(path.join(process.cwd(), 'v7_status.txt'), 
+      `STATUS: STABLE\nPORT: ${PORT}\nTIME: ${new Date().toISOString()}\nFE: ${feAssets}`);
   } catch (e) {}
 
   try { 
-    prisma.$connect().catch(e => console.error('Prisma Error:', e.message));
+    prisma.$connect().catch(e => console.error('DB FAIL:', e.message));
     startScheduler(); 
   } catch (e) {}
 });
