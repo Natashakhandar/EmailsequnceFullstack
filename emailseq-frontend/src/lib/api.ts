@@ -5,24 +5,12 @@ const getApiBaseUrl = () => {
 
   if (import.meta.env.DEV) {
     if (envUrl && !envUrl.includes('placeholder')) return envUrl;
-    return '';
+    return 'http://localhost:3001';
   }
 
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-
-    // REDIRECT API: If on main boostnow domain, talk to the silver-tapir backend
-    // Since email.boostnow.in is a different host, we check for main domain specifically
-    if (hostname === 'boostnow.in' || hostname === 'www.boostnow.in') {
-      return 'https://silver-tapir-929419.hostingersite.com';
-    }
-
-    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return window.location.origin;
-    }
-  }
-
-  return envUrl || window.location.origin;
+  // In production, always use relative path if we're on the same server
+  // This is the most reliable way to handle subdomains and proxies
+  return '';
 };
 
 export const RAW_BASE = getApiBaseUrl();
