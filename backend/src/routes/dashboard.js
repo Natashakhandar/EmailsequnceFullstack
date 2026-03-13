@@ -179,21 +179,26 @@ router.get('/stats', async (req, res) => {
       }
     };
 
-    console.log('✅ Dashboard statistics compiled successfully');
+    console.log('✅ Dashboard statistics compiled:', {
+      totalEmailsSent,
+      openRate: response.openRate.percentage,
+      replyRate: response.replyRate.percentage,
+      bounceRate: response.bounceRate.percentage,
+      dailyActivitySum: dailyActivity.reduce((a, b) => a + b, 0),
+      weeklyPerformanceSum: weeklyPerformance.reduce((a, b) => a + b, 0)
+    });
+
     res.json(response);
 
   } catch (error) {
-    console.error('❌ CRITICAL ERROR in dashboard/stats:', {
-      message: error.message,
-      code: error.code,
-      meta: error.meta,
-      stack: error.stack
+    console.error('❌ Error fetching dashboard statistics:', {
+      error: error.message,
+      stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
     });
 
     res.status(500).json({
       error: 'Failed to fetch dashboard statistics',
-      details: error.message,
-      ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
+      ...(process.env.NODE_ENV !== 'production' && { details: error.message })
     });
   }
 });

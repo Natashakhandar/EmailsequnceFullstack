@@ -21,8 +21,10 @@ function enhanceHtmlFormatting(htmlContent) {
       <html>
         <head>
           <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Email</title>
         </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.5; color: #000; margin: 0; padding: 0;">
+        <body style="font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           ${enhanced}
         </body>
       </html>
@@ -293,9 +295,9 @@ async function sendEmail({
     const formattedSignature = signature && signature.trim() ?
       replaceTokens(signature, contactData, tokenOptions).replace(/\n/g, '<br>') : "";
 
-    // Generate final email HTML with natural fluid structure (looks like Gmail manual send)
+    // Generate final email HTML with proper left alignment and structure
     const fullEmailHtml = `
-      <div style="font-family: Arial, sans-serif; font-size: 14px; color: #000; line-height: 1.5;">
+      <div style="text-align:left; font-family:Arial, sans-serif; line-height:1.6; padding: 16px; max-width: 600px;">
         ${formattedBody}
         ${formattedSignature ? `<br><br>${formattedSignature}` : ''}
       </div>
@@ -329,7 +331,7 @@ async function sendEmail({
       unsubscribeUrl = await generateUnsubscribeToken(contactId);
     }
 
-    // Prepare email options with MINIMAL headers to avoid Promotions tab
+    // Prepare email options
     const mailOptions = {
       from: {
         name: fromName,
@@ -340,10 +342,13 @@ async function sendEmail({
       html: processedHtmlBody,
       text: processedTextBody,
       replyTo: fromAddress,
+      priority: 'normal',
       headers: {
         'Message-ID': messageId,
-        'X-Priority': '3',
-        'Importance': 'normal'
+        'List-Unsubscribe': `<${unsubscribeUrl}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        'X-Priority': '3 (Normal)',
+        'Importance': 'Normal'
       }
     };
 

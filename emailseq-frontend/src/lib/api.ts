@@ -1,14 +1,37 @@
 // API configuration and utilities for the email sequencing backend
 
 const getApiBaseUrl = () => {
-  // Use relative path to leverage Vite proxy in DEV and same-origin in PROD
-  return '/api';
+  const envUrl = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_API_BASE_URL;
+
+  if (import.meta.env.DEV) {
+    if (envUrl && !envUrl.includes('placeholder')) return envUrl;
+    return '';
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+
+    // REDIRECT API: If on boostnow domain, talk to the silver-tapir backend
+    // This is because boostnow is likely configured as static-only in some environments
+    if (hostname.includes('boostnow.in')) {
+      return 'https://silver-tapir-929419.hostingersite.com';
+    }
+
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return window.location.origin;
+    }
+  }
+
+  return envUrl || 'https://silver-tapir-929419.hostingersite.com';
 };
 
-export const API_BASE_URL = getApiBaseUrl();
-export const RAW_BASE = window.location.origin;
+export const RAW_BASE = getApiBaseUrl();
 
-console.log('🌐 API Config:', { API_BASE_URL, RAW_BASE });
+export const API_BASE_URL = RAW_BASE.endsWith('/api')
+  ? RAW_BASE
+  : `${RAW_BASE.replace(/\/$/, '')}/api`;
+
+console.log('🌐 API_BASE_URL:', API_BASE_URL);
 
 // API response types
 export interface Contact {

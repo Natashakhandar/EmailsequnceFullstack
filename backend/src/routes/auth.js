@@ -19,6 +19,7 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
+      console.log('❌ Missing email or password');
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
@@ -28,24 +29,34 @@ router.post('/login', async (req, res) => {
       return res.status(500).json({ error: 'Server configuration error' });
     }
 
+    console.log('🔍 Looking for user:', email.toLowerCase());
+
     // Find user by email
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() }
     });
 
     if (!user) {
+      console.log('❌ User not found:', email.toLowerCase());
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    console.log('✅ User found:', { id: user.id, email: user.email, isActive: user.isActive });
+
     if (!user.isActive) {
+      console.log('❌ User account inactive');
       return res.status(401).json({ error: 'Account is inactive' });
     }
 
     // Verify password
+    console.log('🔑 Verifying password...');
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
+      console.log('❌ Invalid password');
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    console.log('✅ Password valid, generating token...');
 
     // Generate token
     const token = generateToken(user.id);
@@ -53,17 +64,24 @@ router.post('/login', async (req, res) => {
     // Return user data (without password) and token
     const { password: _, ...userWithoutPassword } = user;
 
+    console.log('✅ Login successful for:', user.email);
+
     res.json({
       message: 'Login successful',
       user: userWithoutPassword,
       token
     });
   } catch (error) {
+    console.error('❌ Login error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     res.status(500).json({ 
-      error: 'Backend Error: ' + (error.message || 'Internal server error'), 
+      error: error.message || 'Internal server error', 
       message: error.message,
       code: error.code,
-      details: process.env.NODE_ENV !== 'production' ? error.stack : undefined
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -87,7 +105,7 @@ router.post('/register', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     // Hash password
-    const saltRounds = 10;
+    const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Create user
@@ -294,7 +312,7 @@ router.post('/users/:id/change-password', authenticateToken, requireSuperAdmin, 
     }
 
     // Hash new password
-    const saltRounds = 10;
+    const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     await prisma.user.update({
