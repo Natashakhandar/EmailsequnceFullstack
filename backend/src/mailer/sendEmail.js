@@ -21,10 +21,8 @@ function enhanceHtmlFormatting(htmlContent) {
       <html>
         <head>
           <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Email</title>
         </head>
-        <body style="font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <body style="font-family: Arial, sans-serif; line-height: 1.5; color: #000; margin: 0; padding: 0;">
           ${enhanced}
         </body>
       </html>
@@ -265,7 +263,9 @@ async function sendEmail({
   contactId = null,
   signature = null,
   campaignId = null,
-  userConfig = null
+  userConfig = null,
+  inReplyTo = null,
+  references = null
 }) {
   try {
     const transport = createTransporter(userConfig);
@@ -293,9 +293,9 @@ async function sendEmail({
     const formattedSignature = signature && signature.trim() ?
       replaceTokens(signature, contactData, tokenOptions).replace(/\n/g, '<br>') : "";
 
-    // Generate final email HTML with proper left alignment and structure
+    // Generate final email HTML with natural fluid structure (looks like Gmail manual send)
     const fullEmailHtml = `
-      <div style="text-align:left; font-family:Arial, sans-serif; line-height:1.6; padding: 16px; max-width: 600px;">
+      <div style="font-family: Arial, sans-serif; font-size: 14px; color: #000; line-height: 1.5;">
         ${formattedBody}
         ${formattedSignature ? `<br><br>${formattedSignature}` : ''}
       </div>
@@ -317,9 +317,10 @@ async function sendEmail({
     const messageId = `<${uuidv4()}@${fromDomain}>`;
 
     // Add tracking pixel to HTML body if enrollmentId is provided
+    // MOVED to bottom to avoid early detection by tab filters
     if (enrollmentId && processedHtmlBody) {
-      const trackingPixel = `<img src="${emailConfig.appUrl}/api/track/open?emailId=${encodeURIComponent(messageId)}" width="1" height="1" style="display:none;" alt="" />`;
-      processedHtmlBody = trackingPixel + processedHtmlBody;
+      const trackingPixel = `<img src="${emailConfig.appUrl}/api/track/open?emailId=${encodeURIComponent(messageId)}" width="1" height="1" style="display:none !important;" alt="" />`;
+      processedHtmlBody = processedHtmlBody + trackingPixel;
     }
 
     // Generate unsubscribe URL if contactId is provided
@@ -328,7 +329,7 @@ async function sendEmail({
       unsubscribeUrl = await generateUnsubscribeToken(contactId);
     }
 
-    // Prepare email options
+    // Prepare email options with MINIMAL headers to avoid Promotions tab
     const mailOptions = {
       from: {
         name: fromName,
@@ -341,13 +342,20 @@ async function sendEmail({
       replyTo: fromAddress,
       headers: {
         'Message-ID': messageId,
-        'List-Unsubscribe': `<${unsubscribeUrl}>`,
-        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-        'X-Contact-ID': contactId || '',
-        'X-Enrollment-ID': enrollmentId || '',
-        'X-Mailer': 'Email Sequencing System v1.0'
+        'X-Priority': '3',
+        'Importance': 'normal'
       }
     };
+
+    if (inReplyTo) {
+      mailOptions.inReplyTo = inReplyTo;
+      mailOptions.headers['In-Reply-To'] = inReplyTo;
+    }
+
+    if (references) {
+      mailOptions.references = references;
+      mailOptions.headers['References'] = references;
+    }
 
     // Add bounce handling
     const bounceAddr = userConfig?.fromEmail || emailConfig.bounceAddress;
@@ -577,6 +585,30 @@ async function sendSequenceEmail(enrollment) {
     // Get user signature (if sequence has an owner)
     const userSignature = sequence.user?.signature || null;
 
+    // Check for previous step's Message-ID for threading (if Step > 1)
+    let threadHeaders = {};
+    if (enrollment.currentStep > 1) {
+      try {
+        const lastSentEvent = await prisma.event.findFirst({
+          where: {
+            enrollmentId: enrollment.id,
+            type: 'SENT'
+          },
+          orderBy: { timestamp: 'desc' }
+        });
+
+        if (lastSentEvent && lastSentEvent.emailId) {
+          threadHeaders = {
+            inReplyTo: lastSentEvent.emailId,
+            references: lastSentEvent.emailId
+          };
+          console.log(`🧵 Threading Step ${enrollment.currentStep} with previous Message-ID: ${lastSentEvent.emailId}`);
+        }
+      } catch (err) {
+        console.warn('⚠️ Could not fetch previous message for threading:', err.message);
+      }
+    }
+
     // Send the email
     const result = await sendEmail({
       to: contact.email,
@@ -587,7 +619,8 @@ async function sendSequenceEmail(enrollment) {
       contactId: contact.id,
       signature: userSignature,
       campaignId: fullEnrollment.campaignId, // Pass campaign ID for tracking
-      userConfig: sequence.user?.emailConfig || sequence.user || null
+      userConfig: sequence.user?.emailConfig || sequence.user || null,
+      ...threadHeaders
     });
 
     if (result.success) {

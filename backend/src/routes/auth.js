@@ -297,4 +297,37 @@ router.post('/impersonate/:userId', authenticateToken, requireSuperAdmin, async 
   }
 });
 
+// POST /api/auth/users/:id/change-password - Change user password (superadmin only)
+router.post('/users/:id/change-password', authenticateToken, requireSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: 'New password is required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    // Hash new password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    await prisma.user.update({
+      where: { id },
+      data: { password: hashedPassword }
+    });
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
