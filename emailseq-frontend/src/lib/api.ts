@@ -292,6 +292,21 @@ class ApiClient {
     });
   }
 
+  async getWarmupSettings(): Promise<any> {
+    return this.request<any>('/warmup/settings');
+  }
+
+  async updateWarmupSettings(data: any): Promise<any> {
+    return this.request<any>('/warmup/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAdminWarmupSettings(userId: string): Promise<any> {
+    return this.request<any>(`/warmup/admin/${userId}`);
+  }
+
   async impersonateUser(userId: string): Promise<LoginResponse> {
     // Store current token as original before switching
     const currentToken = this.getAuthToken();

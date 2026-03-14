@@ -37,6 +37,14 @@ const SmtpSettings = () => {
     imapPassword: '',
   });
 
+  const [warmupData, setWarmupData] = useState({
+    isEnabled: false,
+    currentBatchSize: 10,
+    dailyIncrement: 5,
+    maxLimit: 200,
+    dailySentCount: 0
+  });
+
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -69,6 +77,21 @@ const SmtpSettings = () => {
         }
       } catch (e) {
         console.error("Failed to fetch SMTP settings:", e);
+      }
+
+      try {
+        const warmup = await api.getWarmupSettings();
+        if (warmup) {
+          setWarmupData({
+            isEnabled: warmup.isEnabled,
+            currentBatchSize: warmup.currentBatchSize,
+            dailyIncrement: warmup.dailyIncrement,
+            maxLimit: warmup.maxLimit,
+            dailySentCount: warmup.dailySentCount
+          });
+        }
+      } catch (e) {
+        console.error("Failed to fetch warmup settings:", e);
       } finally {
         setLoading(false);
       }
@@ -89,7 +112,10 @@ const SmtpSettings = () => {
     setSaveSuccess(null);
     setSaveError(null);
     try {
-      await api.saveSmtpConfig(formData);
+      await Promise.all([
+        api.saveSmtpConfig(formData),
+        api.updateWarmupSettings(warmupData)
+      ]);
       setSaveSuccess("Settings saved successfully!");
       // reverify
       handleVerifySmtp();
@@ -297,6 +323,72 @@ const SmtpSettings = () => {
             <button onClick={handleVerifyImap} disabled={verifyingImap} className="w-full px-4 py-2 mt-4 rounded-md bg-muted text-foreground border border-border disabled:opacity-50 text-sm font-medium hover:bg-muted/80">
               {verifyingImap ? "Verifying..." : "Verify IMAP Connection"}
             </button>
+          </div>
+
+          {/* Email Warmup Section */}
+          <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
+            <div className="flex justify-between items-center border-b border-border pb-4">
+              <div>
+                <h2 className="text-lg font-semibold">Email Warmup (Safety Mode)</h2>
+                <p className="text-sm text-muted-foreground">Limit daily sending volume to prevent spam filters</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="sr-only peer" 
+                  checked={warmupData.isEnabled}
+                  onChange={(e) => setWarmupData(prev => ({ ...prev, isEnabled: e.target.checked }))}
+                />
+                <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              </label>
+            </div>
+
+            <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 ${!warmupData.isEnabled && 'opacity-50 pointer-events-none'}`}>
+              <div className="space-y-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Daily Send Limit (Now)</label>
+                  <input 
+                    type="number"
+                    value={warmupData.currentBatchSize}
+                    onChange={(e) => setWarmupData(prev => ({ ...prev, currentBatchSize: parseInt(e.target.value) || 0 }))}
+                    className="input bg-background border border-border rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/20 outline-none"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Today's maximum emails: <span className="text-primary font-bold">{warmupData.dailySentCount}</span>/{warmupData.currentBatchSize}</p>
+                </div>
+                
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Daily Increment</label>
+                  <input 
+                    type="number"
+                    value={warmupData.dailyIncrement}
+                    onChange={(e) => setWarmupData(prev => ({ ...prev, dailyIncrement: parseInt(e.target.value) || 0 }))}
+                    className="input bg-background border border-border rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/20 outline-none"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Increase limit by this much every active day</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Maximum Goal Limit</label>
+                  <input 
+                    type="number"
+                    value={warmupData.maxLimit}
+                    onChange={(e) => setWarmupData(prev => ({ ...prev, maxLimit: parseInt(e.target.value) || 0 }))}
+                    className="input bg-background border border-border rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/20 outline-none"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Stop increasing once this many emails per day is reached</p>
+                </div>
+
+                <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 rounded-lg p-3">
+                  <h4 className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase mb-1">How it works</h4>
+                  <p className="text-[11px] text-blue-600 dark:text-blue-300 leading-relaxed">
+                    Warmup prevents your domain from being flagged by gradually increasing daily volume. 
+                    If you send at least 80% of your current limit, the limit will increase by the "Daily Increment" amount tomorrow.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Test Email Section */}

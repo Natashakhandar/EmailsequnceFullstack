@@ -23,6 +23,7 @@ const reportsRouter = require('./routes/reports');
 const campaignsRouter = require('./routes/campaigns');
 const fixEventDetailsRouter = require('./routes/fixEventDetails');
 const smtpRouter = require('./routes/smtp');
+const warmupRouter = require('./routes/warmup');
 
 // Import scheduler and email monitor
 const { startScheduler } = require('./jobs/scheduler');
@@ -124,6 +125,7 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/fix-event-details', fixEventDetailsRouter);
 app.use('/api/smtp', smtpRouter);
+app.use('/api/warmup', warmupRouter);
 
 // Static file serving - Serve frontend build
 const fs = require('fs');

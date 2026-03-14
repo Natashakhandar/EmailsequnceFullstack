@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const { sendEmail, sendSequenceEmail, verifyConnection } = require('../mailer/sendEmail');
 const { startEmailMonitoring } = require('./emailMonitorJob');
 const prisma = require('../db/prismaClient');
+const warmupManager = require('../services/warmupManager');
 
 let isSchedulerRunning = false;
 let schedulerTask = null;
@@ -273,6 +274,22 @@ async function processDueEmails() {
           continue;
         }
 
+        // WARMUP CHECK: Check if the user has reached their daily limit
+        const canSend = await warmupManager.canSendEmail(enrollment.sequence.userId);
+        if (!canSend) {
+          console.log(`⏳ Warmup limit reached for user ${enrollment.sequence.userId}. Postponing enrollment ${enrollment.id}`);
+          // Update nextSendAt to check again tomorrow
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(9, 0, 0, 0); // Reset to 9 AM tomorrow
+          
+          await prisma.enrollment.update({
+            where: { id: enrollment.id },
+            data: { nextSendAt: tomorrow }
+          });
+          continue;
+        }
+
         // Add a small delay between emails to avoid overwhelming SMTP server
         if (successCount > 0) {
           await new Promise(resolve => setTimeout(resolve, 500)); 
@@ -310,6 +327,8 @@ async function processDueEmails() {
 
         if (result.success) {
           successCount++;
+          // Record successful send in warmup manager
+          await warmupManager.recordSentEmail(enrollment.sequence.userId);
         } else {
           errorCount++;
           console.log(`❌ Failed to send email for enrollment ${enrollment.id}: ${result.error || result.reason}`);
