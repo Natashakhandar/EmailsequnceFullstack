@@ -81,11 +81,13 @@ const Campaigns = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [leadsSearchTerm, setLeadsSearchTerm] = useState("");
+  const [warmupStatus, setWarmupStatus] = useState({ isEnabled: false, reached: false });
 
   // Load data on component mount
   useEffect(() => {
     loadCampaigns();
-    loadSequences(); // Load sequences so they are available for mapping names in the table
+    loadSequences(); 
+    loadWarmupStatus();
   }, []);
 
   // Validate form whenever formData changes
@@ -106,6 +108,20 @@ const Campaigns = () => {
       setCampaigns([]);
     } finally {
       setLoadingCampaigns(false);
+    }
+  };
+
+  const loadWarmupStatus = async () => {
+    try {
+      const status = await api.getWarmupSettings();
+      if (status) {
+        setWarmupStatus({
+          isEnabled: status.isEnabled,
+          reached: status.isEnabled && (Number(status.dailySentCount) >= Number(status.currentBatchSize))
+        });
+      }
+    } catch (error) {
+      console.error("Error loading warmup status:", error);
     }
   };
 
@@ -344,6 +360,12 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
       return;
     }
 
+    // CHECK WARMUP LIMIT
+    if (warmupStatus.reached) {
+      const proceed = window.confirm("⚠️ Daily sending limit reached!\n\nAny emails from this campaign will be automatically scheduled for tomorrow. Do you want to proceed?");
+      if (!proceed) return;
+    }
+
     try {
       setIsSubmitting(true);
       
@@ -432,6 +454,25 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
       <Navbar />
 
       <main className="container mx-auto px-6 pt-20 pb-12">
+        {/* Warmup Alert Banner */}
+        {warmupStatus.reached && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            className="mb-6 overflow-hidden"
+          >
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-4 shadow-sm">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-red-900">Daily Warmup Limit Reached!</h3>
+                <p className="text-sm text-red-700">You've reached your daily sending limit. New emails will be automatically queued for tomorrow morning to protect your reputation.</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

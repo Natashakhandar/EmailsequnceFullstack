@@ -17,7 +17,15 @@ router.get('/settings', authenticateToken, async (req, res) => {
 // PUT /api/warmup/settings
 router.put('/settings', authenticateToken, async (req, res) => {
   try {
-    const settings = await warmupManager.updateSettings(req.user.id, req.body);
+    const { isEnabled, currentBatchSize, dailyIncrement, maxLimit } = req.body;
+    
+    const updateData = {};
+    if (isEnabled !== undefined) updateData.isEnabled = !!isEnabled;
+    if (currentBatchSize !== undefined) updateData.currentBatchSize = parseInt(currentBatchSize);
+    if (dailyIncrement !== undefined) updateData.dailyIncrement = parseInt(dailyIncrement);
+    if (maxLimit !== undefined) updateData.maxLimit = parseInt(maxLimit);
+
+    const settings = await warmupManager.updateSettings(req.user.id, updateData);
     res.json({
       message: 'Warmup settings updated successfully',
       settings

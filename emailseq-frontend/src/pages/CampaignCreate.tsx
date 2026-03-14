@@ -53,11 +53,13 @@ const CampaignCreate = () => {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
   const [loadingSequences, setLoadingSequences] = useState(true);
+  const [warmupStatus, setWarmupStatus] = useState({ isEnabled: false, reached: false });
 
   // Load data on component mount
   useEffect(() => {
     loadLeads();
     loadSequences();
+    loadWarmupStatus();
   }, []);
 
   // Validate form whenever formData changes
@@ -92,6 +94,25 @@ const CampaignCreate = () => {
       setSequences([]);
     } finally {
       setLoadingSequences(false);
+    }
+  };
+
+  const loadWarmupStatus = async () => {
+    try {
+      const status = await api.getWarmupSettings();
+      console.log("📊 [DEBUG] Warmup Status Loaded:", status);
+      if (status) {
+        const isEnabled = status.isEnabled === true;
+        const sent = Number(status.dailySentCount || 0);
+        const limit = Number(status.currentBatchSize || 0);
+        
+        setWarmupStatus({
+          isEnabled,
+          reached: isEnabled && sent >= limit
+        });
+      }
+    } catch (error) {
+      console.error("Error loading warmup status:", error);
     }
   };
 
@@ -208,8 +229,35 @@ const CampaignCreate = () => {
       return;
     }
 
+    // CHECK WARMUP LIMIT
+    console.log("🛡️ Checking warmup limit before submission:", warmupStatus);
+    if (warmupStatus.reached) {
+      toast.error("Todays limit reach! Your campaign will be created, but emails will be automatically scheduled for tomorrow.", {
+        duration: 6000,
+      });
+      // We don't block the creation, but we warn the user.
+    }
+
     try {
       setIsSubmitting(true);
+      
+      // RE-CHECK WARMUP STATUS RIGHT BEFORE SUBMIT (FORCE FRESH DATA)
+      const status = await api.getWarmupSettings();
+      const sent = Number(status?.dailySentCount || 0);
+      const limit = Number(status?.currentBatchSize || 0);
+      const isReached = status?.isEnabled && (sent >= limit);
+      
+      console.log("🛡️ [WARMUP CHECK] Sent:", sent, "Limit:", limit, "Reached:", isReached);
+
+      if (isReached) {
+        // Force a confirmation modal that cannot be missed
+        const proceed = window.confirm("⚠️ Daily sending limit reached!\n\nYour campaign will be created, but emails will be automatically scheduled for tomorrow morning. Do you want to proceed?");
+        
+        if (!proceed) {
+          setIsSubmitting(false);
+          return;
+        }
+      }
       
       // Transform camelCase form data to snake_case for backend API
       const campaignData = {
@@ -221,23 +269,14 @@ const CampaignCreate = () => {
         end_date: formData.endDate.trim() || undefined
       };
 
-      console.log("=== PAYLOAD TRANSFORMATION VERIFICATION ===");
-      console.log("Original form data (camelCase):", {
-        campaignName: formData.campaignName,
-        sequenceId: formData.sequenceId,
-        leadIds: formData.leadIds,
-        startDate: formData.startDate,
-        endDate: formData.endDate
-      });
-      console.log("Transformed API payload (snake_case):", campaignData);
-      console.log("API payload size:", JSON.stringify(campaignData).length, "bytes");
-      
       const campaign = await api.createCampaign(campaignData);
-      
       console.log("Campaign created successfully:", campaign);
-      toast.success("Campaign created successfully!");
       
-      // Navigate back to leads page or to a campaigns list page
+      toast.success("Campaign created successfully!");
+      if (isReached) {
+        toast.info("Emails scheduled for tomorrow due to limit.");
+      }
+      
       navigate("/leads");
       
     } catch (error: any) {
@@ -313,6 +352,15 @@ const CampaignCreate = () => {
               <CardDescription>
                 Fill in the campaign information and select leads to get started
               </CardDescription>
+              {warmupStatus.reached && (
+                <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-bold text-amber-800">Daily Warmup Limit Reached</h4>
+                    <p className="text-xs text-amber-700">You've hit your daily sending limit. Any emails from this campaign will be automatically scheduled for tomorrow morning.</p>
+                  </div>
+                </div>
+              )}
             </CardHeader>
             
             <CardContent>

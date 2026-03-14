@@ -112,9 +112,12 @@ const SmtpSettings = () => {
     setSaveSuccess(null);
     setSaveError(null);
     try {
+      // Create a clean object for warmup update without dailySentCount to prevent overwriting progress
+      const { dailySentCount, ...warmupUpdate } = warmupData;
+      
       await Promise.all([
         api.saveSmtpConfig(formData),
-        api.updateWarmupSettings(warmupData)
+        api.updateWarmupSettings(warmupUpdate)
       ]);
       setSaveSuccess("Settings saved successfully!");
       // reverify

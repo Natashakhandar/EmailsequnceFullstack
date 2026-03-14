@@ -274,9 +274,9 @@ async function processDueEmails() {
           continue;
         }
 
-        // WARMUP CHECK: Check if the user has reached their daily limit
-        const canSend = await warmupManager.canSendEmail(enrollment.sequence.userId);
-        if (!canSend) {
+        // WARMUP CHECK: Atomic check-and-increment to prevent race conditions
+        const slotClaimed = await warmupManager.claimWarmupSlot(enrollment.sequence.userId);
+        if (!slotClaimed) {
           console.log(`⏳ Warmup limit reached for user ${enrollment.sequence.userId}. Postponing enrollment ${enrollment.id}`);
           // Update nextSendAt to check again tomorrow
           const tomorrow = new Date();
@@ -320,6 +320,9 @@ async function processDueEmails() {
               data: { nextSendAt: nextCheck }
             });
           }
+          
+          // Refund the warmup slot since we aren't sending an email
+          await warmupManager.refundWarmupSlot(enrollment.sequence.userId);
           continue;
         }
 
@@ -327,11 +330,12 @@ async function processDueEmails() {
 
         if (result.success) {
           successCount++;
-          // Record successful send in warmup manager
-          await warmupManager.recordSentEmail(enrollment.sequence.userId);
+          // Success! Slot was already claimed before sending
         } else {
           errorCount++;
           console.log(`❌ Failed to send email for enrollment ${enrollment.id}: ${result.error || result.reason}`);
+          // Refund the warmup slot on failure
+          await warmupManager.refundWarmupSlot(enrollment.sequence.userId);
         }
 
       } catch (error) {
