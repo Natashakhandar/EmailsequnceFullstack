@@ -89,7 +89,7 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/register (only for superadmin/admin to create users)
 router.post('/register', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { email, password, firstName, lastName, role = 'USER' } = req.body;
+    const { email, password, firstName, lastName, role = 'USER', managedUserIds = [] } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -115,7 +115,12 @@ router.post('/register', authenticateToken, requireAdmin, async (req, res) => {
         password: hashedPassword,
         firstName,
         lastName,
-        role
+        role,
+        ...(role === 'MANAGER' && managedUserIds.length > 0 && {
+          managedUsers: {
+            connect: managedUserIds.map(id => ({ id }))
+          }
+        })
       }
     });
 
@@ -161,10 +166,20 @@ router.post('/logout', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/auth/users - List all users (superadmin only)
-router.get('/users', authenticateToken, requireSuperAdmin, async (req, res) => {
+// GET /api/auth/users - List users (superadmin can see all, manager can see managed users)
+router.get('/users', authenticateToken, async (req, res) => {
   try {
+    const isAdmin = req.user.role === 'SUPERADMIN' || req.user.role === 'ADMIN';
+    const isManager = req.user.role === 'MANAGER';
+
+    if (!isAdmin && !isManager) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const where = isManager ? { managerId: req.user.id } : {};
+
     const users = await prisma.user.findMany({
+      where,
       select: {
         id: true,
         email: true,
@@ -173,7 +188,15 @@ router.get('/users', authenticateToken, requireSuperAdmin, async (req, res) => {
         role: true,
         isActive: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        managedUsers: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true
+          }
+        }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -189,7 +212,7 @@ router.get('/users', authenticateToken, requireSuperAdmin, async (req, res) => {
 router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { email, firstName, lastName, role, isActive } = req.body;
+    const { email, firstName, lastName, role, isActive, managedUserIds } = req.body;
 
     const user = await prisma.user.update({
       where: { id },
@@ -198,7 +221,17 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         ...(firstName !== undefined && { firstName }),
         ...(lastName !== undefined && { lastName }),
         ...(role && { role }),
-        ...(isActive !== undefined && { isActive })
+        ...(isActive !== undefined && { isActive }),
+        ...(role === 'MANAGER' && managedUserIds !== undefined && {
+          managedUsers: {
+            set: managedUserIds.map(id => ({ id }))
+          }
+        }),
+        ...(role && role !== 'MANAGER' && {
+          managedUsers: {
+            set: []
+          }
+        })
       },
       select: {
         id: true,
@@ -208,7 +241,13 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         role: true,
         isActive: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        managedUsers: {
+          select: {
+            id: true,
+            email: true
+          }
+        }
       }
     });
 
@@ -249,19 +288,38 @@ router.delete('/users/:id', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-// POST /api/auth/impersonate/:userId - Impersonate another user (superadmin only)
-router.post('/impersonate/:userId', authenticateToken, requireSuperAdmin, async (req, res) => {
+// POST /api/auth/impersonate/:userId - Impersonate another user (superadmin/manager only)
+router.post('/impersonate/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
 
-    console.log(`👤 Impersonation request: ${req.user.email} -> ${userId}`);
+    console.log(`👤 Impersonation request: ${req.user.email} (Role: ${req.user.role}) -> ${userId}`);
 
-    // Prevent impersonating yourself (waste of time)
+    // Permission check
+    if (req.user.role !== 'SUPERADMIN') {
+      if (req.user.role !== 'MANAGER') {
+        return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
+      }
+
+      // Check if this manager manages the target user
+      const targetUser = await prisma.user.findFirst({
+        where: {
+          id: userId,
+          managerId: req.user.id
+        }
+      });
+
+      if (!targetUser) {
+        return res.status(403).json({ error: 'Access denied. You can only view work of users you manage.' });
+      }
+    }
+
+    // Prevent impersonating yourself
     if (userId === req.user.id) {
       return res.status(400).json({ error: 'Cannot impersonate yourself' });
     }
 
-    // Find target user
+    // Find target user (already found for manager above, but need it for superadmin)
     const targetUser = await prisma.user.findUnique({
       where: { id: userId }
     });
@@ -281,7 +339,7 @@ router.post('/impersonate/:userId', authenticateToken, requireSuperAdmin, async 
     console.log(`✅ Impersonation successful: Logged in as ${targetUser.email}`);
 
     res.json({
-      message: `Impersonating ${targetUser.email}`,
+      message: `Viewing work for ${targetUser.email}`,
       user: userWithoutPassword,
       token,
       isImpersonating: true,

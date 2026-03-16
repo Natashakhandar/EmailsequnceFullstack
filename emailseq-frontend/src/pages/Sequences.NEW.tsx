@@ -1338,7 +1338,7 @@ Line breaks will be preserved in the final email."
                                   <Label className="text-sm font-medium text-gray-700">
                                     Email Preview
                                   </Label>
-                                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                                  <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium">
                                     Live Preview
                                   </span>
                                 </div>

@@ -24,8 +24,10 @@ function enhanceHtmlFormatting(htmlContent) {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Email</title>
         </head>
-        <body style="font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          ${enhanced}
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.5; color: #000; margin: 0; padding: 0;">
+          <div style="padding: 10px 0;">
+            ${enhanced}
+          </div>
         </body>
       </html>
     `;
@@ -297,9 +299,9 @@ async function sendEmail({
 
     // Generate final email HTML with proper left alignment and structure
     const fullEmailHtml = `
-      <div style="text-align:left; font-family:Arial, sans-serif; line-height:1.6; padding: 16px; max-width: 600px;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000; text-align: left;">
         ${formattedBody}
-        ${formattedSignature ? `<br><br>${formattedSignature}` : ''}
+        ${formattedSignature ? `<div style="margin-top: 20px;">${formattedSignature}</div>` : ''}
       </div>
     `;
 
@@ -348,7 +350,11 @@ async function sendEmail({
         'List-Unsubscribe': `<${unsubscribeUrl}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         'X-Priority': '3 (Normal)',
-        'Importance': 'Normal'
+        'Importance': 'Normal',
+        // Anti-Promotion/Update tab headers
+        'X-Entity-Ref-ID': uuidv4(),
+        'X-Auto-Response-Suppress': 'OOF, AutoReply',
+        'Precedence': 'personal'
       }
     };
 

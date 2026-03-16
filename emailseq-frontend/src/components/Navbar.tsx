@@ -78,10 +78,14 @@ const Navbar = () => {
           { to: "/profile", label: "Profile", icon: User },
         ];
 
-        if (currentUser?.role === 'SUPERADMIN') {
+        if (currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'MANAGER') {
           const links = [...base];
           const profileItem = links.pop();
-          links.push({ to: "/admin-management", label: "Admin Management", icon: Shield });
+          links.push({ 
+            to: "/admin-management", 
+            label: currentUser.role === 'SUPERADMIN' ? "Admin Management" : "My Team", 
+            icon: currentUser.role === 'SUPERADMIN' ? Shield : Users 
+          });
           if (profileItem) links.push(profileItem);
           return links;
         }
@@ -103,9 +107,9 @@ const Navbar = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="text-xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"
+            className="text-xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent whitespace-nowrap"
           >
-            BoostNow Sales Company
+            BN Mail
           </motion.div>
 
           {/* Navigation Links */}

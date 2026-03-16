@@ -23,7 +23,8 @@ const authenticateToken = async (req, res, next) => {
         firstName: true,
         lastName: true,
         role: true,
-        isActive: true
+        isActive: true,
+        createdAt: true
       }
     });
 

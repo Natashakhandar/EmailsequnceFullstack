@@ -9,7 +9,7 @@ router.use(authenticateToken);
 // GET /api/contacts - Get all contacts with pagination
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 50, status, search } = req.query;
+    const { page = 1, limit = 50, status, search, leadListName } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
@@ -17,12 +17,22 @@ router.get('/', async (req, res) => {
       userId: req.user.id
     };
     if (status) where.status = status;
+    
+    if (leadListName !== undefined) {
+      if (!leadListName || leadListName === 'null' || leadListName === 'Uncategorized') {
+        where.leadListName = null;
+      } else {
+        where.leadListName = leadListName;
+      }
+    }
+    
     if (search) {
       where.OR = [
         { email: { contains: search, mode: 'insensitive' } },
         { firstName: { contains: search, mode: 'insensitive' } },
         { lastName: { contains: search, mode: 'insensitive' } },
-        { company: { contains: search, mode: 'insensitive' } }
+        { company: { contains: search, mode: 'insensitive' } },
+        { leadListName: { contains: search, mode: 'insensitive' } }
       ];
     }
 
@@ -58,6 +68,36 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Error fetching contacts:', error);
     res.status(500).json({ error: 'Failed to fetch contacts' });
+  }
+});
+
+// GET /api/contacts/groups - Get unique Lead List Names with counts
+router.get('/groups', async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
+    const where = isAdmin ? {} : { userId: req.user.id };
+
+    const groups = await prisma.contact.groupBy({
+      by: ['leadListName'],
+      where,
+      _count: {
+        _all: true
+      },
+      orderBy: {
+        leadListName: 'asc'
+      }
+    });
+
+    // Format for easier frontend use
+    const formattedGroups = groups.map(group => ({
+      name: group.leadListName || 'Uncategorized',
+      count: group._count._all
+    }));
+
+    res.json(formattedGroups);
+  } catch (error) {
+    console.error('Error fetching contact groups:', error);
+    res.status(500).json({ error: 'Failed to fetch contact groups' });
   }
 });
 
@@ -101,7 +141,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/contacts - Create new contact
 router.post('/', async (req, res) => {
   try {
-    const { email, firstName, lastName, company, timezone = 'UTC' } = req.body;
+    const { email, firstName, lastName, company, leadListName, timezone = 'UTC' } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
@@ -126,6 +166,7 @@ router.post('/', async (req, res) => {
         firstName: firstName?.trim(),
         lastName: lastName?.trim(),
         company: company?.trim(),
+        leadListName: leadListName?.trim() || null,
         timezone
       }
     });
@@ -140,7 +181,7 @@ router.post('/', async (req, res) => {
 // PUT /api/contacts/:id - Update contact
 router.put('/:id', async (req, res) => {
   try {
-    const { firstName, lastName, company, timezone, status } = req.body;
+    const { firstName, lastName, company, leadListName, timezone, status } = req.body;
 
     const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
     // First verify ownership or admin role
@@ -161,6 +202,7 @@ router.put('/:id', async (req, res) => {
         ...(firstName !== undefined && { firstName: firstName?.trim() }),
         ...(lastName !== undefined && { lastName: lastName?.trim() }),
         ...(company !== undefined && { company: company?.trim() }),
+        ...(leadListName !== undefined && { leadListName: leadListName?.trim() || null }),
         ...(timezone && { timezone }),
         ...(status && { status })
       }
@@ -352,6 +394,7 @@ router.post('/bulk', async (req, res) => {
             firstName: contactData.firstName?.trim(),
             lastName: contactData.lastName?.trim(),
             company: contactData.company?.trim(),
+            leadListName: contactData.leadListName?.trim() || null,
             timezone: contactData.timezone || 'UTC'
           }
         });

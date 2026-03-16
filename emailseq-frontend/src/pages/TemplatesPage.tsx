@@ -22,7 +22,7 @@ const TemplatesPage = () => {
   const [newTemplate, setNewTemplate] = useState({ name: '', subject: '', body: '', signature: '' });
 
   // Default professional signature
-  const defaultSignature = `--\nBest regards,\nBoostNow Sales Company\nEmpowering Businesses with ERP, SaaS & App Solutions`;
+  const defaultSignature = `Best regards, BN Mail | Empowering Businesses with ERP, SaaS & App Solutions`;
 
   // Fetch custom templates from API
   const fetchCustomTemplates = async () => {

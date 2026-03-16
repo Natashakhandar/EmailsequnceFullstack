@@ -2,9 +2,10 @@ import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
-import { Mail, Eye, MessageSquare, TrendingUp, RefreshCw } from "lucide-react";
+import { Mail, Eye, MessageSquare, TrendingUp, RefreshCw, Calendar } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { api, RAW_BASE } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import io from "socket.io-client";
 
 interface DashboardStats {
@@ -35,15 +36,40 @@ const Dashboard = () => {
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState("all");
   const [socket, setSocket] = useState<any>(null);
 
-  const fetchDashboardData = async (isRefreshing = false) => {
+  const getTimeRangeParams = (range: string) => {
+    const now = new Date();
+    const startDate = new Date();
+    
+    switch (range) {
+      case "today":
+        startDate.setHours(0, 0, 0, 0);
+        return { startDate: startDate.toISOString() };
+      case "week":
+        startDate.setDate(now.getDate() - 7);
+        return { startDate: startDate.toISOString() };
+      case "month":
+        startDate.setMonth(now.getMonth() - 1);
+        return { startDate: startDate.toISOString() };
+      case "year":
+        startDate.setFullYear(now.getFullYear() - 1);
+        return { startDate: startDate.toISOString() };
+      case "all":
+      default:
+        return {};
+    }
+  };
+
+  const fetchDashboardData = async (isRefreshing = false, range = timeRange) => {
     try {
       if (!isRefreshing) setLoading(true);
       setError(null);
 
-      console.log('🔄 Fetching dashboard statistics...');
-      const stats = await api.getDashboardStats();
+      console.log(`🔄 Fetching dashboard statistics for range: ${range}...`);
+      const params = getTimeRangeParams(range);
+      const stats = await api.getDashboardStats(params);
       setDashboardStats(stats);
     } catch (err) {
       console.error('❌ Error fetching dashboard data:', err);
@@ -59,10 +85,15 @@ const Dashboard = () => {
     }
   };
 
+  useEffect(() => {
+    fetchDashboardData(false, timeRange);
+  }, [timeRange]);
+
   // Fetch dashboard data on component mount
   useEffect(() => {
-    fetchDashboardData();
-
+    // fetchDashboardData is now called via the timeRange useEffect above
+    
+    // Set up socket connection for real-time updates
     // Set up socket connection for real-time updates
     const socketConnection = io(RAW_BASE);
     setSocket(socketConnection);
@@ -185,19 +216,35 @@ const Dashboard = () => {
             <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
             <p className="text-muted-foreground">Track your email campaigns and performance</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Data range: {dashboardStats.dateRange.startDate} to {dashboardStats.dateRange.endDate}
+              Data range: {dashboardStats.dateRange.startDate === 'All time' ? 'Start' : new Date(dashboardStats.dateRange.startDate).toLocaleDateString()} to {dashboardStats.dateRange.endDate === 'All time' ? 'Today' : new Date(dashboardStats.dateRange.endDate).toLocaleDateString()}
             </p>
           </div>
-          <motion.button
-            onClick={refreshDashboard}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </motion.button>
+          <div className="flex items-center gap-3">
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-[180px] bg-background border-border/40 shadow-sm rounded-xl">
+                <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Select time range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">1 Week</SelectItem>
+                <SelectItem value="month">1 Month</SelectItem>
+                <SelectItem value="year">1 Year</SelectItem>
+                <SelectItem value="all">Overall</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <motion.button
+              onClick={() => fetchDashboardData(true)}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-luxury shadow-primary/20"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </motion.button>
+          </div>
         </motion.div>
 
         {/* Metric Cards */}

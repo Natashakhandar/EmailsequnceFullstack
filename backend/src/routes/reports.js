@@ -96,7 +96,17 @@ router.get('/analytics', async (req, res) => {
     const campaignBreakdown = await prisma.campaign.findMany({
       where: {
         ...(isAdmin ? {} : { userId: req.user.id }),
-        ...(campaignId ? { id: campaignId } : {})
+        ...(campaignId ? { id: campaignId } : {}),
+        ...(startDate || endDate ? {
+          events: {
+            some: {
+              timestamp: {
+                ...(startDate ? { gte: new Date(startDate) } : {}),
+                ...(endDate ? { lte: new Date(endDate) } : {})
+              }
+            }
+          }
+        } : {})
       },
       select: {
         id: true,

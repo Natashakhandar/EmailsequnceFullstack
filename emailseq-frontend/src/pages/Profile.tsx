@@ -23,6 +23,7 @@ const Profile = () => {
     email: "",
   });
 
+  /* Commented out Daily Targets state
   const [targets, setTargets] = useState({
     dailyTarget: 50,
     emailsSentToday: 38,
@@ -31,6 +32,7 @@ const Profile = () => {
 
   const [editTargets, setEditTargets] = useState({ ...targets });
   const [isEditingTargets, setIsEditingTargets] = useState(false);
+  */
 
   // Signature state
   const [signature, setSignature] = useState("");
@@ -84,11 +86,13 @@ const Profile = () => {
     toast.success("Profile updated successfully");
   };
 
+  /* Commented out Daily Targets handlers
   const handleSaveTargets = () => {
     setTargets(editTargets);
     setIsEditingTargets(false);
     toast.success("Targets updated successfully");
   };
+  */
 
   const handleSaveSignature = async () => {
     try {
@@ -113,7 +117,7 @@ const Profile = () => {
     setSignatureDisplay(signature.replace(/<br\s*\/?>/gi, '\n'));
   };
 
-  const progressPercentage = (targets.emailsSentToday / targets.dailyTarget) * 100;
+  // const progressPercentage = (targets.emailsSentToday / targets.dailyTarget) * 100;
 
   // Helper function to get role display info
   const getRoleInfo = (role: string) => {
@@ -122,6 +126,8 @@ const Profile = () => {
         return { label: 'Super Administrator', icon: Crown, color: 'text-yellow-500' };
       case 'ADMIN':
         return { label: 'Administrator', icon: Shield, color: 'text-blue-500' };
+      case 'MANAGER':
+        return { label: 'Manager', icon: Briefcase, color: 'text-green-500' };
       case 'USER':
       default:
         return { label: 'User', icon: UserIcon, color: 'text-gray-500' };
@@ -187,7 +193,7 @@ const Profile = () => {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 gap-6 mb-6">
           {/* Profile Information */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -340,116 +346,16 @@ const Profile = () => {
             </div>
           </motion.div>
 
-          {/* Daily Targets */}
+{/* Daily Targets Section commented out
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
             className="glass rounded-2xl p-8 shadow-card hover-lift"
           >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-semibold text-foreground">Daily Targets</h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsEditingTargets(!isEditingTargets)}
-                className="rounded-xl"
-              >
-                <Edit className="w-5 h-5" />
-              </Button>
-            </div>
-
-            <div className="space-y-6">
-              {/* Daily Target */}
-              <div className="space-y-2">
-                <Label htmlFor="dailyTarget">Daily Email Target</Label>
-                <Input
-                  id="dailyTarget"
-                  type="number"
-                  value={
-                    isEditingTargets ? editTargets.dailyTarget : targets.dailyTarget
-                  }
-                  onChange={(e) =>
-                    setEditTargets({
-                      ...editTargets,
-                      dailyTarget: parseInt(e.target.value),
-                    })
-                  }
-                  disabled={!isEditingTargets}
-                  className="rounded-xl text-lg font-semibold"
-                />
-              </div>
-
-              {/* Progress Bar */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Today's Progress</Label>
-                  <span className="text-sm font-semibold text-primary">
-                    {progressPercentage.toFixed(0)}% – {targets.emailsSentToday} of {targets.dailyTarget}
-                  </span>
-                </div>
-                <Progress value={progressPercentage} className="h-3 rounded-full" />
-                <p className="text-xs text-muted-foreground text-center">
-                  {targets.dailyTarget - targets.emailsSentToday} emails remaining to reach daily goal
-                </p>
-              </div>
-
-              {/* Emails Sent Today */}
-              <div className="space-y-2">
-                <Label htmlFor="emailsSent">Emails Sent Today</Label>
-                <Input
-                  id="emailsSent"
-                  type="number"
-                  value={
-                    isEditingTargets
-                      ? editTargets.emailsSentToday
-                      : targets.emailsSentToday
-                  }
-                  onChange={(e) =>
-                    setEditTargets({
-                      ...editTargets,
-                      emailsSentToday: parseInt(e.target.value),
-                    })
-                  }
-                  disabled={!isEditingTargets}
-                  className="rounded-xl text-lg font-semibold"
-                />
-              </div>
-
-              {/* Conversion Rate */}
-              <div className="space-y-2">
-                <Label htmlFor="conversionRate">Conversion Rate (%)</Label>
-                <Input
-                  id="conversionRate"
-                  type="number"
-                  step="0.1"
-                  value={
-                    isEditingTargets
-                      ? editTargets.conversionRate
-                      : targets.conversionRate
-                  }
-                  onChange={(e) =>
-                    setEditTargets({
-                      ...editTargets,
-                      conversionRate: parseFloat(e.target.value),
-                    })
-                  }
-                  disabled={!isEditingTargets}
-                  className="rounded-xl text-lg font-semibold"
-                />
-              </div>
-
-              {isEditingTargets && (
-                <Button
-                  onClick={handleSaveTargets}
-                  className="w-full gradient-primary text-white rounded-xl shadow-luxury"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Targets
-                </Button>
-              )}
-            </div>
+            ... (content commented out)
           </motion.div>
+          */}
         </div>
 
         {/* Email Signature Section */}

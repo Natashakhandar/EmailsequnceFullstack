@@ -19,7 +19,8 @@ import {
   EyeOff,
   Edit2,
   Trash2,
-  MoreVertical
+  MoreVertical,
+  Users as UsersIcon
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,6 +28,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { api, User } from "@/lib/api";
 
@@ -43,8 +47,9 @@ const AdminManagement = () => {
     email: "",
     firstName: "",
     lastName: "",
-    role: "USER" as "USER" | "ADMIN" | "SUPERADMIN",
-    isActive: true
+    role: "USER" as "USER" | "ADMIN" | "SUPERADMIN" | "MANAGER",
+    isActive: true,
+    managedUserIds: [] as string[]
   });
 
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
@@ -56,7 +61,8 @@ const AdminManagement = () => {
     password: "",
     firstName: "",
     lastName: "",
-    role: "USER" as "USER" | "ADMIN" | "SUPERADMIN"
+    role: "USER" as "USER" | "ADMIN" | "SUPERADMIN" | "MANAGER",
+    managedUserIds: [] as string[]
   });
 
   useEffect(() => {
@@ -65,8 +71,8 @@ const AdminManagement = () => {
         const response = await api.getCurrentUser();
         setCurrentUser(response.user);
 
-        if (response.user.role !== 'SUPERADMIN') {
-          setError('Access denied. Only superadmins can view this page.');
+        if (response.user.role !== 'SUPERADMIN' && response.user.role !== 'MANAGER') {
+          setError('Access denied. Only superadmins and managers can view this page.');
           return;
         }
 
@@ -112,7 +118,8 @@ const AdminManagement = () => {
       password: "",
       firstName: "",
       lastName: "",
-      role: "USER"
+      role: "USER",
+      managedUserIds: []
     });
     setShowPassword(false);
   };
@@ -124,7 +131,8 @@ const AdminManagement = () => {
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       role: user.role,
-      isActive: user.isActive
+      isActive: user.isActive,
+      managedUserIds: (user as any).managedUsers?.map((u: any) => u.id) || []
     });
     setIsEditDialogOpen(true);
   };
@@ -194,6 +202,8 @@ const AdminManagement = () => {
         return { label: 'Super Admin', icon: Crown, color: 'bg-yellow-100 text-yellow-800', badgeVariant: 'default' as const };
       case 'ADMIN':
         return { label: 'Admin', icon: Shield, color: 'bg-blue-100 text-blue-800', badgeVariant: 'secondary' as const };
+      case 'MANAGER':
+        return { label: 'Manager', icon: UsersIcon, color: 'bg-green-100 text-green-800', badgeVariant: 'default' as const };
       default:
         return { label: 'User', icon: UserIcon, color: 'bg-gray-100 text-gray-800', badgeVariant: 'outline' as const };
     }
@@ -229,7 +239,7 @@ const AdminManagement = () => {
     );
   }
 
-  if (currentUser?.role !== 'SUPERADMIN') {
+  if (currentUser?.role !== 'SUPERADMIN' && currentUser?.role !== 'MANAGER') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
         <Navbar />
@@ -237,7 +247,7 @@ const AdminManagement = () => {
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Access denied. Only superadmins can access this page.
+              Access denied. You do not have permission to access this page.
             </AlertDescription>
           </Alert>
         </main>
@@ -258,92 +268,138 @@ const AdminManagement = () => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold mb-2">User Management</h1>
-              <p className="text-muted-foreground">Create and manage user accounts</p>
+              <h1 className="text-4xl font-bold mb-2">
+                {currentUser?.role === 'SUPERADMIN' ? 'User Management' : 'My Team'}
+              </h1>
+              <p className="text-muted-foreground">
+                {currentUser?.role === 'SUPERADMIN' ? 'Create and manage user accounts' : 'View and monitor your managed users'}
+              </p>
             </div>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gradient-primary text-white rounded-xl shadow-luxury">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add User
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Create New User</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleCreateUser} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+            {currentUser?.role === 'SUPERADMIN' && (
+              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gradient-primary text-white rounded-xl shadow-luxury">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add User
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Create New User</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateUser} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName">First Name</Label>
+                        <Input
+                          id="firstName"
+                          value={formData.firstName}
+                          onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName">Last Name</Label>
+                        <Input
+                          id="lastName"
+                          value={formData.lastName}
+                          onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
                     <div className="space-y-2">
-                      <Label htmlFor="firstName">First Name</Label>
+                      <Label htmlFor="email">Email</Label>
                       <Input
-                        id="firstName"
-                        value={formData.firstName}
-                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">Last Name</Label>
-                      <Input
-                        id="lastName"
-                        value={formData.lastName}
-                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                        required
-                      />
+                      <Label htmlFor="password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          value={formData.password}
+                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                          className="pr-10"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="pr-10"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    <div className="space-y-2">
+                      <Label htmlFor="role">Role</Label>
+                      <Select
+                        value={formData.role}
+                        onValueChange={(value: any) => setFormData({ ...formData, role: value, managedUserIds: [] })}
                       >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="USER">User</SelectItem>
+                          <SelectItem value="ADMIN">Admin</SelectItem>
+                          <SelectItem value="MANAGER">Manager</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Input
-                      id="role"
-                      value="User"
-                      disabled
-                      className="w-full bg-muted/50 cursor-not-allowed"
-                    />
-                  </div>
-                  <div className="flex gap-2 pt-4">
-                    <Button type="submit" className="flex-1">Create User</Button>
-                    <Button type="button" variant="outline" onClick={() => {
-                      setIsCreateDialogOpen(false);
-                      resetForm();
-                    }}>
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+
+                    {formData.role === "MANAGER" && (
+                      <div className="space-y-2">
+                        <Label>Assign Users to Manage</Label>
+                        <ScrollArea className="h-32 w-full rounded-md border p-2">
+                          {users.filter(u => u.role === "USER").length === 0 ? (
+                            <p className="text-xs text-muted-foreground p-2">No regular users available to assign.</p>
+                          ) : (
+                            users.filter(u => u.role === "USER").map(user => (
+                              <div key={user.id} className="flex items-center space-x-2 py-1">
+                                <Checkbox
+                                  id={`user-${user.id}`}
+                                  checked={formData.managedUserIds.includes(user.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setFormData({ ...formData, managedUserIds: [...formData.managedUserIds, user.id] });
+                                    } else {
+                                      setFormData({ ...formData, managedUserIds: formData.managedUserIds.filter(id => id !== user.id) });
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`user-${user.id}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                  {getFullName(user)} ({user.email})
+                                </label>
+                              </div>
+                            ))
+                          )}
+                        </ScrollArea>
+                      </div>
+                    )}
+                    <div className="flex gap-2 pt-4">
+                      <Button type="submit" className="flex-1">Create User</Button>
+                      <Button type="button" variant="outline" onClick={() => {
+                        setIsCreateDialogOpen(false);
+                        resetForm();
+                      }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
 
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
               <DialogContent className="sm:max-w-md">
@@ -383,13 +439,53 @@ const AdminManagement = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="editRole">Role</Label>
-                    <Input
-                      id="editRole"
-                      value={editFormData.role === "USER" ? "User" : editFormData.role === "ADMIN" ? "Admin" : "Super Admin"}
-                      disabled
-                      className="w-full bg-muted/50 cursor-not-allowed"
-                    />
+                    <Select
+                      value={editFormData.role}
+                      onValueChange={(value: any) => setEditFormData({ ...editFormData, role: value, managedUserIds: [] })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="USER">User</SelectItem>
+                        <SelectItem value="ADMIN">Admin</SelectItem>
+                        <SelectItem value="MANAGER">Manager</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  {editFormData.role === "MANAGER" && (
+                    <div className="space-y-2">
+                      <Label>Manageable Users</Label>
+                      <ScrollArea className="h-32 w-full rounded-md border p-2">
+                        {users.filter(u => u.role === "USER" && u.id !== editingUserId).length === 0 ? (
+                          <p className="text-xs text-muted-foreground p-2">No regular users available to assign.</p>
+                        ) : (
+                          users.filter(u => u.role === "USER" && u.id !== editingUserId).map(user => (
+                            <div key={user.id} className="flex items-center space-x-2 py-1">
+                              <Checkbox
+                                id={`edit-user-${user.id}`}
+                                checked={editFormData.managedUserIds.includes(user.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setEditFormData({ ...editFormData, managedUserIds: [...editFormData.managedUserIds, user.id] });
+                                  } else {
+                                    setEditFormData({ ...editFormData, managedUserIds: editFormData.managedUserIds.filter(id => id !== user.id) });
+                                  }
+                                }}
+                              />
+                              <label
+                                htmlFor={`edit-user-${user.id}`}
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                              >
+                                {getFullName(user)} ({user.email})
+                              </label>
+                            </div>
+                          ))
+                        )}
+                      </ScrollArea>
+                    </div>
+                  )}
                   <div className="space-y-2 flex items-center justify-between">
                     <Label>Active Status</Label>
                     <input
@@ -499,7 +595,7 @@ const AdminManagement = () => {
                             <span>View User's Work</span>
                           </DropdownMenuItem>
 
-                          {user.id !== currentUser?.id && (
+                          {user.id !== currentUser?.id && currentUser?.role === 'SUPERADMIN' && (
                             <>
                               <DropdownMenuItem
                                 className="cursor-pointer flex items-center gap-2 text-blue-600 focus:text-blue-600 focus:bg-blue-50"
@@ -545,6 +641,11 @@ const AdminManagement = () => {
                     <p className="text-xs text-muted-foreground">
                       Created: {new Date(user.createdAt).toLocaleDateString()}
                     </p>
+                    {(user as any).managedUsers?.length > 0 && (
+                      <p className="text-xs text-primary font-medium">
+                        Managing {(user as any).managedUsers.length} users
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>

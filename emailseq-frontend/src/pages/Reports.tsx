@@ -1,10 +1,13 @@
 import { motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
-import { TrendingUp, Users, Mail, Activity, Target, Eye, Reply, AlertCircle } from "lucide-react";
+import { TrendingUp, Users, Mail, Activity, Target, Eye, Reply, AlertCircle, Calendar, RefreshCw, Download } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { useEffect, useState } from "react";
 import { api, RAW_BASE } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import * as XLSX from "xlsx";
 import io from "socket.io-client";
 
 const Reports = () => {
@@ -12,22 +15,47 @@ const Reports = () => {
   const [campaignPerformanceData, setCampaignPerformanceData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState("month");
   const [socket, setSocket] = useState<any>(null);
 
+  const getTimeRangeParams = (range: string) => {
+    const now = new Date();
+    const startDate = new Date();
+    
+    switch (range) {
+      case "today":
+        startDate.setHours(0, 0, 0, 0);
+        return { startDate: startDate.toISOString(), days: 1 };
+      case "week":
+        startDate.setDate(now.getDate() - 7);
+        return { startDate: startDate.toISOString(), days: 7 };
+      case "month":
+        startDate.setMonth(now.getMonth() - 1);
+        return { startDate: startDate.toISOString(), days: 30 };
+      case "year":
+        startDate.setFullYear(now.getFullYear() - 1);
+        return { startDate: startDate.toISOString(), days: 365 };
+      case "all":
+      default:
+        return { days: 10000 }; // 10000 days is effectively overall
+    }
+  };
+
   // Fetch analytics data
-  const fetchAnalyticsData = async () => {
+  const fetchAnalyticsData = async (range = timeRange) => {
     try {
       setLoading(true);
       setError(null);
 
-      console.log('📊 Fetching reports data...');
+      console.log(`📊 Fetching reports data for range: ${range}...`);
+      const { startDate, days } = getTimeRangeParams(range);
 
       const [analyticsResponse, performanceResponse] = await Promise.all([
-        api.getReportsAnalytics().catch(err => {
+        api.getReportsAnalytics({ startDate }).catch(err => {
           console.warn('Analytics API failed:', err.message);
           return null;
         }),
-        api.getReportsPerformanceTrends({ days: 30 }).catch(err => {
+        api.getReportsPerformanceTrends({ days }).catch(err => {
           console.warn('Performance trends API failed:', err.message);
           return null;
         })
@@ -76,8 +104,11 @@ const Reports = () => {
   };
 
   useEffect(() => {
-    fetchAnalyticsData();
+    fetchAnalyticsData(timeRange);
+  }, [timeRange]);
 
+  useEffect(() => {
+    // fetchAnalyticsData is now called via the timeRange useEffect above
     // Set up socket connection for real-time updates
     const socketConnection = io(RAW_BASE);
     setSocket(socketConnection);
@@ -114,13 +145,33 @@ const Reports = () => {
     });
 
     // Set up polling as fallback for real-time updates every 30 seconds
-    const interval = setInterval(fetchAnalyticsData, 30000);
+    const interval = setInterval(() => fetchAnalyticsData(), 30000);
 
     return () => {
       clearInterval(interval);
       socketConnection.disconnect();
     };
   }, []);
+
+  const handleDownloadReport = () => {
+    if (!campaignAnalytics || campaignAnalytics.length === 0) return;
+
+    const data = campaignAnalytics.map((campaign: any) => ({
+      'Campaign Name': campaign.name,
+      'Emails Sent': campaign.sent,
+      'Emails Opened': campaign.opened,
+      'Emails Replied': campaign.replied,
+      'Emails Bounced': campaign.bounced,
+      'Open Rate (%)': (campaign.openRate ?? 0).toFixed(2),
+      'Reply Rate (%)': (campaign.replyRate ?? 0).toFixed(2),
+      'Bounce Rate (%)': (campaign.bounceRate ?? 0).toFixed(2)
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Campaign Stats");
+    XLSX.writeFile(workbook, `Campaign_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
   // Prepare chart data from API response with safe fallbacks
   // Combine campaign events and uncategorized events for the main distribution
@@ -225,7 +276,7 @@ const Reports = () => {
                 </p>
               </div>
               <button
-                onClick={fetchAnalyticsData}
+                onClick={() => fetchAnalyticsData()}
                 className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
                 disabled={loading}
               >
@@ -260,12 +311,40 @@ const Reports = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-8 flex justify-between items-start"
         >
-          <h1 className="text-4xl font-bold mb-2">Reports</h1>
-          <p className="text-muted-foreground">
-            Comprehensive analytics and performance insights
-          </p>
+          <div>
+            <h1 className="text-4xl font-bold mb-2">Reports</h1>
+            <p className="text-muted-foreground">
+              Comprehensive analytics and performance insights
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-[180px] bg-background border-border/40 shadow-sm rounded-xl">
+                <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Select time range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">1 Week</SelectItem>
+                <SelectItem value="month">1 Month</SelectItem>
+                <SelectItem value="year">1 Year</SelectItem>
+                <SelectItem value="all">Overall</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <motion.button
+              onClick={() => fetchAnalyticsData()}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-luxury shadow-primary/20"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </motion.button>
+          </div>
         </motion.div>
 
         {/* No Data Message */}
@@ -286,7 +365,7 @@ const Reports = () => {
                 <li>• The system is still collecting data</li>
               </ul>
               <button
-                onClick={fetchAnalyticsData}
+                onClick={() => fetchAnalyticsData()}
                 className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
               >
                 Refresh Data
@@ -445,10 +524,19 @@ const Reports = () => {
             transition={{ delay: 0.7 }}
             className="mt-6 glass rounded-2xl p-6 shadow-card hover-lift"
           >
-            <h3 className="text-xl font-semibold mb-4 text-foreground flex items-center gap-2">
-              <Target className="w-5 h-5" />
-              Campaign Breakdown
-            </h3>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                <Target className="w-5 h-5" />
+                Campaign Breakdown
+              </h3>
+              <Button 
+                onClick={handleDownloadReport}
+                className="bg-[#0091d5] hover:bg-[#007bb5] text-white rounded-xl flex items-center gap-2 shadow-luxury shadow-primary/20"
+              >
+                <Download className="w-4 h-4" />
+                Download Report
+              </Button>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -525,7 +613,7 @@ const Reports = () => {
                 Create and run campaigns to see detailed performance breakdown
               </p>
               <button
-                onClick={fetchAnalyticsData}
+                onClick={() => fetchAnalyticsData()}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
               >
                 Refresh Data

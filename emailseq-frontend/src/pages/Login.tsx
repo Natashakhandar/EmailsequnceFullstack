@@ -48,8 +48,8 @@ const Login = () => {
           transition={{ delay: 0.2, duration: 0.6 }}
           className="text-center mb-8"
         >
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
-            BoostNow Sales Company
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2 whitespace-nowrap">
+            BN Mail
           </h1>
           <p className="text-muted-foreground">Premium Email Automation</p>
         </motion.div>

@@ -29,7 +29,7 @@ const ManageTemplatesPopup = ({
   const [customTemplates, setCustomTemplates] = useState<DefaultTemplate[]>([]);
 
   // Default professional signature
-  const defaultSignature = `--\nBest regards,\nBoostNow Sales Company\nEmpowering Businesses with ERP, SaaS & App Solutions`;
+  const defaultSignature = `Best regards, BN Mail | Empowering Businesses with ERP, SaaS & App Solutions`;
 
   // Helper function to extract body and signature for editing
   const extractBodyAndSignature = (fullBody: string): { body: string; signature: string } => {
