@@ -10,13 +10,18 @@ const getApiBaseUrl = () => {
 
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    // For any production domain, use the current origin
+    
+    // REDIRECT API: If on boostnow domain, talk to the silver-tapir backend
+    if (hostname.includes('boostnow.in')) {
+      return 'https://silver-tapir-929419.hostingersite.com';
+    }
+
     if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
       return window.location.origin;
     }
   }
 
-  return envUrl || '';
+  return envUrl || 'https://silver-tapir-929419.hostingersite.com';
 };
 
 export const RAW_BASE = getApiBaseUrl();
