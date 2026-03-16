@@ -11,13 +11,18 @@ const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
 
-    // Use relative origin for production to ensure we talk to the same server
+    // REDIRECT API: If on boostnow domain, talk to the silver-tapir backend
+    // This is because boostnow is likely configured as static-only in some environments
+    if (hostname.includes('boostnow.in')) {
+      return 'https://silver-tapir-929419.hostingersite.com';
+    }
+
     if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
       return window.location.origin;
     }
   }
 
-  return envUrl || '';
+  return envUrl || 'https://silver-tapir-929419.hostingersite.com';
 };
 
 export const RAW_BASE = getApiBaseUrl();
@@ -26,8 +31,7 @@ export const API_BASE_URL = RAW_BASE.endsWith('/api')
   ? RAW_BASE
   : `${RAW_BASE.replace(/\/$/, '')}/api`;
 
-console.log('🚀 [API] VERSION: V3_RELATIVE');
-console.log('🌐 [API] BASE_URL:', API_BASE_URL);
+console.log('🌐 API_BASE_URL:', API_BASE_URL);
 
 // API response types
 export interface Contact {
@@ -161,10 +165,6 @@ class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const token = this.getAuthToken();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-
-    console.log(`🌐 [API Request] ${options.method || 'GET'} ${url}`);
 
     const config: RequestInit = {
       headers: {
@@ -173,14 +173,10 @@ class ApiClient {
         ...options.headers,
       },
       ...options,
-      signal: controller.signal
     };
 
     try {
       const response = await fetch(url, config);
-      clearTimeout(timeoutId);
-      
-      console.log(`📡 [API Response] ${response.status} ${endpoint}`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -199,13 +195,8 @@ class ApiClient {
       }
 
       return await response.json();
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        console.error(`🛑 [API Timeout] Request hung for 15s: ${endpoint}`);
-        throw new Error('Connection timeout: Server is taking too long to respond. Please try again.');
-      }
-      console.error(`❌ [API Error] ${endpoint}:`, error);
+    } catch (error) {
+      console.error(`API request failed: ${endpoint}`, error);
       throw error;
     }
   }

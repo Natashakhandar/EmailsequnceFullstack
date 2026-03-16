@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
 import { Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from "lucide-react";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { api, RAW_BASE } from "@/lib/api";
+import { api } from "@/lib/api";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -15,15 +15,6 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    // Check API health on load
-    console.log('📡 Checking API health at:', RAW_BASE);
-    fetch(`${RAW_BASE}/health`)
-      .then(r => r.json())
-      .then(data => console.log('✅ API Health:', data))
-      .catch(err => console.error('❌ API Unreachable:', err));
-  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

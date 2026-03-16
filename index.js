@@ -8,10 +8,6 @@ const fs = require('fs');
 console.log('--- Starting BoostNow Email Service ---');
 console.log('Current Directory:', process.cwd());
 
-// FORCE PRISMA BINARY ENGINE (Crucial for Hostinger/Cloudlinux)
-process.env.PRISMA_QUERY_ENGINE_TYPE = 'binary';
-console.log('⚙️ Environment: PRISMA_QUERY_ENGINE_TYPE=binary');
-
 // 1. Find and Start Backend
 const backendPath = path.join(process.cwd(), 'src/index.js');
 const altBackendPath = path.join(process.cwd(), 'backend/src/index.js');
@@ -25,14 +21,9 @@ if (fs.existsSync(backendPath)) {
 
 if (targetPath) {
     console.log(`🚀 Launching backend from: ${targetPath}`);
-    try {
-        require(targetPath);
-    } catch (e) {
-        console.error('❌ CRITICAL ERROR DURING BACKEND LAUNCH:', e);
-        process.exit(1);
-    }
+    require(targetPath);
 } else {
     console.error('❌ CRITICAL ERROR: Could not find src/index.js or backend/src/index.js');
-    console.log('Files in:', process.cwd(), fs.readdirSync(process.cwd()));
+    console.log('Files in current directory:', fs.readdirSync(process.cwd()));
     process.exit(1);
 }

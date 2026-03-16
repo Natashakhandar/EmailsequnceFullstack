@@ -1,22 +1,17 @@
 .env
 .env.local
 emailseq-frontend/.env
+
 node_modules/
 *.log
 dist/
 .DS_Store
-.prisma/
-@prisma/
-query-engine-*
-*.exe
-*.dll
-*.dylib
-*.so
-.vscode/
-.idea/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.next/
-out/
-build/
+
+# Local routing config
+# Removed .htaccess from ignore to allow deployment
+# .htaccess
+
+node_modules
+node_modules
+node_modules
+node_modules

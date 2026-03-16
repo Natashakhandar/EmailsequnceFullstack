@@ -1,0 +1,11 @@
+﻿ M .gitignore
+ M backend/.env
+ M backend/prisma/schema.prisma
+ M backend/src/index.js
+ M backend/src/routes/auth.js
+ M emailseq-frontend/src/lib/api.ts
+ M emailseq-frontend/src/pages/Login.tsx
+ M index.js
+ M package.json
+?? status.txt
+?? status_utf8.txt

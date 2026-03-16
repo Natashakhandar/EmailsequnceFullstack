@@ -1,15 +1,5 @@
 const path = require('path');
-// Prioritize root .env for unified configuration
-const rootEnv = path.join(process.cwd(), '.env');
-const backendEnv = path.join(__dirname, '../.env');
-
-if (require('fs').existsSync(rootEnv)) {
-    require('dotenv').config({ path: rootEnv });
-    console.log('📝 Loaded configuration from Root .env');
-} else {
-    require('dotenv').config({ path: backendEnv });
-    console.log('📝 Loaded configuration from Backend .env');
-}
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -39,7 +29,6 @@ const warmupRouter = require('./routes/warmup');
 const { startScheduler } = require('./jobs/scheduler');
 const { startEmailMonitoring } = require('./jobs/emailMonitorJob');
 const { initializeSocket } = require('./services/socketService');
-const prisma = require('./db/prismaClient');
 
 const app = express();
 const http = require('http');
@@ -64,8 +53,7 @@ app.use(cors({
       'localhost',
       '127.0.0.1',
       'boostnow.in',
-      'hostingersite.com',
-      'email.boostnow.in'
+      'hostingersite.com'
     ];
     
     const isAllowed = allowedPatterns.some(pattern => origin.includes(pattern));
@@ -108,32 +96,13 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint with DB check
-app.get('/health', async (req, res) => {
-  const healthInfo = {
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    config: {
-      hasDbUrl: !!process.env.DATABASE_URL,
-      hasJwtSecret: !!process.env.JWT_SECRET,
-      dbUrlStart: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 15) + '...' : 'missing',
-      engineType: process.env.PRISMA_QUERY_ENGINE_TYPE || 'default'
-    }
-  };
-
-  try {
-    // Test DB connection
-    await prisma.$queryRaw`SELECT 1`;
-    healthInfo.database = 'connected';
-    res.json(healthInfo);
-  } catch (error) {
-    console.error('💥 Health check DB error:', error.message);
-    healthInfo.status = 'ERROR';
-    healthInfo.database = 'disconnected';
-    healthInfo.error = error.message;
-    res.status(500).json(healthInfo);
-  }
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 
@@ -158,23 +127,21 @@ app.use('/api/fix-event-details', fixEventDetailsRouter);
 app.use('/api/smtp', smtpRouter);
 app.use('/api/warmup', warmupRouter);
 
-
 // Static file serving - Serve frontend build
 const fs = require('fs');
 const possibleFrontendPaths = [
-  path.join(process.cwd(), 'emailseq-frontend/dist'),
-  path.join(process.cwd(), 'dist'),
-  path.join(process.cwd(), 'public'),
   path.join(__dirname, '../public'),
   path.join(__dirname, '../../public'),
-  path.join(__dirname, '../dist')
+  path.join(__dirname, '../dist'),
+  path.join(process.cwd(), 'public'),
+  path.join(process.cwd(), 'backend/public')
 ];
 
-let frontendPath = path.join(process.cwd(), 'public'); // Default
+let frontendPath = possibleFrontendPaths[0];
 for (const p of possibleFrontendPaths) {
   if (fs.existsSync(path.join(p, 'index.html'))) {
     frontendPath = p;
-    console.log(`✅ FOUND FRONTEND AT: ${frontendPath}`);
+    console.log(`✅ Serving frontend from: ${frontendPath}`);
     break;
   }
 }
