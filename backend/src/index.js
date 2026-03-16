@@ -1,5 +1,8 @@
 const path = require('path');
+// 1. Try to load from backend dir
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
+// 2. Try to load from root dir (fallback)
+require('dotenv').config({ path: path.join(process.cwd(), '.env') });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
