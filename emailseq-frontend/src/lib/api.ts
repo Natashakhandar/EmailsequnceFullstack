@@ -165,6 +165,10 @@ class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const token = this.getAuthToken();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+    console.log(`🌐 [API Request] ${options.method || 'GET'} ${url}`);
 
     const config: RequestInit = {
       headers: {
@@ -173,10 +177,14 @@ class ApiClient {
         ...options.headers,
       },
       ...options,
+      signal: controller.signal
     };
 
     try {
       const response = await fetch(url, config);
+      clearTimeout(timeoutId);
+      
+      console.log(`📡 [API Response] ${response.status} ${endpoint}`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -195,8 +203,13 @@ class ApiClient {
       }
 
       return await response.json();
-    } catch (error) {
-      console.error(`API request failed: ${endpoint}`, error);
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error(`🛑 [API Timeout] Request hung for 15s: ${endpoint}`);
+        throw new Error('Connection timeout: Server is taking too long to respond. Please try again.');
+      }
+      console.error(`❌ [API Error] ${endpoint}:`, error);
       throw error;
     }
   }
