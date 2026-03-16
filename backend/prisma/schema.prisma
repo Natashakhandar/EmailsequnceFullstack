@@ -43,6 +43,11 @@ model User {
   emailConfig EmailConfig?
   warmupSettings WarmupSettings?
 
+  // Manager Relation
+  managerId String?
+  manager   User?   @relation("ManagerUsers", fields: [managerId], references: [id], onDelete: SetNull)
+  managedUsers User[] @relation("ManagerUsers")
+
   @@map("users")
 }
 
@@ -72,6 +77,7 @@ model Contact {
   company   String?
   timezone  String        @default("UTC")
   status    ContactStatus @default(ACTIVE)
+  leadListName String?    @map("lead_list_name")
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -261,6 +267,7 @@ enum UserRole {
   USER
   ADMIN
   SUPERADMIN
+  MANAGER
 }
 
 enum ContactStatus {
