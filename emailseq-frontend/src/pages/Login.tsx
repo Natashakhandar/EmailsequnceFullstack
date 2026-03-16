@@ -16,6 +16,14 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useState(() => {
+    // Check API health on load
+    fetch(`${api.RAW_BASE}/health`)
+      .then(r => r.json())
+      .then(data => console.log('📡 API Health:', data))
+      .catch(err => console.error('📡 API Unreachable:', err));
+  });
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
