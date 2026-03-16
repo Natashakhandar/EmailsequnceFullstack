@@ -1,8 +1,15 @@
 const path = require('path');
-// 1. Try to load from backend dir
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
-// 2. Try to load from root dir (fallback)
-require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+// Prioritize root .env for unified configuration
+const rootEnv = path.join(process.cwd(), '.env');
+const backendEnv = path.join(__dirname, '../.env');
+
+if (require('fs').existsSync(rootEnv)) {
+    require('dotenv').config({ path: rootEnv });
+    console.log('📝 Loaded configuration from Root .env');
+} else {
+    require('dotenv').config({ path: backendEnv });
+    console.log('📝 Loaded configuration from Backend .env');
+}
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');

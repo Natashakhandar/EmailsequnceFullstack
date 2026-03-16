@@ -8,6 +8,10 @@ const fs = require('fs');
 console.log('--- Starting BoostNow Email Service ---');
 console.log('Current Directory:', process.cwd());
 
+// FORCE PRISMA BINARY ENGINE (Crucial for Hostinger/Cloudlinux)
+process.env.PRISMA_QUERY_ENGINE_TYPE = 'binary';
+console.log('⚙️ Environment: PRISMA_QUERY_ENGINE_TYPE=binary');
+
 // 1. Find and Start Backend
 const backendPath = path.join(process.cwd(), 'src/index.js');
 const altBackendPath = path.join(process.cwd(), 'backend/src/index.js');

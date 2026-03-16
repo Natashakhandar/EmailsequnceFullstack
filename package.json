@@ -9,7 +9,7 @@
         "dev:frontend": "cd emailseq-frontend && npm run dev",
         "install:all": "cd backend && npm install && cd ../emailseq-frontend && npm install",
         "postinstall": "npx prisma generate --schema=./backend/prisma/schema.prisma",
-        "start": "export PRISMA_QUERY_ENGINE_TYPE=binary && npx prisma generate --schema=./backend/prisma/schema.prisma && node index.js"
+        "start": "node index.js"
     },
     "dependencies": {
         "@prisma/client": "5.22.0",
