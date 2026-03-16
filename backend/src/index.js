@@ -126,36 +126,53 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
+// 1. Health & Ping (Highest Priority)
 app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    db: !!process.env.DATABASE_URL
   });
 });
 
+app.get('/api/ping', (req, res) => res.json({ status: 'pong' }));
 
-// API routes
-app.use('/api/auth', authRouter);
-app.use('/api/contacts', contactsRouter);
-app.use('/api/leads', contactsRouter); // Alias for contacts (leads)
-app.use('/api/templates', templatesRouter);
-app.use('/api/sequences', sequencesRouter);
-app.use('/api/enrollments', enrollmentsRouter);
-app.use('/api/events', eventsRouter);
-app.use('/api/unsubscribe', unsubscribeRouter);
-app.use('/api/scheduler', schedulerRouter);
-app.use('/api', emailRouter);
-app.use('/api/email-activity', emailActivityRouter);
-app.use('/api/email-monitoring', emailMonitoringRouter);
-app.use('/api/profile', profileRouter);
-app.use('/api/dashboard', dashboardRouter);
-app.use('/api/reports', reportsRouter);
-app.use('/api/campaigns', campaignsRouter);
-app.use('/api/fix-event-details', fixEventDetailsRouter);
-app.use('/api/smtp', smtpRouter);
-app.use('/api/warmup', warmupRouter);
+// 2. Consolidate API Routes
+const apiRouter = express.Router();
+
+// Logger for API requests
+apiRouter.use((req, res, next) => {
+  console.log(`[API] ${req.method} ${req.path}`);
+  next();
+});
+
+apiRouter.use('/auth', authRouter);
+apiRouter.use('/contacts', contactsRouter);
+apiRouter.use('/leads', contactsRouter);
+apiRouter.use('/templates', templatesRouter);
+apiRouter.use('/sequences', sequencesRouter);
+apiRouter.use('/enrollments', enrollmentsRouter);
+apiRouter.use('/events', eventsRouter);
+apiRouter.use('/unsubscribe', unsubscribeRouter);
+apiRouter.use('/scheduler', schedulerRouter);
+apiRouter.use('/email-activity', emailActivityRouter);
+apiRouter.use('/email-monitoring', emailMonitoringRouter);
+apiRouter.use('/profile', profileRouter);
+apiRouter.use('/dashboard', dashboardRouter);
+apiRouter.use('/reports', reportsRouter);
+apiRouter.use('/campaigns', campaignsRouter);
+apiRouter.use('/fix-event-details', fixEventDetailsRouter);
+apiRouter.use('/smtp', smtpRouter);
+apiRouter.use('/warmup', warmupRouter);
+apiRouter.use('/', emailRouter); // Email tracker routes
+
+apiRouter.get('/', (req, res) => {
+  res.json({ message: 'Email Sequencing API', version: '1.0.0' });
+});
+
+// Register the combined API router
+app.use('/api', apiRouter);
 
 // Static file serving - Serve frontend build
 const possibleFrontendPaths = [
@@ -204,15 +221,20 @@ app.use((err, req, res, next) => {
   });
 });
 
-// For all other requests, send back index.html (React routing)
-// BUT exclude /api routes so they still trigger 404 or their respective handlers
-app.get(/^(?!\/api).*/, (req, res) => {
-  res.sendFile(path.join(frontendPath, 'index.html'));
-});
+// 4. SPA Fallback - Only for non-API routes
+app.get('*', (req, res, next) => {
+  // If it's an API route that reached here, it means 404 in API
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  // If it's a static file that wasn't caught by express.static
+  if (req.path.includes('.')) {
+    return next();
+  }
 
-// 404 handler for API routes
-app.use('/api/*', (req, res) => {
-  res.status(404).json({ error: 'API Route not found' });
+  // Otherwise, serve the SPA
+  res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 // Start server
