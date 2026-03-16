@@ -25,9 +25,14 @@ if (fs.existsSync(backendPath)) {
 
 if (targetPath) {
     console.log(`🚀 Launching backend from: ${targetPath}`);
-    require(targetPath);
+    try {
+        require(targetPath);
+    } catch (e) {
+        console.error('❌ CRITICAL ERROR DURING BACKEND LAUNCH:', e);
+        process.exit(1);
+    }
 } else {
     console.error('❌ CRITICAL ERROR: Could not find src/index.js or backend/src/index.js');
-    console.log('Files in current directory:', fs.readdirSync(process.cwd()));
+    console.log('Files in:', process.cwd(), fs.readdirSync(process.cwd()));
     process.exit(1);
 }

@@ -39,6 +39,7 @@ const warmupRouter = require('./routes/warmup');
 const { startScheduler } = require('./jobs/scheduler');
 const { startEmailMonitoring } = require('./jobs/emailMonitorJob');
 const { initializeSocket } = require('./services/socketService');
+const prisma = require('./db/prismaClient');
 
 const app = express();
 const http = require('http');
