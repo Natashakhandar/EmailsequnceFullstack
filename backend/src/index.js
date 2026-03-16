@@ -63,7 +63,8 @@ app.use(cors({
       'localhost',
       '127.0.0.1',
       'boostnow.in',
-      'hostingersite.com'
+      'hostingersite.com',
+      'email.boostnow.in'
     ];
     
     const isAllowed = allowedPatterns.some(pattern => origin.includes(pattern));
@@ -156,21 +157,23 @@ app.use('/api/fix-event-details', fixEventDetailsRouter);
 app.use('/api/smtp', smtpRouter);
 app.use('/api/warmup', warmupRouter);
 
+
 // Static file serving - Serve frontend build
 const fs = require('fs');
 const possibleFrontendPaths = [
+  path.join(process.cwd(), 'emailseq-frontend/dist'),
+  path.join(process.cwd(), 'dist'),
+  path.join(process.cwd(), 'public'),
   path.join(__dirname, '../public'),
   path.join(__dirname, '../../public'),
-  path.join(__dirname, '../dist'),
-  path.join(process.cwd(), 'public'),
-  path.join(process.cwd(), 'backend/public')
+  path.join(__dirname, '../dist')
 ];
 
-let frontendPath = possibleFrontendPaths[0];
+let frontendPath = path.join(process.cwd(), 'public'); // Default
 for (const p of possibleFrontendPaths) {
   if (fs.existsSync(path.join(p, 'index.html'))) {
     frontendPath = p;
-    console.log(`✅ Serving frontend from: ${frontendPath}`);
+    console.log(`✅ FOUND FRONTEND AT: ${frontendPath}`);
     break;
   }
 }
