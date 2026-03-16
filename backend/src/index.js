@@ -99,13 +99,31 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
+// Health check endpoint with DB check
+app.get('/health', async (req, res) => {
+  const healthInfo = {
     status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  });
+    environment: process.env.NODE_ENV || 'development',
+    config: {
+      hasDbUrl: !!process.env.DATABASE_URL,
+      hasJwtSecret: !!process.env.JWT_SECRET,
+      dbUrlStart: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 15) + '...' : 'missing'
+    }
+  };
+
+  try {
+    // Test DB connection
+    await prisma.$queryRaw`SELECT 1`;
+    healthInfo.database = 'connected';
+    res.json(healthInfo);
+  } catch (error) {
+    console.error('💥 Health check DB error:', error.message);
+    healthInfo.status = 'ERROR';
+    healthInfo.database = 'disconnected';
+    healthInfo.error = error.message;
+    res.status(500).json(healthInfo);
+  }
 });
 
 
