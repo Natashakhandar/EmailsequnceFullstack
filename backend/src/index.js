@@ -1,6 +1,9 @@
 const path = require('path');
 const fs = require('fs');
 
+// 0. Capture System Port BEFORE loading .env (Critical for Hostinger)
+const SYSTEM_PORT = process.env.PORT;
+
 // 1. Robust Environment Variable Loading
 const envPaths = [
   path.join(__dirname, '../.env'),
@@ -56,7 +59,11 @@ const { initializeSocket } = require('./services/socketService');
 const app = express();
 const http = require('http');
 const server = http.createServer(app);
-const PORT = process.env.PORT || 3000;
+
+// 2. Port Configuration - Hostinger provides PORT env var, MUST use it
+// Always prioritize the port provided by the system/host
+const PORT = SYSTEM_PORT || process.env.PORT || 3001;
+
 app.set('trust proxy', true); // Trust Hostinger proxy for accurate IP tracking
 
 
