@@ -8,7 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, RefreshCw, Eye, Filter, Calendar, Mail, User, Activity, Trash2, MessageCircle, Inbox, AlertCircle } from "lucide-react";
+import { 
+  Loader2, RefreshCw, Eye, Filter, Calendar, Mail, User, Users,
+  Activity, Trash2, MessageCircle, Inbox, AlertCircle, Search, X 
+} from "lucide-react";
 import { toast } from "sonner";
 import io from "socket.io-client";
 import { api, Event, Contact, Sequence, RAW_BASE } from "@/lib/api";
@@ -22,12 +25,14 @@ interface EmailActivityFilters {
   startDate?: string;
   endDate?: string;
   search?: string;
+  leadListName?: string;
 }
 
 const EmailActivity = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [groups, setGroups] = useState<{name: string, count: number}[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [checkingReplies, setCheckingReplies] = useState(false);
@@ -48,6 +53,7 @@ const EmailActivity = () => {
     replied: 0,
     bounced: 0
   });
+
 
   // Auto-refresh every 30 seconds as fallback
   useEffect(() => {
@@ -142,13 +148,15 @@ const EmailActivity = () => {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [contactsResponse, sequencesResponse] = await Promise.all([
+      const [contactsResponse, sequencesResponse, groupsResponse] = await Promise.all([
         api.getContacts({ limit: 1000 }),
-        api.getSequences({ limit: 100 })
+        api.getSequences({ limit: 100 }),
+        api.getContactGroups()
       ]);
       
       setContacts(contactsResponse.contacts);
       setSequences(sequencesResponse.sequences);
+      setGroups(groupsResponse);
       
       await loadEvents();
     } catch (error) {
@@ -521,6 +529,29 @@ const EmailActivity = () => {
                     />
                   </div>
                 </div>
+
+                <div>
+                  <Label htmlFor="groupFilter" className="text-sm font-medium text-gray-700">
+                    Lead Group
+                  </Label>
+                  <Select
+                    value={filters.leadListName || ""}
+                    onValueChange={(value) => handleFilterChange('leadListName', value)}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="All groups" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All groups</SelectItem>
+                      <SelectItem value="Uncategorized">Uncategorized</SelectItem>
+                      {groups.filter(g => g.name !== 'Uncategorized').map((group) => (
+                        <SelectItem key={group.name} value={group.name}>
+                          {group.name} ({group.count})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="flex justify-end mt-4">
@@ -566,7 +597,8 @@ const EmailActivity = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Contact</TableHead>
+                      <TableHead>Group Name</TableHead>
+                      <TableHead>Contact Email</TableHead>
                       <TableHead>Sequence</TableHead>
                       <TableHead>Subject</TableHead>
                       <TableHead>Status</TableHead>
@@ -578,22 +610,34 @@ const EmailActivity = () => {
                     {events.map((event) => (
                       <TableRow key={event.id}>
                         <TableCell>
-                          <div className="flex items-center gap-3 py-1">
-                            <div className="bg-gray-100 p-2 rounded-full">
-                              <User className="w-4 h-4 text-gray-500" />
+                          <div className="flex items-center gap-3">
+                            <div className="bg-primary/5 p-2 rounded-lg">
+                              <Users className="w-4 h-4 text-primary" />
                             </div>
                             <div className="flex flex-col">
-                              <span className="font-semibold text-gray-900 leading-tight">
+                              <span className="font-bold text-gray-900 leading-tight">
+                                {event.contact?.leadListName || "Uncategorized"}
+                              </span>
+                              <span className="text-[11px] text-gray-500 mt-0.5">
                                 {event.contact ? (
-                                  `${(event.contact.firstName || '')} ${(event.contact.lastName || '')}`.trim() || event.contact.email
+                                  `${(event.contact.firstName || '')} ${(event.contact.lastName || '')}`.trim() || 'No Name'
                                 ) : (
                                   getContactName(event.contactId)
                                 )}
                               </span>
-                              <span className="text-xs text-gray-500 mt-0.5">
-                                {event.contact?.email}
-                              </span>
                             </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="text-sm text-gray-900 font-medium">
+                              {event.contact?.email || 'Unknown'}
+                            </span>
+                            {event.contact?.company && (
+                              <span className="text-[10px] text-gray-400">
+                                {event.contact.company}
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>

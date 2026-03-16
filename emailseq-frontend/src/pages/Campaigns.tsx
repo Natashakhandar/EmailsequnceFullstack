@@ -12,10 +12,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { 
   Target, Loader2, Users, Mail, AlertCircle, CheckCircle2, Plus, 
   Eye, Edit, Trash2, Calendar, Clock, Play, Pause, MoreHorizontal,
-  Filter, Search, RefreshCw
+  Filter, Search, RefreshCw, Check, ChevronsUpDown, X
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, Contact, Sequence, Campaign } from "@/lib/api";
@@ -59,9 +63,11 @@ const Campaigns = () => {
   // Data loading state
   const [leads, setLeads] = useState<Contact[]>([]);
   const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [groups, setGroups] = useState<Array<{ name: string; count: number }>>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(false);
   const [loadingSequences, setLoadingSequences] = useState(false);
+  const [loadingGroups, setLoadingGroups] = useState(false);
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
   
   // Campaign details modal
@@ -82,12 +88,15 @@ const Campaigns = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [leadsSearchTerm, setLeadsSearchTerm] = useState("");
   const [warmupStatus, setWarmupStatus] = useState({ isEnabled: false, reached: false });
+  const [activeTab, setActiveTab] = useState("groups");
+  const [isGroupPopoverOpen, setIsGroupPopoverOpen] = useState(false);
 
   // Load data on component mount
   useEffect(() => {
     loadCampaigns();
     loadSequences(); 
     loadWarmupStatus();
+    loadGroups();
   }, []);
 
   // Validate form whenever formData changes
@@ -259,6 +268,18 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
     loadCampaignDetails(campaign.id);
   };
 
+  const loadGroups = async () => {
+    try {
+      setLoadingGroups(true);
+      const data = await api.getContactGroups();
+      setGroups(data);
+    } catch (error) {
+      console.error("Error loading groups:", error);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
   const loadLeads = async () => {
     try {
       setLoadingLeads(true);
@@ -345,11 +366,62 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
     }));
   };
 
+  const handleGroupToggle = (groupName: string, currentlySelected: boolean) => {
+    const groupLeads = leads.filter(lead => {
+      const leadGroup = lead.leadListName || 'Uncategorized';
+      return leadGroup === groupName;
+    });
+    
+    const groupLeadIds = groupLeads.map(l => l.id);
+    
+    if (currentlySelected) {
+      // Remove all leads in this group
+      setFormData(prev => ({
+        ...prev,
+        leadIds: prev.leadIds.filter(id => !groupLeadIds.includes(id))
+      }));
+    } else {
+      // Add all leads in this group
+      setFormData(prev => ({
+        ...prev,
+        leadIds: [...new Set([...prev.leadIds, ...groupLeadIds])]
+      }));
+    }
+  };
+
+  const isGroupSelected = (groupName: string) => {
+    const groupLeads = leads.filter(lead => {
+      const leadGroup = lead.leadListName || 'Uncategorized';
+      return leadGroup === groupName;
+    });
+    
+    if (groupLeads.length === 0) return false;
+    return groupLeads.every(lead => formData.leadIds.includes(lead.id));
+  };
+
   const handleSelectAllLeads = () => {
-    setFormData(prev => ({
-      ...prev,
-      leadIds: prev.leadIds.length === leads.length ? [] : leads.map(lead => lead.id)
-    }));
+    const searchLower = leadsSearchTerm.toLowerCase();
+    const filteredLeads = leads.filter(lead => {
+      const fullName = `${(lead.firstName || '')} ${(lead.lastName || '')}`.trim();
+      return fullName.toLowerCase().includes(searchLower) || 
+             lead.email.toLowerCase().includes(searchLower) ||
+             (lead.company && lead.company.toLowerCase().includes(searchLower));
+    });
+    
+    const filteredLeadIds = filteredLeads.map(lead => lead.id);
+    const areAllFilteredSelected = filteredLeadIds.every(id => formData.leadIds.includes(id));
+    
+    if (areAllFilteredSelected) {
+      setFormData(prev => ({
+        ...prev,
+        leadIds: prev.leadIds.filter(id => !filteredLeadIds.includes(id))
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        leadIds: Array.from(new Set([...prev.leadIds, ...filteredLeadIds]))
+      }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -806,114 +878,240 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
                   {errors.sequenceId}
                 </div>
               )}
-            </div>
+                          {/* Lead Selection */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">
+                  Select Leads *
+                </Label>
+              </div>
 
-            {/* Lead Selection */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                Select Leads *
-              </Label>
-              
-              {loadingLeads ? (
-                <div className="flex items-center justify-center py-8 border rounded-xl">
-                  <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
-                  <span className="text-muted-foreground">Loading leads...</span>
-                </div>
-              ) : leads.length === 0 ? (
-                <div className="text-center py-8 border rounded-xl bg-muted/20">
-                  <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="font-semibold mb-2">No Active Leads Available</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Please add some active leads first before creating a campaign.
-                  </p>
-                </div>
-              ) : (
-                <div className={`border rounded-xl p-4 max-h-[300px] overflow-y-auto bg-white ${errors.leadIds ? 'border-red-500' : ''}`}>
-                  {/* Search Bar */}
-                  <div className="mb-3 pb-3 border-b">
-                    <Input
-                      placeholder="Search leads..."
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 h-10 p-1 bg-muted/50 rounded-lg">
+                  <TabsTrigger value="groups" className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    <Users className="w-4 h-4 mr-2" />
+                    By Groups
+                  </TabsTrigger>
+                  <TabsTrigger value="individual" className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    <Mail className="w-4 h-4 mr-2" />
+                    Individual Leads
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="groups" className="mt-4 space-y-4">
+                  {loadingGroups ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+                      <span className="text-muted-foreground">Loading groups...</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">Select one or more lead groups to add all their active contacts.</p>
+                      
+                      <Popover open={isGroupPopoverOpen} onOpenChange={setIsGroupPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="w-full justify-between rounded-xl h-12 bg-white border-border/50 hover:bg-muted/30 transition-smooth px-4"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Users className="w-4 h-4 text-primary" />
+                              <span>Search or select lead groups...</span>
+                            </div>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-0" align="start">
+                          <Command className="rounded-xl border-none shadow-luxury">
+                            <CommandInput placeholder="Search group name..." className="h-11 border-b" />
+                            <CommandList className="max-h-[300px]">
+                              <CommandEmpty className="py-6 text-center text-muted-foreground">
+                                No lead groups found.
+                              </CommandEmpty>
+                              <CommandGroup className="p-2">
+                                {/* All Leads Option */}
+                                <CommandItem
+                                  onSelect={() => {
+                                    handleSelectAllLeads();
+                                    setIsGroupPopoverOpen(false);
+                                  }}
+                                  className="rounded-lg py-3 cursor-pointer"
+                                >
+                                  <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center gap-3">
+                                      <div className={cn(
+                                        "flex items-center justify-center w-8 h-8 rounded-full",
+                                        formData.leadIds.length === leads.length && leads.length > 0 ? "bg-primary text-white" : "bg-muted text-muted-foreground"
+                                      )}>
+                                        <Users className="w-4 h-4" />
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <span className="font-semibold text-sm">All Leads</span>
+                                        <span className="text-xs text-muted-foreground">{leads.length} contacts total</span>
+                                      </div>
+                                    </div>
+                                    {formData.leadIds.length === leads.length && leads.length > 0 && (
+                                      <Check className="w-4 h-4 text-primary" />
+                                    )}
+                                  </div>
+                                </CommandItem>
+
+                                {/* Map existing groups */}
+                                {groups.map((group) => {
+                                  const selected = isGroupSelected(group.name);
+                                  return (
+                                    <CommandItem
+                                      key={group.name}
+                                      onSelect={() => {
+                                        handleGroupToggle(group.name, selected);
+                                        setIsGroupPopoverOpen(false);
+                                      }}
+                                      className="rounded-lg py-3 cursor-pointer"
+                                    >
+                                      <div className="flex items-center justify-between w-full">
+                                        <div className="flex items-center gap-3">
+                                          <div className={cn(
+                                            "flex items-center justify-center w-8 h-8 rounded-full",
+                                            selected ? "bg-primary text-white" : "bg-muted text-muted-foreground"
+                                          )}>
+                                            <Users className="w-4 h-4" />
+                                          </div>
+                                          <div className="flex flex-col">
+                                            <span className="font-semibold text-sm">{group.name}</span>
+                                            <span className="text-xs text-muted-foreground">{group.count} contacts</span>
+                                          </div>
+                                        </div>
+                                        {selected && (
+                                          <Check className="w-4 h-4 text-primary" />
+                                        )}
+                                      </div>
+                                    </CommandItem>
+                                  );
+                                })}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      
+                      {/* Selected Groups Display */}
+                      {(groups.some(g => isGroupSelected(g.name)) || isGroupSelected('Uncategorized')) && (
+                        <div className="flex flex-wrap gap-2 mt-3 p-3 rounded-xl border border-dashed border-primary/20 bg-primary/5">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-full mb-1">Current Groups:</span>
+                          {groups.map(group => isGroupSelected(group.name) ? (
+                            <Badge key={group.name} variant="secondary" className="bg-white border-primary/20 text-primary gap-1 pl-2 h-7 rounded-lg">
+                              {group.name}
+                              <button type="button" onClick={() => handleGroupToggle(group.name, true)} className="hover:text-red-500 ml-1">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ) : null)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="individual" className="mt-4 space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input 
+                      placeholder="Search manual leads..."
                       value={leadsSearchTerm}
                       onChange={(e) => setLeadsSearchTerm(e.target.value)}
-                      className="w-full"
+                      className="pl-10 h-10 rounded-xl"
                     />
                   </div>
-                  
-                  {(() => {
-                    // Filter leads based on search term
-                    const filteredLeads = leads.filter((lead) => {
-                      const searchLower = leadsSearchTerm.toLowerCase();
-                     const fullName = `${(lead.firstName || '')} ${(lead.lastName || '')}`.trim();
 
-                      return (
-                        fullName.toLowerCase().includes(searchLower) ||
-                        lead.email.toLowerCase().includes(searchLower) ||
-                        (lead.company && lead.company.toLowerCase().includes(searchLower))
-                      );
-                    });
-                    
-                    return (
-                      <>
-                        {/* Select All */}
-                        <div className="flex items-center space-x-2 mb-3 pb-3 border-b">
-                          <Checkbox 
-                            checked={filteredLeads.length > 0 && filteredLeads.every(lead => formData.leadIds.includes(lead.id))}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                // Add all filtered leads to selection
-                                const newLeadIds = [...new Set([...formData.leadIds, ...filteredLeads.map(lead => lead.id)])];
-                                setFormData(prev => ({ ...prev, leadIds: newLeadIds }));
-                              } else {
-                                // Remove all filtered leads from selection
-                                const filteredLeadIds = filteredLeads.map(lead => lead.id);
-                                const newLeadIds = formData.leadIds.filter(id => !filteredLeadIds.includes(id));
-                                setFormData(prev => ({ ...prev, leadIds: newLeadIds }));
-                              }
-                            }}
-                          />
-                          <Label className="text-sm font-medium">
-                            Select All {leadsSearchTerm ? 'Filtered' : 'Active'} Leads ({filteredLeads.length})
-                          </Label>
-                        </div>
-                        
-                        {/* Individual Leads */}
-                        <div className="space-y-2">
-                          {filteredLeads.length === 0 && leadsSearchTerm ? (
-                            <div className="text-center py-4 text-muted-foreground">
-                              <p>No leads found matching "{leadsSearchTerm}"</p>
-                            </div>
-                          ) : (
-                            filteredLeads.map((lead) => (
-                              <div key={lead.id} className="flex items-center space-x-2 py-1">
-                                <Checkbox 
-                                  checked={formData.leadIds.includes(lead.id)}
-                                  onCheckedChange={() => handleLeadSelection(lead.id)}
-                                />
-                                <Label className="text-sm cursor-pointer flex-1">
-                                  <div className="flex items-center justify-between">
-                                    <span>
-                                     {`${(lead.firstName || '')} ${(lead.lastName || '')}`.trim() || lead.email}
+                  {loadingLeads ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+                      <span className="text-muted-foreground">Loading leads...</span>
+                    </div>
+                  ) : (
+                    <div className="border rounded-xl max-h-[300px] overflow-y-auto divide-y divide-border/50">
+                      <div className="flex items-center p-3 sticky top-0 bg-white/80 backdrop-blur-md z-10 cursor-pointer" onClick={handleSelectAllLeads}>
+                        <Checkbox 
+                          checked={(() => {
+                            const searchLower = leadsSearchTerm.toLowerCase();
+                            const filtered = leads.filter(lead => {
+                              const fullName = `${(lead.firstName || '')} ${(lead.lastName || '')}`.trim();
+                              return fullName.toLowerCase().includes(searchLower) || 
+                                     lead.email.toLowerCase().includes(searchLower) ||
+                                     (lead.company && lead.company.toLowerCase().includes(searchLower));
+                            });
+                            return filtered.length > 0 && filtered.every(lead => formData.leadIds.includes(lead.id));
+                          })()}
+                          onCheckedChange={handleSelectAllLeads}
+                        />
+                        <Label className="text-xs font-bold text-muted-foreground ml-3 uppercase tracking-wider cursor-pointer">
+                          Select All Filtered Leads
+                        </Label>
+                      </div>
 
-                                    </span>
-                                    <span className="text-muted-foreground text-xs">
-                                      {lead.email}
-                                    </span>
-                                  </div>
-                                  {lead.company && (
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                      {lead.company}
-                                    </div>
-                                  )}
-                                </Label>
-                              </div>
-                            ))
+                      {leads.filter(lead => {
+                        const searchLower = leadsSearchTerm.toLowerCase();
+                        const fullName = `${(lead.firstName || '')} ${(lead.lastName || '')}`.trim();
+                        return fullName.toLowerCase().includes(searchLower) || 
+                               lead.email.toLowerCase().includes(searchLower) ||
+                               (lead.company && lead.company.toLowerCase().includes(searchLower));
+                      }).map((lead) => (
+                        <div 
+                          key={lead.id} 
+                          className={cn(
+                            "flex items-center gap-3 p-3 transition-colors hover:bg-muted/30 cursor-pointer",
+                            formData.leadIds.includes(lead.id) && "bg-primary/5"
                           )}
+                          onClick={() => handleLeadSelection(lead.id)}
+                        >
+                          <Checkbox 
+                            checked={formData.leadIds.includes(lead.id)}
+                            onCheckedChange={() => {}} // Handled by div onClick
+                          />
+                          <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold truncate text-slate-900">
+                                {`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.email}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[11px] font-medium text-primary bg-primary/5 px-1.5 py-0.5 rounded-md">
+                                  {lead.leadListName || "Uncategorized"}
+                                </span>
+                                {lead.company && (
+                                  <>
+                                    <span className="text-muted-foreground/30 text-[10px]">•</span>
+                                    <span className="text-[11px] text-muted-foreground font-medium">{lead.company}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground font-medium whitespace-nowrap">{lead.email}</p>
+                          </div>
                         </div>
-                      </>
-                    );
-                  })()}
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+
+              {/* Selection Summary */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-border/50">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-white shadow-sm border border-border/50">
+                    <Users className="w-4 h-4 text-primary" />
+                  </div>
+                  <span className="text-sm font-medium">
+                    {formData.leadIds.length} lead(s) selected
+                  </span>
                 </div>
-              )}
+                {formData.leadIds.length > 0 && (
+                  <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/10 border-green-500/20">
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    Ready
+                  </Badge>
+                )}
+              </div>   </div>
               
               {errors.leadIds && (
                 <div className="flex items-center gap-2 text-sm text-red-600">

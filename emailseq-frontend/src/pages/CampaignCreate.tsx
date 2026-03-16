@@ -9,9 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Target, Loader2, Users, Mail, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Target, Loader2, Users, Mail, AlertCircle, CheckCircle2, Plus, Search, Trash2, ChevronRight, ChevronDown, Check, ChevronsUpDown, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, Contact, Sequence } from "@/lib/api";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 interface FormData {
   campaignName: string;
@@ -51,14 +56,31 @@ const CampaignCreate = () => {
   // Data loading state
   const [leads, setLeads] = useState<Contact[]>([]);
   const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [groups, setGroups] = useState<Array<{ name: string; count: number }>>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
   const [loadingSequences, setLoadingSequences] = useState(true);
+  const [loadingGroups, setLoadingGroups] = useState(true);
   const [warmupStatus, setWarmupStatus] = useState({ isEnabled: false, reached: false });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState("groups");
+  const [isQuickAddPopoverOpen, setIsQuickAddPopoverOpen] = useState(false);
+  const [isGroupPopoverOpen, setIsGroupPopoverOpen] = useState(false);
+
+  // Quick Add state
+  const [isQuickAdding, setIsQuickAdding] = useState(false);
+  const [newContact, setNewContact] = useState({
+    email: "",
+    firstName: "",
+    lastName: "",
+    company: "",
+    leadListName: ""
+  });
 
   // Load data on component mount
   useEffect(() => {
     loadLeads();
     loadSequences();
+    loadGroups();
     loadWarmupStatus();
   }, []);
 
@@ -70,7 +92,8 @@ const CampaignCreate = () => {
   const loadLeads = async () => {
     try {
       setLoadingLeads(true);
-      const response = await api.getContacts({ limit: 100 });
+      // Fetch a larger number of contacts for campaign creation
+      const response = await api.getContacts({ limit: 1000 });
       // Only show active leads for campaign creation
       const activeLeads = response.contacts.filter(contact => contact.status === 'ACTIVE');
       setLeads(activeLeads);
@@ -80,6 +103,19 @@ const CampaignCreate = () => {
       setLeads([]);
     } finally {
       setLoadingLeads(false);
+    }
+  };
+
+  const loadGroups = async () => {
+    try {
+      setLoadingGroups(true);
+      const data = await api.getContactGroups();
+      setGroups(data);
+    } catch (error) {
+      console.error("Error loading groups:", error);
+      toast.error("Failed to load lead groups");
+    } finally {
+      setLoadingGroups(false);
     }
   };
 
@@ -178,10 +214,100 @@ const CampaignCreate = () => {
   };
 
   const handleSelectAllLeads = () => {
-    setFormData(prev => ({
-      ...prev,
-      leadIds: prev.leadIds.length === leads.length ? [] : leads.map(lead => lead.id)
-    }));
+    const filteredLeadIds = filteredLeads.map(lead => lead.id);
+    const areAllFilteredSelected = filteredLeadIds.every(id => formData.leadIds.includes(id));
+    
+    if (areAllFilteredSelected) {
+      // Deselect only the filtered leads
+      setFormData(prev => ({
+        ...prev,
+        leadIds: prev.leadIds.filter(id => !filteredLeadIds.includes(id))
+      }));
+    } else {
+      // Select all filtered leads (maintaining others)
+      setFormData(prev => ({
+        ...prev,
+        leadIds: Array.from(new Set([...prev.leadIds, ...filteredLeadIds]))
+      }));
+    }
+  };
+
+  const handleGroupToggle = async (groupName: string, currentlySelected: boolean) => {
+    try {
+      // Get all leads for this group
+      const params: any = { limit: 1000 };
+      if (groupName === 'Uncategorized') {
+        params.leadListName = null;
+      } else {
+        params.leadListName = groupName;
+      }
+      
+      const response = await api.getContacts(params);
+      const activeGroupLeadIds = response.contacts
+        .filter(c => c.status === 'ACTIVE')
+        .map(c => c.id);
+
+      if (currentlySelected) {
+        // Deselect all from this group
+        setFormData(prev => ({
+          ...prev,
+          leadIds: prev.leadIds.filter(id => !activeGroupLeadIds.includes(id))
+        }));
+      } else {
+        // Select all from this group
+        setFormData(prev => ({
+          ...prev,
+          leadIds: Array.from(new Set([...prev.leadIds, ...activeGroupLeadIds]))
+        }));
+      }
+    } catch (error) {
+      toast.error("Failed to toggle group selection");
+    }
+  };
+
+  const handleQuickAdd = async () => {
+    if (!newContact.email) {
+      toast.error("Email is required");
+      return;
+    }
+
+    try {
+      setIsQuickAdding(true);
+      const contact = await api.createContact({
+        ...newContact,
+        status: "ACTIVE",
+        timezone: "UTC"
+      });
+      
+      // Add to leads list and select it
+      setLeads(prev => [contact, ...prev]);
+      setFormData(prev => ({
+        ...prev,
+        leadIds: [...prev.leadIds, contact.id]
+      }));
+      
+      setNewContact({ email: "", firstName: "", lastName: "", company: "", leadListName: "" });
+      toast.success("Lead added and selected");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add lead");
+    } finally {
+      setIsQuickAdding(false);
+    }
+  };
+
+  const filteredLeads = leads.filter(lead => 
+    lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    `${lead.firstName} ${lead.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    lead.company?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const isGroupSelected = (groupName: string) => {
+    // A group is considered selected if all its leads (that we have loaded) are selected
+    const groupLeads = leads.filter(l => 
+      groupName === 'Uncategorized' ? !l.leadListName : l.leadListName === groupName
+    );
+    if (groupLeads.length === 0) return false;
+    return groupLeads.every(l => formData.leadIds.includes(l.id));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -505,83 +631,393 @@ const CampaignCreate = () => {
                     </div>
                   )}
                 </div>
+                         {/* Lead Selection */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">
+                      Select Leads *
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsQuickAdding(!isQuickAdding)}
+                        className="text-primary hover:text-primary/80 h-8"
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Quick Add Lead
+                      </Button>
+                    </div>
+                  </div>
 
-                {/* Lead Selection */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">
-                    Select Leads *
-                  </Label>
-                  
-                  {loadingLeads ? (
-                    <div className="flex items-center justify-center py-8 border rounded-xl">
-                      <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
-                      <span className="text-muted-foreground">Loading leads...</span>
-                    </div>
-                  ) : leads.length === 0 ? (
-                    <div className="text-center py-8 border rounded-xl bg-muted/20">
-                      <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="font-semibold mb-2">No Active Leads Available</h3>
-                      <p className="text-muted-foreground text-sm">
-                        Please add some active leads first before creating a campaign.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className={`border rounded-xl p-4 max-h-[300px] overflow-y-auto ${errors.leadIds ? 'border-red-500' : ''}`}>
-                      {/* Select All */}
-                      <div className="flex items-center space-x-2 mb-3 pb-3 border-b">
-                        <Checkbox 
-                          checked={formData.leadIds.length === leads.length && leads.length > 0}
-                          onCheckedChange={handleSelectAllLeads}
+                  {isQuickAdding && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="p-4 rounded-xl border border-dashed border-primary/30 bg-primary/5 space-y-4"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <Input
+                          placeholder="Email *"
+                          value={newContact.email}
+                          onChange={(e) => setNewContact({...newContact, email: e.target.value})}
+                          className="h-9 rounded-lg"
                         />
-                        <Label className="text-sm font-medium">
-                          Select All Active Leads ({leads.length})
-                        </Label>
+                        <Input
+                          placeholder="First Name"
+                          value={newContact.firstName}
+                          onChange={(e) => setNewContact({...newContact, firstName: e.target.value})}
+                          className="h-9 rounded-lg"
+                        />
+                        <Input
+                          placeholder="Last Name"
+                          value={newContact.lastName}
+                          onChange={(e) => setNewContact({...newContact, lastName: e.target.value})}
+                          className="h-9 rounded-lg"
+                        />
+                        <Input
+                          placeholder="Company"
+                          value={newContact.company}
+                          onChange={(e) => setNewContact({...newContact, company: e.target.value})}
+                          className="h-9 rounded-lg"
+                        />
                       </div>
-                      
-                      {/* Individual Leads */}
-                      <div className="space-y-2">
-                        {leads.map((lead) => (
-                          <div key={lead.id} className="flex items-center space-x-2 py-1">
-                            <Checkbox 
-                              checked={formData.leadIds.includes(lead.id)}
-                              onCheckedChange={() => handleLeadSelection(lead.id)}
-                            />
-                            <Label className="text-sm cursor-pointer flex-1">
-                              <div className="flex items-center justify-between">
-                                <span>
-                                  {`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.email}
-                                </span>
-                                <span className="text-muted-foreground text-xs">
-                                  {lead.email}
-                                </span>
-                              </div>
-                              {lead.company && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  {lead.company}
-                                </div>
-                              )}
-                            </Label>
-                          </div>
-                        ))}
+                      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+                        <div className="flex-1 w-full">
+                          <Label className="text-xs text-muted-foreground mb-1 block">Lead List Name (Groups)</Label>
+                          <Popover open={isQuickAddPopoverOpen} onOpenChange={setIsQuickAddPopoverOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                  "w-full justify-between rounded-lg font-normal h-9 px-3 text-sm",
+                                  !newContact.leadListName && "text-muted-foreground"
+                                )}
+                              >
+                                {newContact.leadListName || "Select or type a group..."}
+                                <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[300px] p-0" align="start">
+                              <Command>
+                                <CommandInput 
+                                  placeholder="Search or type new group..." 
+                                  onValueChange={(val) => setNewContact({ ...newContact, leadListName: val })}
+                                />
+                                <CommandList>
+                                  <CommandEmpty 
+                                    className="py-2 px-4 cursor-pointer hover:bg-accent text-sm" 
+                                    onClick={() => {
+                                      setIsQuickAddPopoverOpen(false);
+                                    }}
+                                  >
+                                    Using new group: "{newContact.leadListName}"
+                                  </CommandEmpty>
+                                  <CommandGroup>
+                                    {groups.map((group) => (
+                                      <CommandItem
+                                        key={group.name}
+                                        value={group.name}
+                                        onSelect={(currentValue) => {
+                                          setNewContact({ ...newContact, leadListName: currentValue });
+                                          setIsQuickAddPopoverOpen(false);
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-3 w-3",
+                                            newContact.leadListName === group.name ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        {group.name} ({group.count})
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        <div className="flex justify-end gap-2 w-full md:w-auto self-end">
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setIsQuickAdding(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          type="button" 
+                          size="sm"
+                          onClick={handleQuickAdd}
+                          className="gradient-primary text-white"
+                        >
+                          Add & Select
+                        </Button>
+                        </div>
                       </div>
-                    </div>
+                    </motion.div>
                   )}
                   
-                  {/* Selection Summary */}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {formData.leadIds.length} lead(s) selected
-                    </span>
-                    {formData.leadIds.length > 0 && (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Ready for campaign
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 h-10 p-1 bg-muted/50 rounded-lg">
+                      <TabsTrigger value="groups" className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Users className="w-4 h-4 mr-2" />
+                        By Groups
+                      </TabsTrigger>
+                      <TabsTrigger value="individual" className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Mail className="w-4 h-4 mr-2" />
+                        Individual Leads
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="groups" className="mt-4 space-y-4">
+                      {loadingGroups ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+                          <span className="text-muted-foreground">Loading groups...</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <p className="text-sm text-muted-foreground">Select one or more lead groups to add all their active contacts to your campaign.</p>
+                          
+                          <Popover open={isGroupPopoverOpen} onOpenChange={setIsGroupPopoverOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className="w-full justify-between rounded-xl h-12 bg-white border-border/50 hover:bg-muted/30 transition-smooth px-4"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Users className="w-4 h-4 text-primary" />
+                                  <span>Search or select lead groups...</span>
+                                </div>
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[400px] p-0" align="start">
+                              <Command className="rounded-xl border-none shadow-luxury">
+                                <CommandInput placeholder="Search or type new group name..." className="h-11 border-b" />
+                                <CommandList className="max-h-[300px]">
+                                  <CommandEmpty className="py-6 text-center text-muted-foreground">
+                                    No lead groups found matching your search.
+                                  </CommandEmpty>
+                                  <CommandGroup className="p-2">
+                                    {/* All Leads Option */}
+                                    <CommandItem
+                                      onSelect={() => {
+                                        handleSelectAllLeads();
+                                        setIsGroupPopoverOpen(false);
+                                      }}
+                                      className="rounded-lg py-3 cursor-pointer"
+                                    >
+                                      <div className="flex items-center justify-between w-full">
+                                        <div className="flex items-center gap-3">
+                                          <div className={cn(
+                                            "flex items-center justify-center w-8 h-8 rounded-full",
+                                            formData.leadIds.length === leads.length && leads.length > 0 ? "bg-primary text-white" : "bg-muted text-muted-foreground"
+                                          )}>
+                                            <Users className="w-4 h-4" />
+                                          </div>
+                                          <div className="flex flex-col">
+                                            <span className="font-semibold text-sm">All Leads</span>
+                                            <span className="text-xs text-muted-foreground">{leads.length} contacts total</span>
+                                          </div>
+                                        </div>
+                                        {formData.leadIds.length === leads.length && leads.length > 0 && (
+                                          <Check className="w-4 h-4 text-primary" />
+                                        )}
+                                      </div>
+                                    </CommandItem>
+
+                                    {/* Uncategorized Option if not in groups list */}
+                                    {!groups.find(g => g.name === 'Uncategorized') && (
+                                      <CommandItem
+                                        onSelect={() => {
+                                          handleGroupToggle('Uncategorized', isGroupSelected('Uncategorized'));
+                                          setIsGroupPopoverOpen(false);
+                                        }}
+                                        className="rounded-lg py-3 cursor-pointer"
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                              "flex items-center justify-center w-8 h-8 rounded-full",
+                                              isGroupSelected('Uncategorized') ? "bg-primary text-white" : "bg-muted text-muted-foreground"
+                                            )}>
+                                              <Users className="w-4 h-4" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                              <span className="font-semibold text-sm">Uncategorized</span>
+                                              <span className="text-xs text-muted-foreground">
+                                                {leads.filter(l => !l.leadListName).length} contacts
+                                              </span>
+                                            </div>
+                                          </div>
+                                          {isGroupSelected('Uncategorized') && (
+                                            <Check className="w-4 h-4 text-primary" />
+                                          )}
+                                        </div>
+                                      </CommandItem>
+                                    )}
+
+                                    {/* Map existing groups */}
+                                    {groups.map((group) => {
+                                      const selected = isGroupSelected(group.name);
+                                      return (
+                                        <CommandItem
+                                          key={group.name}
+                                          onSelect={() => {
+                                            handleGroupToggle(group.name, selected);
+                                            setIsGroupPopoverOpen(false);
+                                          }}
+                                          className="rounded-lg py-3 cursor-pointer"
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-3">
+                                              <div className={cn(
+                                                "flex items-center justify-center w-8 h-8 rounded-full",
+                                                selected ? "bg-primary text-white" : "bg-muted text-muted-foreground"
+                                              )}>
+                                                <Users className="w-4 h-4" />
+                                              </div>
+                                              <div className="flex flex-col">
+                                                <span className="font-semibold text-sm">{group.name}</span>
+                                                <span className="text-xs text-muted-foreground">{group.count} contacts</span>
+                                              </div>
+                                            </div>
+                                            {selected && (
+                                              <Check className="w-4 h-4 text-primary" />
+                                            )}
+                                          </div>
+                                        </CommandItem>
+                                      );
+                                    })}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                          
+                          {/* Selected Groups Display */}
+                          {(groups.some(g => isGroupSelected(g.name)) || isGroupSelected('Uncategorized')) && (
+                            <div className="flex flex-wrap gap-2 mt-3 p-3 rounded-xl border border-dashed border-primary/20 bg-primary/5">
+                              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-full mb-1">Current Groups:</span>
+                              {isGroupSelected('Uncategorized') && (
+                                <Badge variant="secondary" className="bg-white border-primary/20 text-primary gap-1 pl-2 h-7 rounded-lg">
+                                  Uncategorized
+                                  <button type="button" onClick={() => handleGroupToggle('Uncategorized', true)} className="hover:text-red-500 ml-1">
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </Badge>
+                              )}
+                              {groups.map(group => isGroupSelected(group.name) ? (
+                                <Badge key={group.name} variant="secondary" className="bg-white border-primary/20 text-primary gap-1 pl-2 h-7 rounded-lg">
+                                  {group.name}
+                                  <button type="button" onClick={() => handleGroupToggle(group.name, true)} className="hover:text-red-500 ml-1">
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </Badge>
+                              ) : null)}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="individual" className="mt-4 space-y-4">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input 
+                          placeholder="Search manual leads..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10 h-10 rounded-xl"
+                        />
                       </div>
+
+                      {loadingLeads ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+                          <span className="text-muted-foreground">Loading leads...</span>
+                        </div>
+                      ) : filteredLeads.length === 0 ? (
+                        <div className="text-center py-8 border rounded-xl bg-muted/20">
+                          <p className="text-muted-foreground text-sm">No leads found.</p>
+                        </div>
+                      ) : (
+                        <div className="border rounded-xl max-h-[300px] overflow-y-auto divide-y divide-border/50">
+                          <div className="flex items-center p-3 sticky top-0 bg-white/80 backdrop-blur-md z-10 cursor-pointer" onClick={handleSelectAllLeads}>
+                            <Checkbox 
+                              checked={filteredLeads.length > 0 && filteredLeads.every(lead => formData.leadIds.includes(lead.id))}
+                              onCheckedChange={handleSelectAllLeads}
+                            />
+                            <Label className="text-xs font-bold text-muted-foreground ml-3 uppercase tracking-wider cursor-pointer">
+                              Select All Filtered Leads ({filteredLeads.length})
+                            </Label>
+                          </div>
+                          {filteredLeads.map((lead) => (
+                            <div 
+                              key={lead.id} 
+                              className={cn(
+                                "flex items-center gap-3 p-3 transition-colors hover:bg-muted/30",
+                                formData.leadIds.includes(lead.id) && "bg-primary/5"
+                              )}
+                              onClick={() => handleLeadSelection(lead.id)}
+                            >
+                              <Checkbox 
+                                checked={formData.leadIds.includes(lead.id)}
+                                onCheckedChange={() => {}} // Handled by div onClick
+                              />
+                              <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold truncate text-slate-900">
+                                    {`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.email}
+                                  </p>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className="text-[11px] font-medium text-primary bg-primary/5 px-1.5 py-0.5 rounded-md">
+                                      {lead.leadListName || "Uncategorized"}
+                                    </span>
+                                    {lead.company && (
+                                      <>
+                                        <span className="text-muted-foreground/30 text-[10px]">•</span>
+                                        <span className="text-[11px] text-muted-foreground font-medium">{lead.company}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <p className="text-xs text-muted-foreground font-medium whitespace-nowrap">{lead.email}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                  
+                  {/* Selection Summary */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-border/50">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-white shadow-sm border border-border/50">
+                        <Users className="w-4 h-4 text-primary" />
+                      </div>
+                      <span className="text-sm font-medium">
+                        {formData.leadIds.length} lead(s) selected
+                      </span>
+                    </div>
+                    {formData.leadIds.length > 0 && (
+                      <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/10 border-green-500/20">
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        Ready
+                      </Badge>
                     )}
                   </div>
                   
                   {errors.leadIds && (
-                    <div className="flex items-center gap-2 text-sm text-red-600">
+                    <div className="flex items-center gap-2 text-sm text-red-600 px-1">
                       <AlertCircle className="w-4 h-4" />
                       {errors.leadIds}
                     </div>

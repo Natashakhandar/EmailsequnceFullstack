@@ -40,6 +40,7 @@ export interface Contact {
   firstName?: string;
   lastName?: string;
   company?: string;
+  leadListName?: string;
   timezone: string;
   status: 'ACTIVE' | 'UNSUBSCRIBED' | 'BOUNCED' | 'INACTIVE';
   createdAt: string;
@@ -105,6 +106,7 @@ export interface Event {
   details?: string;
   timestamp: string;
   emailId?: string;
+  campaignId?: string;
   contact?: Contact;
   enrollment?: Enrollment;
 }
@@ -114,7 +116,7 @@ export interface User {
   email: string;
   firstName?: string;
   lastName?: string;
-  role: 'USER' | 'ADMIN' | 'SUPERADMIN';
+  role: 'USER' | 'ADMIN' | 'SUPERADMIN' | 'MANAGER';
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -258,7 +260,8 @@ class ApiClient {
     password: string;
     firstName?: string;
     lastName?: string;
-    role?: 'USER' | 'ADMIN' | 'SUPERADMIN';
+    role?: 'USER' | 'ADMIN' | 'SUPERADMIN' | 'MANAGER';
+    managedUserIds?: string[];
   }): Promise<{ message: string; user: User }> {
     return this.request<{ message: string; user: User }>('/auth/register', {
       method: 'POST',
@@ -270,8 +273,9 @@ class ApiClient {
     email?: string;
     firstName?: string;
     lastName?: string;
-    role?: 'USER' | 'ADMIN' | 'SUPERADMIN';
+    role?: 'USER' | 'ADMIN' | 'SUPERADMIN' | 'MANAGER';
     isActive?: boolean;
+    managedUserIds?: string[];
   }): Promise<{ message: string; user: User }> {
     return this.request<{ message: string; user: User }>(`/auth/users/${id}`, {
       method: 'PUT',
@@ -343,15 +347,20 @@ class ApiClient {
   }
 
   // Contacts API
-  async getContacts(params?: { page?: number; limit?: number; status?: string; search?: string }) {
+  async getContacts(params?: { page?: number; limit?: number; status?: string; search?: string; leadListName?: string }) {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.limit) searchParams.append('limit', params.limit.toString());
     if (params?.status) searchParams.append('status', params.status);
     if (params?.search) searchParams.append('search', params.search);
+    if (params?.leadListName !== undefined) searchParams.append('leadListName', params.leadListName as string);
 
     const query = searchParams.toString();
     return this.request<{ contacts: Contact[]; pagination: any }>(`/contacts${query ? `?${query}` : ''}`);
+  }
+
+  async getContactGroups() {
+    return this.request<Array<{ name: string; count: number }>>('/contacts/groups');
   }
 
   async createContact(contact: Omit<Contact, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -520,6 +529,8 @@ class ApiClient {
     contactId?: string;
     startDate?: string;
     endDate?: string;
+    search?: string;
+    leadListName?: string;
   }) {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
@@ -529,9 +540,11 @@ class ApiClient {
     if (params?.contactId) searchParams.append('contactId', params.contactId);
     if (params?.startDate) searchParams.append('startDate', params.startDate);
     if (params?.endDate) searchParams.append('endDate', params.endDate);
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.leadListName) searchParams.append('leadListName', params.leadListName);
 
     const query = searchParams.toString();
-    return this.request<{ events: Event[]; pagination: any }>(`/events${query ? `?${query}` : ''}`);
+    return this.request<{ events: Event[]; pagination: any; stats?: any }>(`/events${query ? `?${query}` : ''}`);
   }
 
   async getEvent(id: string) {

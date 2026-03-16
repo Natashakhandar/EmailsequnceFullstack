@@ -15,19 +15,37 @@ router.get('/', async (req, res) => {
       enrollmentId,
       contactId,
       startDate,
-      endDate
+      endDate,
+      search,
+      leadListName
     } = req.query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
-    const where = isAdmin ? {} : {
-      contact: { userId: req.user.id }
-    };
+    const where = {};
+    const contactWhere = {};
+
+    if (!isAdmin) contactWhere.userId = req.user.id;
 
     if (type) where.type = type;
     if (enrollmentId) where.enrollmentId = enrollmentId;
     if (contactId) where.contactId = contactId;
+
+    // Handle leadListName (from dropdown) and search (from search bar)
+    if (search) {
+      contactWhere.leadListName = { contains: search, mode: 'insensitive' };
+    } else if (leadListName !== undefined && leadListName !== 'all') {
+      if (!leadListName || leadListName === 'null' || leadListName === 'Uncategorized') {
+        contactWhere.leadListName = null;
+      } else {
+        contactWhere.leadListName = leadListName;
+      }
+    }
+
+    if (Object.keys(contactWhere).length > 0) {
+      where.contact = contactWhere;
+    }
 
     if (startDate || endDate) {
       where.timestamp = {};
