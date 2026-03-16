@@ -27,7 +27,8 @@ const Login = () => {
       navigate("/dashboard");
     } catch (error) {
       console.error('Login failed:', error);
-      setError(error instanceof Error ? error.message : 'Login failed');
+      const apiBase = (api as any).baseUrl || 'unknown';
+      setError(`${error instanceof Error ? error.message : 'Login failed'} (Target: ${apiBase})`);
     } finally {
       setIsLoading(false);
     }

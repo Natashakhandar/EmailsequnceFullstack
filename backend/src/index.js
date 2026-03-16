@@ -1,5 +1,28 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+const fs = require('fs');
+
+// 1. Robust Environment Variable Loading
+const envPaths = [
+  path.join(__dirname, '../.env'),
+  path.join(__dirname, '../../.env'),
+  path.join(process.cwd(), '.env'),
+  path.join(process.cwd(), 'backend/.env')
+];
+
+let envFound = false;
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    require('dotenv').config({ path: envPath });
+    console.log(`✅ Loaded environment from: ${envPath}`);
+    envFound = true;
+    break;
+  }
+}
+
+if (!envFound) {
+  console.warn('⚠️ No .env file found in standard locations. Using system environment variables.');
+}
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -128,12 +151,14 @@ app.use('/api/smtp', smtpRouter);
 app.use('/api/warmup', warmupRouter);
 
 // Static file serving - Serve frontend build
-const fs = require('fs');
 const possibleFrontendPaths = [
   path.join(__dirname, '../public'),
   path.join(__dirname, '../../public'),
   path.join(__dirname, '../dist'),
+  path.join(__dirname, '../../emailseq-frontend/dist'),
   path.join(process.cwd(), 'public'),
+  path.join(process.cwd(), 'dist'),
+  path.join(process.cwd(), 'emailseq-frontend/dist'),
   path.join(process.cwd(), 'backend/public')
 ];
 
