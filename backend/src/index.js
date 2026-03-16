@@ -65,13 +65,26 @@ const server = http.createServer(app);
 // 2. Port Configuration
 const PORT = SYSTEM_PORT || process.env.PORT || 3001;
 
+console.log('-------------------------------------------');
+console.log('🚀 INITIALIZING SERVER');
+console.log(`📍 Port: ${PORT}`);
+console.log(`🌍 NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`🔑 JWT_SECRET: ${process.env.JWT_SECRET ? 'SET' : 'MISSING'}`);
+console.log(`🗄️ DATABASE: ${process.env.DATABASE_URL ? 'CONFIGURED' : 'MISSING'}`);
+console.log('-------------------------------------------');
+
 // Trust and Logging
 app.set('trust proxy', 1); 
 
 // Global Debug Logger for Production Issues
 app.use((req, res, next) => {
-  const logMsg = `[${new Date().toISOString()}] ${req.method} ${req.url} (Host: ${req.headers.host})\n`;
-  fs.appendFileSync(path.join(process.cwd(), 'request_log.txt'), logMsg);
+  try {
+    const logMsg = `[${new Date().toISOString()}] ${req.method} ${req.url}\n`;
+    fs.appendFileSync(path.join(process.cwd(), 'request_log.txt'), logMsg);
+    console.log(`[REQ] ${req.method} ${req.url}`);
+  } catch (e) {
+    // Silently continue if log fails
+  }
   next();
 });
 

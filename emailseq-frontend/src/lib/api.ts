@@ -3,25 +3,21 @@
 const getApiBaseUrl = () => {
   const envUrl = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_API_BASE_URL;
 
-  if (import.meta.env.DEV) {
-    if (envUrl && !envUrl.includes('placeholder')) return envUrl;
-    return '';
-  }
-
+  // 1. Check if we are running locally
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    
-    // REDIRECT API: If on boostnow domain, talk to the silver-tapir backend
-    if (hostname.includes('boostnow.in')) {
-      return 'https://silver-tapir-929419.hostingersite.com';
-    }
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
 
-    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return window.location.origin;
+    if (!isLocal) {
+      // 2. FOR ALL PRODUCTION/HOSTED DOMAINS: Force the silver-tapir backend
+      // This is because the backend is specifically configured there.
+      return 'https://silver-tapir-929419.hostingersite.com';
     }
   }
 
-  return envUrl || 'https://silver-tapir-929419.hostingersite.com';
+  // 3. Fallback for Local Dev or Server Side
+  if (envUrl && !envUrl.includes('placeholder')) return envUrl;
+  return ''; // Local proxy uses this
 };
 
 export const RAW_BASE = getApiBaseUrl();
