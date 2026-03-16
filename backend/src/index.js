@@ -108,7 +108,8 @@ app.get('/health', async (req, res) => {
     config: {
       hasDbUrl: !!process.env.DATABASE_URL,
       hasJwtSecret: !!process.env.JWT_SECRET,
-      dbUrlStart: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 15) + '...' : 'missing'
+      dbUrlStart: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 15) + '...' : 'missing',
+      engineType: process.env.PRISMA_QUERY_ENGINE_TYPE || 'default'
     }
   };
 
