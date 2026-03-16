@@ -1,13 +1,12 @@
 const path = require('path');
 const fs = require('fs');
 
-// 0. Capture System Port BEFORE loading .env (Critical for Hostinger)
-const SYSTEM_PORT = process.env.PORT;
+// 0. CAPTURE PORT IMMEDIATELY (Global Priority for Hostinger)
+const SYSTEM_PORT = process.env.PORT || process.env.APP_PORT;
 
 // 1. Robust Environment Variable Loading
 const envPaths = [
   path.join(__dirname, '../.env'),
-  path.join(__dirname, '../../.env'),
   path.join(process.cwd(), '.env'),
   path.join(process.cwd(), 'backend/.env')
 ];
@@ -16,11 +15,14 @@ let envFound = false;
 for (const envPath of envPaths) {
   if (fs.existsSync(envPath)) {
     require('dotenv').config({ path: envPath });
-    console.log(`✅ Loaded environment from: ${envPath}`);
+    console.log(`✅ Environment loaded: ${envPath}`);
     envFound = true;
     break;
   }
 }
+
+const express = require('express');
+const cors = require('cors');
 
 if (!envFound) {
   console.warn('⚠️ No .env file found in standard locations. Using system environment variables.');
@@ -60,11 +62,18 @@ const app = express();
 const http = require('http');
 const server = http.createServer(app);
 
-// 2. Port Configuration - Hostinger provides PORT env var, MUST use it
-// Always prioritize the port provided by the system/host
+// 2. Port Configuration
 const PORT = SYSTEM_PORT || process.env.PORT || 3001;
 
-app.set('trust proxy', true); // Trust Hostinger proxy for accurate IP tracking
+// Trust and Logging
+app.set('trust proxy', 1); 
+
+// Global Debug Logger for Production Issues
+app.use((req, res, next) => {
+  const logMsg = `[${new Date().toISOString()}] ${req.method} ${req.url} (Host: ${req.headers.host})\n`;
+  fs.appendFileSync(path.join(process.cwd(), 'request_log.txt'), logMsg);
+  next();
+});
 
 
 if (!process.env.DATABASE_URL) {
@@ -126,26 +135,21 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 1. Health & Ping (Highest Priority)
+// 1. Health & Ping (Absolute Priority)
 app.get('/health', (req, res) => {
   res.json({
-    status: 'OK',
+    status: 'online',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    db: !!process.env.DATABASE_URL
+    port: PORT,
+    cwd: process.cwd(),
+    node: process.version
   });
 });
-
-app.get('/api/ping', (req, res) => res.json({ status: 'pong' }));
 
 // 2. Consolidate API Routes
 const apiRouter = express.Router();
 
-// Logger for API requests
-apiRouter.use((req, res, next) => {
-  console.log(`[API] ${req.method} ${req.path}`);
-  next();
-});
+apiRouter.get('/ping', (req, res) => res.json({ status: 'pong' }));
 
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/contacts', contactsRouter);
@@ -165,14 +169,15 @@ apiRouter.use('/campaigns', campaignsRouter);
 apiRouter.use('/fix-event-details', fixEventDetailsRouter);
 apiRouter.use('/smtp', smtpRouter);
 apiRouter.use('/warmup', warmupRouter);
-apiRouter.use('/', emailRouter); // Email tracker routes
+apiRouter.use('/', emailRouter);
 
-apiRouter.get('/', (req, res) => {
-  res.json({ message: 'Email Sequencing API', version: '1.0.0' });
-});
-
-// Register the combined API router
+// Register API
 app.use('/api', apiRouter);
+
+// Fallback for /api itself
+app.all('/api', (req, res) => {
+  res.json({ message: 'BoostNow API Active', version: '1.2.0' });
+});
 
 // Static file serving - Serve frontend build
 const possibleFrontendPaths = [
@@ -221,19 +226,19 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 4. SPA Fallback - Only for non-API routes
-app.get('*', (req, res, next) => {
-  // If it's an API route that reached here, it means 404 in API
-  if (req.path.startsWith('/api/')) {
+// 4. SPA Fallback
+app.get('*', (req, res) => {
+  // STRICT API Protection: If it starts with /api (slash optional) or contains search params that look like API calls
+  if (req.url.startsWith('/api') || req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
   
-  // If it's a static file that wasn't caught by express.static
+  // Exclude actual static files
   if (req.path.includes('.')) {
-    return next();
+    return res.status(404).end();
   }
 
-  // Otherwise, serve the SPA
+  // Everything else is a frontend route
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
