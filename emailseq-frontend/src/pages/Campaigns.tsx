@@ -749,7 +749,7 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
       {/* Create Campaign Modal */}
       <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
        <DialogContent
-  className="sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-white shadow-2xl border border-gray-200 rounded-2xl"
+  className="sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto bg-white shadow-2xl border border-gray-200 rounded-2xl top-0 translate-y-0 sm:top-[50%] sm:translate-y-[-50%] p-5 sm:p-6"
   style={{ backgroundColor: 'white' }}
 >
 
@@ -1164,8 +1164,7 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
       <AnimatePresence>
         {showDetailsModal && (
           <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-          <DialogContent
-  className="sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-white shadow-xl border border-gray-200 rounded-2xl"
+          <DialogContent className="sm:max-w-4xl max-h-[95vh] overflow-y-auto bg-slate-50 p-0 overflow-hidden border-none shadow-luxury top-0 translate-y-0 sm:top-[50%] sm:translate-y-[-50%] rounded-2xl"
   style={{ backgroundColor: 'white' }}
 >
 
@@ -1187,10 +1186,10 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
             ) : selectedCampaign ? (
             <div className="space-y-6 mt-6">
               {/* Campaign Info */}
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
                   <Label className="text-sm font-medium text-gray-600">Campaign Name</Label>
-                  <p className="text-xl font-bold text-gray-900 mt-1">{selectedCampaign.campaignName}</p>
+                  <p className="text-lg sm:text-xl font-bold text-gray-900 mt-1">{selectedCampaign.campaignName}</p>
                 </div>
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border border-green-100">
                   <Label className="text-sm font-medium text-gray-600">Status</Label>
@@ -1205,10 +1204,10 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
                 </div>
               )}
               
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-xl border border-purple-100">
                   <Label className="text-sm font-medium text-gray-600">Start Date</Label>
-                  <p className="mt-2 text-lg font-semibold text-gray-900">
+                  <p className="mt-2 text-md sm:text-lg font-semibold text-gray-900">
                     {selectedCampaign.startDate 
                       ? new Date(selectedCampaign.startDate).toLocaleDateString('en-US', {
                           year: 'numeric',
@@ -1221,7 +1220,7 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
                 </div>
                 <div className="bg-gradient-to-br from-orange-50 to-red-50 p-4 rounded-xl border border-orange-100">
                   <Label className="text-sm font-medium text-gray-600">End Date</Label>
-                  <p className="mt-2 text-lg font-semibold text-gray-900">
+                  <p className="mt-2 text-md sm:text-lg font-semibold text-gray-900">
                     {selectedCampaign.endDate 
                       ? new Date(selectedCampaign.endDate).toLocaleDateString('en-US', {
                           year: 'numeric',
@@ -1251,9 +1250,9 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
 
               {/* Leads Section */}
               <div className="border-t border-gray-200 pt-6">
-                <div className="flex items-center justify-between mb-6">
-                  <Label className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                    <Users className="w-6 h-6 text-blue-600" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-2">
+                  <Label className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <Users className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                     Campaign Leads ({campaignLeads.length})
                   </Label>
                 </div>
@@ -1273,57 +1272,95 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
                   </div>
                 ) : (
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Company</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="w-16">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {campaignLeads.map((lead) => (
-                          <TableRow key={lead.id} className="hover:bg-blue-50 transition-colors duration-200">
-                            <TableCell>
-                              <div className="font-medium">
-                              {`${(lead.firstName || '')} ${(lead.lastName || '')}`.trim() || 'N/A'}
-
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-sm">{lead.email}</div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-sm">{lead.company || 'N/A'}</div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge 
-                                variant={lead.status === 'ACTIVE' ? 'default' : 'secondary'}
-                                className={lead.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : ''}
-                              >
-                                {lead.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                onClick={() => {
-                                  setLeadToDelete(lead);
-                                  setShowDeleteLeadDialog(true);
-                                }}
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                title="Delete Lead"
-                              >
-                                🗑
-                              </Button>
-                            </TableCell>
+                    {/* Desktop Table View */}
+                    <div className="hidden sm:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="whitespace-nowrap">Name</TableHead>
+                            <TableHead className="whitespace-nowrap">Email</TableHead>
+                            <TableHead className="whitespace-nowrap">Company</TableHead>
+                            <TableHead className="whitespace-nowrap">Status</TableHead>
+                            <TableHead className="w-16">Actions</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {campaignLeads.map((lead) => (
+                            <TableRow key={lead.id} className="hover:bg-blue-50 transition-colors duration-200">
+                              <TableCell>
+                                <div className="font-medium">
+                                  {`${(lead.firstName || '')} ${(lead.lastName || '')}`.trim() || 'N/A'}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm">{lead.email}</div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm">{lead.company || 'N/A'}</div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={lead.status === 'ACTIVE' ? 'default' : 'secondary'}
+                                  className={lead.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : ''}
+                                >
+                                  {lead.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  onClick={() => {
+                                    setLeadToDelete(lead);
+                                    setShowDeleteLeadDialog(true);
+                                  }}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  title="Delete Lead"
+                                >
+                                  🗑
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile Card List View */}
+                    <div className="sm:hidden divide-y divide-gray-100">
+                      {campaignLeads.map((lead) => (
+                        <div key={lead.id} className="p-4 flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-gray-900 truncate">
+                              {`${(lead.firstName || '')} ${(lead.lastName || '')}`.trim() || lead.email}
+                            </div>
+                            <div className="text-xs text-gray-500 truncate mt-0.5">{lead.email}</div>
+                            {lead.company && (
+                              <div className="text-[10px] text-primary bg-primary/5 inline-block px-1.5 py-0.5 rounded-md mt-1 font-medium">
+                                {lead.company}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-2 shrink-0">
+                            <div className={cn(
+                              "w-6 h-2 rounded-full shadow-sm",
+                              lead.status === 'ACTIVE' ? "bg-[#0d7a5f]" : "bg-slate-300"
+                            )} title={lead.status || 'ACTIVE'} />
+                            <Button
+                              onClick={() => {
+                                setLeadToDelete(lead);
+                                setShowDeleteLeadDialog(true);
+                              }}
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-destructive bg-destructive/5 hover:bg-destructive/10 rounded-lg"
+                            >
+                              🗑
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1375,7 +1412,7 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
       <AnimatePresence>
         {showDeleteCampaignDialog && (
           <Dialog open={showDeleteCampaignDialog} onOpenChange={setShowDeleteCampaignDialog}>
-            <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-lg shadow-2xl border border-red-200 rounded-2xl">
+            <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-lg shadow-2xl border border-red-200 rounded-2xl top-0 translate-y-0 sm:top-[50%] sm:translate-y-[-50%]">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold text-red-700">Delete Campaign</DialogTitle>
             </DialogHeader>

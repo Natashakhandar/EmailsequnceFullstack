@@ -113,6 +113,13 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+
+  /* Prevent auto-zoom on mobile inputs */
+  @media screen and (max-width: 768px) {
+    input, textarea, select, .input {
+      font-size: 16px !important;
+    }
+  }
 }
 
 @layer utilities {
