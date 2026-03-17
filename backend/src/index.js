@@ -28,8 +28,8 @@ if (!envFound) {
   console.warn('⚠️ No .env file found in standard locations. Using system environment variables.');
 }
 
-// 🚀 DEPLOYMENT TRIGGER: Final 127.0.0.1 Sync
-// Last updated: 2026-03-17 10:18:00
+// 🚀 DEPLOYMENT TRIGGER: BoostNow2026 Sync
+// Last updated: 2026-03-17 10:25:00
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');

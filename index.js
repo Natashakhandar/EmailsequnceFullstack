@@ -17,8 +17,13 @@ envsToCheck.forEach(env => {
         status = '✅ PRESENT';
         if (env === 'DATABASE_URL') {
             const url = process.env.DATABASE_URL;
-            const masked = url.replace(/\/\/.*:.*@/, '//****:****@');
-            status += ` (${masked.substring(0, 30)}...)`;
+            // Mask password but show host/db
+            const parts = url.split('@');
+            if (parts.length > 1) {
+                const head = parts[0].split(':'); // mysql://user
+                const tail = parts[1]; // host:port/db
+                status += ` [${head[0]}://${head[1]}:****@${tail}]`;
+            }
         }
     }
     console.log(`${env}: ${status}`);
@@ -28,15 +33,18 @@ envsToCheck.forEach(env => {
 const envFiles = [
     path.join(__dirname, '.env'),
     path.join(__dirname, 'backend/.env'),
-    path.join(__dirname, 'backend/src/.env')
+    path.join(__dirname, 'backend/src/.env'),
+    path.join(process.cwd(), '.env'),
+    path.join(process.cwd(), 'backend/.env')
 ];
 console.log('--- .env File Audit ---');
 envFiles.forEach(f => {
-    if (fs.existsSync(f)) {
-        console.warn(`⚠️  WARNING: .env file found at ${f}. This might override your Hostinger settings!`);
-    } else {
-        console.log(`ℹ️  No file at ${f}`);
-    }
+    try {
+        if (fs.existsSync(f)) {
+            const stats = fs.statSync(f);
+            console.warn(`⚠️  CRITICAL: .env file found at ${f} (Size: ${stats.size} bytes). PLEASE DELETE THIS FROM HOSTINGER FILE MANAGER!`);
+        }
+    } catch (e) {}
 });
 console.log('-------------------------');
 
