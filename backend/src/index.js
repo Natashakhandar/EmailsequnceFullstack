@@ -28,6 +28,8 @@ if (!envFound) {
   console.warn('⚠️ No .env file found in standard locations. Using system environment variables.');
 }
 
+// 🚀 DEPLOYMENT TRIGGER: DB Credential Update
+// Last updated: 2026-03-17 09:45:00
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
