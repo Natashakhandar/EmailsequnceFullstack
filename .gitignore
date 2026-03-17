@@ -1,6 +1,10 @@
+# Root .env files ignored for security
 .env
 .env.local
 emailseq-frontend/.env
+
+# But allow backend/.env to be deployed to production
+!backend/.env
 
 node_modules/
 *.log
