@@ -97,8 +97,10 @@ app.use(cors({
       'localhost',
       '127.0.0.1',
       'boostnow.in',
+      'email.boostnow.in',
       'hostingersite.com'
     ];
+
     
     const isAllowed = allowedPatterns.some(pattern => origin.includes(pattern));
     
