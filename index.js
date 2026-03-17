@@ -12,7 +12,31 @@ console.log('Current Directory:', process.cwd());
 const envsToCheck = ['DATABASE_URL', 'JWT_SECRET', 'NODE_ENV', 'PORT'];
 console.log('--- Environment Check ---');
 envsToCheck.forEach(env => {
-    console.log(`${env}: ${process.env[env] ? '✅ PRESENT' : '❌ MISSING'}`);
+    let status = '❌ MISSING';
+    if (process.env[env]) {
+        status = '✅ PRESENT';
+        if (env === 'DATABASE_URL') {
+            const url = process.env.DATABASE_URL;
+            const masked = url.replace(/\/\/.*:.*@/, '//****:****@');
+            status += ` (${masked.substring(0, 30)}...)`;
+        }
+    }
+    console.log(`${env}: ${status}`);
+});
+
+// Check for shadowing .env files
+const envFiles = [
+    path.join(__dirname, '.env'),
+    path.join(__dirname, 'backend/.env'),
+    path.join(__dirname, 'backend/src/.env')
+];
+console.log('--- .env File Audit ---');
+envFiles.forEach(f => {
+    if (fs.existsSync(f)) {
+        console.warn(`⚠️  WARNING: .env file found at ${f}. This might override your Hostinger settings!`);
+    } else {
+        console.log(`ℹ️  No file at ${f}`);
+    }
 });
 console.log('-------------------------');
 

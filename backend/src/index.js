@@ -159,9 +159,9 @@ app.get('/health', async (req, res) => {
     try {
       const prisma = require('./db/prismaClient');
       await prisma.$queryRaw`SELECT 1`;
-      dbStatus = 'CONNECTED';
+      dbStatus = 'CONNECTED (PRISMA)';
     } catch (e) {
-      dbStatus = `ERROR: ${e.message}`;
+      dbStatus = `PRISMA ERROR: ${e.message}`;
     }
   }
 
@@ -169,11 +169,29 @@ app.get('/health', async (req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    port: PORT,
     db: dbStatus,
-    url: req.url,
-    headers: req.headers['host']
+    serverId: SERVER_ID
   });
+});
+
+// Emergency Direct DB Test (Bypassy Prisma)
+app.get('/db-test', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(500).json({ error: 'DATABASE_URL missing' });
+  
+  try {
+    const mysql = require('mysql2/promise');
+    const connection = await mysql.createConnection(process.env.DATABASE_URL);
+    await connection.query('SELECT 1');
+    await connection.end();
+    res.json({ status: 'SUCCESS', message: 'Direct MySQL connection works!' });
+  } catch (err) {
+    res.status(500).json({ 
+      status: 'FAILED', 
+      error: err.message,
+      code: err.code,
+      hint: 'If you see Access Denied, double check your User and Password in Hostinger Dashboard.'
+    });
+  }
 });
 
 app.get('/api/ping', (req, res) => res.json({ status: 'pong', timestamp: new Date().toISOString(), serverId: SERVER_ID }));
