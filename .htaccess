@@ -6,11 +6,13 @@
   RewriteCond %{HTTPS} off
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-  # 2. Allow Node.js to handle API and Socket.io
+  # 2. Allow Node.js to handle Health, API and Socket.io
   # This prevents Apache from returning 404s for backend routes
+  RewriteCond %{REQUEST_URI} ^/health [NC,OR]
   RewriteCond %{REQUEST_URI} ^/api [NC,OR]
   RewriteCond %{REQUEST_URI} ^/socket.io [NC]
   RewriteRule ^ - [L]
+
 
   # 3. Serve Frontend files if they exist
   RewriteCond %{REQUEST_FILENAME} -f [OR]
