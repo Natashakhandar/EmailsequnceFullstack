@@ -72,13 +72,23 @@ router.post('/login', async (req, res) => {
       token
     });
   } catch (error) {
-    console.error('❌ Login error details:', {
+    console.error('Login error details:', {
       message: error.message,
       stack: error.stack,
       code: error.code
     });
-    res.status(500).json({ 
-      error: error.message || 'Internal server error', 
+    
+    // Detect database connection errors
+    const isDbError = error.message?.includes('database') || 
+                      error.message?.includes('Can\'t reach') ||
+                      error.code === 'PROTOCOL_CONNECTION_LOST' ||
+                      error.code === 'ER_ACCESS_DENIED_ERROR';
+    
+    const statusCode = isDbError ? 503 : 500;
+    const errorMessage = isDbError ? 'Database service temporarily unavailable' : (error.message || 'Internal server error');
+    
+    res.status(statusCode).json({ 
+      error: errorMessage, 
       message: error.message,
       code: error.code,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined

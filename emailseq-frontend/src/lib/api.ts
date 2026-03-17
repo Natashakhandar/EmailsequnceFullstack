@@ -3,21 +3,20 @@
 const getApiBaseUrl = () => {
   const envUrl = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_API_BASE_URL;
 
-  // 1. Check if we are running locally
+  if (import.meta.env.DEV) {
+    if (envUrl && !envUrl.includes('placeholder')) return envUrl;
+    return '';
+  }
+
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
-
-    if (!isLocal) {
-      // 2. FOR ALL PRODUCTION/HOSTED DOMAINS: Force the silver-tapir backend
-      // This is because the backend is specifically configured there.
-      return 'https://silver-tapir-929419.hostingersite.com';
+    // For any production domain, use the current origin
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return window.location.origin;
     }
   }
 
-  // 3. Fallback for Local Dev or Server Side
-  if (envUrl && !envUrl.includes('placeholder')) return envUrl;
-  return ''; // Local proxy uses this
+  return envUrl || '';
 };
 
 export const RAW_BASE = getApiBaseUrl();

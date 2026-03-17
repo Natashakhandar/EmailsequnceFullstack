@@ -1,17 +1,3 @@
-# Force Node.js Proxy for API and App
-# This helps if Hostinger's default Node.js proxy is struggling
-
-RewriteEngine On
-
-# 1. Do not redirect legitimate files (JS, CSS, Images)
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
-
-# 2. Redirect all /api requests to the Node.js PORT (if known) or just Let it pass 
-# Note: On Hostinger, the proxy is usually automatic. 
-# But we can force the SPA catch-all here as a backup for the web server level.
-
-RewriteRule ^index\.html$ - [L]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule . /index.html [L]
+# Hostinger Node.js Web App - htaccess not needed
+# The Node.js app handles all routing (API + SPA frontend)
+# Hostinger automatically proxies traffic to the Node.js process
