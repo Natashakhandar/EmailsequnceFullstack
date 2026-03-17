@@ -1164,7 +1164,7 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
       <AnimatePresence>
         {showDetailsModal && (
           <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-          <DialogContent className="sm:max-w-4xl max-h-[95vh] overflow-y-auto bg-slate-50 p-0 overflow-hidden border-none shadow-luxury top-0 translate-y-0 sm:top-[50%] sm:translate-y-[-50%] rounded-2xl"
+          <DialogContent className="sm:max-w-4xl max-h-[95vh] overflow-y-auto bg-slate-50 p-6 border-none shadow-luxury top-0 translate-y-0 sm:top-[50%] sm:translate-y-[-50%] rounded-2xl flex flex-col"
   style={{ backgroundColor: 'white' }}
 >
 
