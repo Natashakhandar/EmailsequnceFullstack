@@ -8,6 +8,14 @@ const fs = require('fs');
 console.log('--- Starting BoostNow Email Service ---');
 console.log('Current Directory:', process.cwd());
 
+// Log Environment Variables Presence (Names only for security)
+const envsToCheck = ['DATABASE_URL', 'JWT_SECRET', 'NODE_ENV', 'PORT'];
+console.log('--- Environment Check ---');
+envsToCheck.forEach(env => {
+    console.log(`${env}: ${process.env[env] ? '✅ PRESENT' : '❌ MISSING'}`);
+});
+console.log('-------------------------');
+
 // 1. Precise Path Discovery
 const possiblePaths = [
     path.join(__dirname, 'backend/src/index.js'),

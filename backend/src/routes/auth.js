@@ -85,7 +85,8 @@ router.post('/login', async (req, res) => {
                       error.code === 'ER_ACCESS_DENIED_ERROR';
     
     const statusCode = isDbError ? 503 : 500;
-    const errorMessage = isDbError ? 'Database service temporarily unavailable' : (error.message || 'Internal server error');
+    const baseError = isDbError ? 'Database service temporarily unavailable' : (error.message || 'Internal server error');
+    const errorMessage = isDbError ? `${baseError}: ${error.message}` : baseError;
     
     res.status(statusCode).json({ 
       error: errorMessage, 

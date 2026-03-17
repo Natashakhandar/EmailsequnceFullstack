@@ -25,10 +25,12 @@ const Login = () => {
       const response = await api.login(email, password);
       console.log('Login successful:', response);
       navigate("/dashboard");
-    } catch (error) {
-      console.error('Login failed:', error);
+    } catch (err: any) {
+      console.error('Login failed:', err);
       const apiBase = (api as any).baseUrl || 'unknown';
-      setError(`${error instanceof Error ? error.message : 'Login failed'} (Target: ${apiBase})`);
+      // If the error has a more detailed message from the server response
+      const displayMessage = err.message || 'Login failed';
+      setError(`${displayMessage} (Target: ${apiBase})`);
     } finally {
       setIsLoading(false);
     }
