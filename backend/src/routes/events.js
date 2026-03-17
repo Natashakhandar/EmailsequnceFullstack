@@ -20,35 +20,31 @@ router.get('/', async (req, res) => {
       leadListName
     } = req.query;
 
-    console.log('📨 Events API called with search:', search);
-    console.log('   All query params:', req.query);
-
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
-    const where = {
-      ...(isAdmin ? {} : { contact: { userId: req.user.id } })
-    };
+    const where = {};
+    const contactWhere = {};
+
+    if (!isAdmin) contactWhere.userId = req.user.id;
 
     if (type) where.type = type;
     if (enrollmentId) where.enrollmentId = enrollmentId;
     if (contactId) where.contactId = contactId;
 
-    // Handle comprehensive search (email, contact name, subject, lead list) and leadListName filter
+    // Handle leadListName (from dropdown) and search (from search bar)
     if (search) {
-      // Search in: contact email, firstName, lastName, leadListName
-      where.OR = [
-        { contact: { email: { contains: search, mode: 'insensitive' } } },
-        { contact: { firstName: { contains: search, mode: 'insensitive' } } },
-        { contact: { lastName: { contains: search, mode: 'insensitive' } } },
-        { contact: { leadListName: { contains: search, mode: 'insensitive' } } }
-      ];
+      contactWhere.leadListName = { contains: search, mode: 'insensitive' };
     } else if (leadListName !== undefined && leadListName !== 'all') {
       if (!leadListName || leadListName === 'null' || leadListName === 'Uncategorized') {
-        where.contact = { ...( where.contact || {}), leadListName: null };
+        contactWhere.leadListName = null;
       } else {
-        where.contact = { ...(where.contact || {}), leadListName };
+        contactWhere.leadListName = leadListName;
       }
+    }
+
+    if (Object.keys(contactWhere).length > 0) {
+      where.contact = contactWhere;
     }
 
     if (startDate || endDate) {
