@@ -130,17 +130,58 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// 1. Global Request Logger (To debug 404s on hosted site)
+app.use((req, res, next) => {
+  if (!req.path.includes('.') && !req.path.startsWith('/static')) {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${req.ip}`);
+  }
+  next();
+});
+
 // 1. Health & Ping (Highest Priority)
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  let dbStatus = 'NOT CONFIGURED';
+  if (process.env.DATABASE_URL) {
+    try {
+      const prisma = require('./db/prismaClient');
+      await prisma.$queryRaw`SELECT 1`;
+      dbStatus = 'CONNECTED';
+    } catch (e) {
+      dbStatus = `ERROR: ${e.message}`;
+    }
+  }
+
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    db: !!process.env.DATABASE_URL
+    port: PORT,
+    db: dbStatus,
+    url: req.url,
+    headers: req.headers['host']
   });
 });
 
-app.get('/api/ping', (req, res) => res.json({ status: 'pong' }));
+app.get('/api/ping', (req, res) => res.json({ status: 'pong', timestamp: new Date().toISOString() }));
+
+// Debug routes endpoint
+app.get('/api/debug-routes', (req, res) => {
+  const routes = [];
+  app._router.stack.forEach(middleware => {
+    if (middleware.route) {
+      routes.push(`${Object.keys(middleware.route.methods).join(',').toUpperCase()} ${middleware.route.path}`);
+    } else if (middleware.name === 'router') {
+      middleware.handle.stack.forEach(handler => {
+        if (handler.route) {
+          const path = handler.route.path;
+          const methods = Object.keys(handler.route.methods).join(',').toUpperCase();
+          routes.push(`${methods} /api${path}`);
+        }
+      });
+    }
+  });
+  res.json({ routes });
+});
 
 // 2. Consolidate API Routes
 const apiRouter = express.Router();
@@ -206,7 +247,8 @@ app.use(express.static(frontendPath));
 app.get('/api', (req, res) => {
   res.json({
     message: 'Email Sequencing Backend API',
-    version: '1.0.0'
+    version: '1.0.0',
+    endpoints: ['/api/auth/login', '/api/ping', '/health']
   });
 });
 

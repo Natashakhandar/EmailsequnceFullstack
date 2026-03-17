@@ -1,3 +1,18 @@
-# Hostinger Node.js Web App - htaccess not needed
+# Hostinger Node.js Web App - Force routing to Node.js process
+# Ensure that all requests reaching here are handled by the Node.js application
+# especially the /api prefix which sometimes gets lost in Hostinger's proxying
+
+RewriteEngine On
+RewriteBase /
+
+# Force SSL
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Forward all /api requests explicitly if needed
+# RewriteRule ^api/(.*)$ http://localhost:%{PORT}/api/$1 [P,L]
+
 # The Node.js app handles all routing (API + SPA frontend)
-# Hostinger automatically proxies traffic to the Node.js process
+# Hostinger automatically proxies traffic to the Node.js process 
+# but we keep this file to prevent Apache from serving directories directly.
+Options -Indexes
