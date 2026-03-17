@@ -68,6 +68,9 @@ const PORT = SYSTEM_PORT || process.env.PORT || 3001;
 
 app.set('trust proxy', true); // Trust Hostinger proxy for accurate IP tracking
 
+const SERVER_ID = Math.random().toString(36).substring(7);
+console.log(`🆔 Server Instance ID: ${SERVER_ID}`);
+
 
 const REQUIRED_ENVS = ['DATABASE_URL', 'JWT_SECRET', 'NODE_ENV'];
 REQUIRED_ENVS.forEach(env => {
@@ -169,25 +172,29 @@ app.get('/health', async (req, res) => {
   });
 });
 
-app.get('/api/ping', (req, res) => res.json({ status: 'pong', timestamp: new Date().toISOString() }));
+app.get('/api/ping', (req, res) => res.json({ status: 'pong', timestamp: new Date().toISOString(), serverId: SERVER_ID }));
 
 // Debug routes endpoint
 app.get('/api/debug-routes', (req, res) => {
   const routes = [];
-  app._router.stack.forEach(middleware => {
-    if (middleware.route) {
-      routes.push(`${Object.keys(middleware.route.methods).join(',').toUpperCase()} ${middleware.route.path}`);
-    } else if (middleware.name === 'router') {
-      middleware.handle.stack.forEach(handler => {
-        if (handler.route) {
-          const path = handler.route.path;
-          const methods = Object.keys(handler.route.methods).join(',').toUpperCase();
-          routes.push(`${methods} /api${path}`);
-        }
-      });
-    }
-  });
-  res.json({ routes });
+  try {
+    app._router.stack.forEach(middleware => {
+      if (middleware.route) {
+        routes.push(`${Object.keys(middleware.route.methods).join(',').toUpperCase()} ${middleware.route.path}`);
+      } else if (middleware.name === 'router') {
+        middleware.handle.stack.forEach(handler => {
+          if (handler.route) {
+            const path = handler.route.path;
+            const methods = Object.keys(handler.route.methods).join(',').toUpperCase();
+            routes.push(`${methods} /api${path}`);
+          }
+        });
+      }
+    });
+  } catch (e) {
+    return res.json({ error: e.message });
+  }
+  res.json({ routes, serverId: SERVER_ID });
 });
 
 // 2. Consolidate API Routes
