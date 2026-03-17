@@ -11,11 +11,12 @@ const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     // Cross-origin setup: Frontend on email.boostnow.in, Backend on silver-tapir
-    if (hostname.includes('boostnow.in')) {
+    if (hostname === 'email.boostnow.in' || hostname === 'boostnow.in') {
       return 'https://silver-tapir-929419.hostingersite.com';
     }
     return window.location.origin;
   }
+
 
 
   return envUrl || '';
