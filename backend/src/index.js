@@ -337,7 +337,7 @@ app.get('*', (req, res, next) => {
 // Start server
 initializeSocket(server);
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
