@@ -178,20 +178,20 @@ const TemplatesPage = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       <Navbar />
 
-      <div className="pt-18 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <div className="pt-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
               <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Email Templates</h1>
-              <p className="text-gray-600 mt-1">Manage your email templates for sequences</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Email Templates</h1>
+              <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your email templates for sequences</p>
             </div>
           </div>
         </motion.div>
@@ -203,14 +203,14 @@ const TemplatesPage = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-semibold text-gray-900 flex items-center gap-3">
-                <Mail className="w-6 h-6 text-indigo-600" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 flex items-center gap-3">
+                <Mail className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
                 Custom Templates
               </h2>
               <Button
                 onClick={() => setShowCreateForm(!showCreateForm)}
-                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all"
+                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all w-full sm:w-auto"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Template

@@ -355,7 +355,7 @@ const EmailActivity = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <main className="container mx-auto px-6 pt-20 pb-12">
+        <main className="container mx-auto px-6 pt-24 pb-12">
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             <span className="ml-2 text-gray-600">Loading email activity...</span>
@@ -368,25 +368,25 @@ const EmailActivity = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <main className="container mx-auto px-6 pt-20 pb-12">
+      <main className="container mx-auto px-6 pt-24 pb-12">
         {/* Email Activity Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2 flex items-center gap-3">
                 <Activity className="w-8 h-8 text-blue-600" />
                 Email Activity
               </h1>
-              <p className="text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600">
                 Track all sent and scheduled emails for each contact
               </p>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <Button
                 onClick={() => setShowFilters(!showFilters)}
                 variant="outline"
-                className="border-gray-300"
+                className="border-gray-300 h-10 flex-1 sm:flex-none"
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Filters
@@ -396,21 +396,22 @@ const EmailActivity = () => {
                 onClick={handleCheckReplies}
                 disabled={checkingReplies}
                 variant="outline"
-                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 h-10 flex-1 sm:flex-none"
               >
                 {checkingReplies ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
                   <Inbox className="w-4 h-4 mr-2" />
                 )}
-                Check Replies
+                <span className="hidden xs:inline">Check Replies</span>
+                <span className="xs:hidden">Replies</span>
               </Button>
               
               <Button
                 onClick={() => loadEvents(true)}
                 disabled={refreshing}
                 variant="outline"
-                className="border-gray-300"
+                className="border-gray-300 h-10 flex-1 sm:flex-none"
               >
                 {refreshing ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

@@ -159,7 +159,7 @@ const Dashboard = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
         <Navbar />
-        <main className="container mx-auto px-6 pt-20 pb-12">
+        <main className="container mx-auto px-6 pt-24 pb-12">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
@@ -176,7 +176,7 @@ const Dashboard = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
         <Navbar />
-        <main className="container mx-auto px-6 pt-20 pb-12">
+        <main className="container mx-auto px-6 pt-24 pb-12">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="text-red-500 text-xl mb-4">⚠️</div>
@@ -204,24 +204,24 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       <Navbar />
 
-      <main className="container mx-auto px-6 pt-20 pb-12">
+      <main className="container mx-auto px-4 md:px-6 pt-24 pb-12">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-8 flex justify-between items-start"
+          className="mb-8 flex flex-col md:flex-row md:justify-between md:items-start gap-6"
         >
           <div>
-            <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
-            <p className="text-muted-foreground">Track your email campaigns and performance</p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <h1 className="text-3xl md:text-4xl font-bold mb-2 text-slate-900">Dashboard</h1>
+            <p className="text-sm md:text-base text-muted-foreground">Track your email campaigns and performance</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1">
               Data range: {dashboardStats.dateRange.startDate === 'All time' ? 'Start' : new Date(dashboardStats.dateRange.startDate).toLocaleDateString()} to {dashboardStats.dateRange.endDate === 'All time' ? 'Today' : new Date(dashboardStats.dateRange.endDate).toLocaleDateString()}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-[180px] bg-background border-border/40 shadow-sm rounded-xl">
+              <SelectTrigger className="w-full sm:w-[180px] bg-background border-border/40 shadow-sm rounded-xl">
                 <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Select time range" />
               </SelectTrigger>
@@ -237,7 +237,7 @@ const Dashboard = () => {
             <motion.button
               onClick={() => fetchDashboardData(true)}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-luxury shadow-primary/20"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-luxury shadow-primary/20 w-full sm:w-auto"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >

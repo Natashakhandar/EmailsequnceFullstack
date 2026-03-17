@@ -60,7 +60,25 @@ const buttonTap = {
   transition: { type: "spring" as const, stiffness: 400, damping: 25 }
 };
 
+// Hook for responsive detection
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  return isMobile;
+};
+
 const SequencesNew: React.FC = () => {
+  const isMobile = useIsMobile();
   // React states
   const [sequenceName, setSequenceName] = useState<string>('');
   const [sequenceDescription, setSequenceDescription] = useState<string>('');
@@ -87,7 +105,8 @@ const SequencesNew: React.FC = () => {
   const [isLoadingTemplates, setIsLoadingTemplates] = useState<boolean>(true);
   const [isLoadingSequences, setIsLoadingSequences] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(window.innerWidth >= 1024);
+  const [stepsSidebarOpen, setStepsSidebarOpen] = useState<boolean>(false);
   const [backendStepIdMap, setBackendStepIdMap] = useState<Map<string, string>>(new Map()); // frontend ID -> backend ID
 
   // Signature state
@@ -100,7 +119,15 @@ const SequencesNew: React.FC = () => {
       await Promise.all([fetchTemplates(), fetchSequences(), fetchSignature()]);
     };
     fetchData();
-  }, []);
+    
+    // Auto-close sidebars on mobile
+    if (isMobile) {
+      setSidebarOpen(false);
+      setStepsSidebarOpen(false);
+    } else {
+      setSidebarOpen(true);
+    }
+  }, [isMobile]);
 
   const fetchTemplates = async () => {
     try {
@@ -697,9 +724,9 @@ const SequencesNew: React.FC = () => {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="px-6 py-6"
+          className={isMobile ? "px-4 py-3" : "px-6 py-6"}
           style={{
-            marginLeft: sidebarOpen ? '320px' : '0px',
+            marginLeft: !isMobile && sidebarOpen ? '320px' : '0px',
             transition: 'margin-left 0.3s ease-in-out'
           }}
         >
@@ -716,54 +743,47 @@ const SequencesNew: React.FC = () => {
                   {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 </Button>
 
-                <div className="flex-1 max-w-md space-y-2">
-                  <div>
-                    <Label htmlFor="sequenceName" className="text-sm font-medium text-gray-700 mb-2 block">
-                      Sequence Name {editingSequenceId && <span className="text-blue-600">(Editing)</span>}
-                    </Label>
-                    <Input
-                      id="sequenceName"
-                      value={sequenceName}
-                      onChange={(e) => setSequenceName(e.target.value)}
-                      placeholder="e.g., Welcome Series, Product Demo Follow-up"
-                      className="text-lg font-semibold border-gray-200 focus:border-blue-500 focus:ring-blue-500/20"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="sequenceDescription" className="text-sm font-medium text-gray-700 mb-1 block">
-                      Description (Optional)
-                    </Label>
-                    <Input
-                      id="sequenceDescription"
-                      value={sequenceDescription}
-                      onChange={(e) => setSequenceDescription(e.target.value)}
-                      placeholder="Brief description of this sequence..."
-                      className="text-sm border-gray-200 focus:border-blue-500 focus:ring-blue-500/20"
-                    />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex-1">
+                      <Label htmlFor="sequenceName" className="text-xs font-medium text-gray-500 mb-1 block">
+                        Sequence Name {editingSequenceId && <span className="text-blue-600 font-bold">(Editing)</span>}
+                      </Label>
+                      <Input
+                        id="sequenceName"
+                        value={sequenceName}
+                        onChange={(e) => setSequenceName(e.target.value)}
+                        placeholder="e.g., Welcome Series"
+                        className="text-base sm:text-lg font-bold border-gray-200 focus:border-blue-500 focus:ring-blue-500/20 h-10 px-3"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center space-x-3">
-                {editingSequenceId && (
+              <div className="flex items-center space-x-2">
+                {isMobile && (
                   <Button
-                    onClick={clearAllSteps}
+                    onClick={() => setStepsSidebarOpen(!stepsSidebarOpen)}
                     variant="outline"
-                    className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                    size="sm"
+                    className="bg-blue-50 border-blue-200 text-blue-700 h-9"
                   >
-                    New Sequence
+                    <Mail className="w-4 h-4 mr-1" />
+                    Steps
                   </Button>
                 )}
                 <Button
                   onClick={saveSequence}
                   disabled={isSaving}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 font-medium shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
+                  size={isMobile ? "sm" : "default"}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md transition-all duration-200 disabled:opacity-50 h-9"
                 >
                   {isSaving ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
                     <Save className="w-4 h-4 mr-2" />
                   )}
-                  {isSaving ? 'Saving...' : (editingSequenceId ? 'Update Sequence' : 'Save Sequence')}
+                  {isSaving ? 'Saving...' : (isMobile ? 'Save' : (editingSequenceId ? 'Update Sequence' : 'Save Sequence'))}
                 </Button>
               </div>
             </div>
@@ -774,277 +794,333 @@ const SequencesNew: React.FC = () => {
       {/* Existing Sequences Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
-          <motion.div
-            initial={{ x: -320, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -320, opacity: 0 }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed left-0 top-0 h-full w-80 bg-white border-r border-gray-200 shadow-xl z-40 pt-20"
-          >
-            <div className="p-6 h-full flex flex-col">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Sequences</h3>
-                <Button
-                  onClick={clearAllSteps}
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 text-xs font-medium"
-                >
-                  <Plus className="w-3 h-3 mr-1" />
-                  New
-                </Button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-2">
-                {isLoadingSequences ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                    <span className="ml-2 text-sm text-gray-500">Loading sequences...</span>
-                  </div>
-                ) : sequences.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Mail className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">No sequences yet</p>
-                    <p className="text-xs text-gray-400 mt-1">Create your first sequence to get started</p>
-                  </div>
-                ) : (
-                  sequences.map((sequence) => (
-                    <motion.div
-                      key={sequence.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      whileHover={{ scale: 1.02 }}
-                      className={`p-4 rounded-xl cursor-pointer transition-all duration-200 border ${editingSequenceId === sequence.id
-                        ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
-                        }`}
-                      onClick={() => loadSequence(sequence)}
+          <>
+            {/* Backdrop for mobile */}
+            {isMobile && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setSidebarOpen(false)}
+                className="fixed inset-0 bg-black/50 z-40"
+              />
+            )}
+            <motion.div
+              initial={{ x: -320, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -320, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className={`fixed left-0 bg-white border-r border-gray-200 shadow-xl z-40 w-80 ${
+                isMobile 
+                  ? 'top-0 h-full pt-20' 
+                  : 'top-16 h-[calc(100vh-4rem)] pt-0'
+              }`}
+            >
+              <div className="p-6 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">Sequences</h3>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={clearAllSteps}
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 text-xs font-medium"
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <h4 className="font-medium text-sm text-gray-900 truncate pr-2">
-                          {sequence.name}
-                          {editingSequenceId === sequence.id && (
-                            <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                              Editing
-                            </span>
-                          )}
-                        </h4>
-                        <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${sequence.isActive
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-600'
-                          }`}>
-                          {sequence.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
+                      <Plus className="w-3 h-3 mr-1" />
+                      New
+                    </Button>
+                    {isMobile && (
+                      <Button
+                        onClick={() => setSidebarOpen(false)}
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
 
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <Mail className="w-3 h-3" />
-                          <span>{sequence.steps?.length || 0} steps</span>
+                <div className="flex-1 overflow-y-auto space-y-2">
+                  {isLoadingSequences ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                      <span className="ml-2 text-sm text-gray-500">Loading sequences...</span>
+                    </div>
+                  ) : sequences.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Mail className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">No sequences yet</p>
+                      <p className="text-xs text-gray-400 mt-1">Create your first sequence to get started</p>
+                    </div>
+                  ) : (
+                    sequences.map((sequence) => (
+                      <motion.div
+                        key={sequence.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        whileHover={{ scale: 1.02 }}
+                        className={`p-4 rounded-xl cursor-pointer transition-all duration-200 border ${editingSequenceId === sequence.id
+                          ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                          : 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
+                          }`}
+                        onClick={() => {
+                          loadSequence(sequence);
+                          if (isMobile) setSidebarOpen(false);
+                        }}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-medium text-sm text-gray-900 truncate pr-2">
+                            {sequence.name}
+                            {editingSequenceId === sequence.id && (
+                              <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                Editing
+                              </span>
+                            )}
+                          </h4>
+                          <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${sequence.isActive
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-600'
+                            }`}>
+                            {sequence.isActive ? 'Active' : 'Inactive'}
+                          </span>
                         </div>
-                        <span>•</span>
-                        <span>{new Date(sequence.createdAt).toLocaleDateString()}</span>
-                      </div>
-                      {sequence.description && (
-                        <p className="text-xs text-gray-400 mt-2 truncate">
-                          {sequence.description}
-                        </p>
-                      )}
-                    </motion.div>
-                  ))
-                )}
+
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <Mail className="w-3 h-3" />
+                            <span>{sequence.steps?.length || 0} steps</span>
+                          </div>
+                          <span>•</span>
+                          <span>{new Date(sequence.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
       {/* Main Content Container */}
-      <div className="pt-32">
+      <div className={`${isMobile ? 'pt-44' : 'pt-40'}`}>
         <motion.div
-          className="flex min-h-[calc(100vh-8rem)]"
+          className="flex min-h-[calc(100vh-10rem)]"
           style={{
-            marginLeft: sidebarOpen ? '320px' : '0px'
+            marginLeft: !isMobile && sidebarOpen ? '320px' : '0px'
           }}
           animate={{
-            marginLeft: sidebarOpen ? '320px' : '0px'
+            marginLeft: !isMobile && sidebarOpen ? '320px' : '0px'
           }}
-          transition={{ type: "spring", damping: 25, stiffness: 200 }}
+          transition={{ type: "spring", damping: 30, stiffness: 200 }}
         >
 
           {/* Main Content Area */}
-          <div className="flex flex-1">
+          <div className="flex flex-1 relative">
             {/* Steps Sidebar */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-              className="w-80 bg-white border-r border-gray-200 flex flex-col shadow-sm min-h-[calc(100vh-8rem)]"
-            >
-              {/* Sidebar Header */}
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.2 }}
-                className="p-6 border-b border-gray-200 bg-gray-50"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-bold text-gray-900">Email Steps</h2>
-                  <div className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-                    {steps.length} {steps.length === 1 ? 'step' : 'steps'}
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600">
-                  Configure your email sequence steps
-                </p>
-              </motion.div>
-
-              {/* Steps List */}
-              <div className="flex-1 overflow-y-auto p-4 max-h-[calc(100vh-20rem)]">
-                <div className="space-y-2">
-                  <AnimatePresence mode="popLayout">
-                    {steps.map((step, index) => {
-                      const isSelected = selectedStep === step.id;
-                      const stepTitle = step.subject.trim() || "Untitled Step";
-
-                      return (
-                        <motion.div
-                          key={step.id}
-                          layout
-                          variants={slideInLeft}
-                          initial="initial"
-                          animate="animate"
-                          exit="exit"
-                          transition={{
-                            type: "spring",
-                            stiffness: 300,
-                            damping: 30,
-                            delay: index * 0.1
-                          }}
-                          whileHover={{
-                            scale: 1.02,
-                            y: -2,
-                            transition: { type: "spring", stiffness: 400, damping: 25 }
-                          }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <div
-                            className={`
-                            relative p-4 rounded-xl cursor-pointer transition-all duration-300 group
-                            ${isSelected
-                                ? 'bg-blue-600 text-white shadow-lg border border-blue-500'
-                                : 'bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 hover:shadow-md shadow-sm'
-                              }
-                          `}
-                            onClick={() => setSelectedStep(step.id)}
-                          >
-                            {/* Step Number Badge */}
-                            <div className="flex items-start justify-between mb-3">
-                              <div className={`
-                              w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                              ${isSelected
-                                  ? 'bg-white/20 text-white'
-                                  : 'bg-blue-100 text-blue-600 group-hover:bg-blue-200'
-                                }
-                            `}>
-                                {index + 1}
-                              </div>
-
-                              {/* Delete Button */}
-                              {steps.length > 1 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteStep(step.id);
-                                  }}
-                                  className={`
-                                  p-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                                  ${isSelected
-                                      ? 'text-white/70 hover:text-white hover:bg-white/20'
-                                      : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
-                                    }
-                                `}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </div>
-
-                            {/* Step Content */}
-                            <div className="space-y-2">
-                              <div className="flex items-center">
-                                <Mail className={`w-4 h-4 mr-2 ${isSelected ? 'text-white/80' : 'text-gray-500'}`} />
-                                <h3 className={`
-                                font-semibold text-sm truncate
-                                ${isSelected ? 'text-white' : 'text-gray-900'}
-                              `}>
-                                  {stepTitle}
-                                </h3>
-                              </div>
-
-                              <div className="flex items-center">
-                                <Clock className={`w-3 h-3 mr-2 ${isSelected ? 'text-white/70' : 'text-gray-400'}`} />
-                                <span className={`
-                                text-xs
-                                ${isSelected ? 'text-white/90' : 'text-gray-500'}
-                              `}>
-                                  {step.triggerType === 'delay'
-                                    ? (step.delayDays === 0 && step.delayHours === 0
-                                      ? 'Send immediately'
-                                      : `${step.delayDays}d ${step.delayHours}h delay`)
-                                    : step.triggerType === 'opened' ? 'If opened'
-                                      : step.triggerType === 'not_opened' ? `If not opened (${step.notOpenedDelayHours || 24}h)`
-                                        : step.triggerType === 'replied' ? 'If replied'
-                                          : step.triggerType === 'skip' ? 'Send immediately'
-                                            : 'Unknown trigger'
-                                  }
-                                  {step.skipTrigger && step.triggerType !== 'skip' && ' (Skipped)'}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Selected Indicator */}
-                            {isSelected && (
-                              <motion.div
-                                layoutId="selectedIndicator"
-                                className="absolute left-0 top-0 bottom-0 w-1 bg-white rounded-r-full"
-                                initial={false}
-                                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                              />
-                            )}
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </AnimatePresence>
-                </div>
-              </div>
-
-              {/* Add Step Button at Bottom */}
-              <div className="p-4 border-t border-gray-200 bg-gray-50">
+            <AnimatePresence>
+              {(stepsSidebarOpen || !isMobile) && (
                 <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  initial={isMobile ? { x: -320, opacity: 0 } : { opacity: 0, x: -20 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={isMobile ? { x: -320, opacity: 0 } : { opacity: 0, x: -20 }}
+                  transition={{ duration: 0.4, delay: isMobile ? 0 : 0.1 }}
+                  className={`
+                    ${isMobile ? 'fixed inset-y-0 left-0 z-50 pt-20 shadow-2xl' : 'relative'}
+                    w-80 bg-white border-r border-gray-200 flex flex-col shadow-sm min-h-[calc(100vh-10rem)]
+                  `}
                 >
-                  <Button
-                    onClick={addNewStep}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200"
-                    size="lg"
+                  {isMobile && (
+                    <div className="absolute top-24 right-4 z-10">
+                      <Button
+                        onClick={() => setStepsSidebarOpen(false)}
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full bg-gray-100 hover:bg-gray-200"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                  {/* Sidebar Header */}
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.2 }}
+                    className="p-6 border-b border-gray-200 bg-gray-50"
                   >
-                    <Plus className="w-5 h-5 mr-2" />
-                    Add Email Step
-                  </Button>
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-lg font-bold text-gray-900">Email Steps</h2>
+                      <div className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
+                        {steps.length} {steps.length === 1 ? 'step' : 'steps'}
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Configure your email sequence steps
+                    </p>
+                  </motion.div>
+
+                  {/* Steps List */}
+                  <div className="flex-1 overflow-y-auto p-4 max-h-[calc(100vh-20rem)]">
+                    <div className="space-y-2">
+                      <AnimatePresence mode="popLayout">
+                        {steps.map((step, index) => {
+                          const isSelected = selectedStep === step.id;
+                          const stepTitle = step.subject.trim() || "Untitled Step";
+
+                          return (
+                            <motion.div
+                              key={step.id}
+                              layout
+                              variants={slideInLeft}
+                              initial="initial"
+                              animate="animate"
+                              exit="exit"
+                              transition={{
+                                type: "spring",
+                                stiffness: 300,
+                                damping: 30,
+                                delay: index * 0.1
+                              }}
+                              whileHover={{
+                                scale: 1.02,
+                                y: -2,
+                                transition: { type: "spring", stiffness: 400, damping: 25 }
+                              }}
+                              whileTap={{ scale: 0.98 }}
+                            >
+                              <div
+                                className={`
+                                relative p-4 rounded-xl cursor-pointer transition-all duration-300 group
+                                ${isSelected
+                                    ? 'bg-blue-600 text-white shadow-lg border border-blue-500'
+                                    : 'bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 hover:shadow-md shadow-sm'
+                                  }
+                              `}
+                                onClick={() => setSelectedStep(step.id)}
+                              >
+                                {/* Step Number Badge */}
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className={`
+                                  w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+                                  ${isSelected
+                                      ? 'bg-white/20 text-white'
+                                      : 'bg-blue-100 text-blue-600 group-hover:bg-blue-200'
+                                    }
+                                `}>
+                                    {index + 1}
+                                  </div>
+
+                                  {/* Delete Button */}
+                                  {steps.length > 1 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteStep(step.id);
+                                      }}
+                                      className={`
+                                      p-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                                      ${isSelected
+                                          ? 'text-white/70 hover:text-white hover:bg-white/20'
+                                          : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+                                        }
+                                    `}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                </div>
+
+                                {/* Step Content */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center">
+                                    <Mail className={`w-4 h-4 mr-2 ${isSelected ? 'text-white/80' : 'text-gray-500'}`} />
+                                    <h3 className={`
+                                    font-semibold text-sm truncate
+                                    ${isSelected ? 'text-white' : 'text-gray-900'}
+                                  `}>
+                                      {stepTitle}
+                                    </h3>
+                                  </div>
+
+                                  <div className="flex items-center">
+                                    <Clock className={`w-3 h-3 mr-2 ${isSelected ? 'text-white/70' : 'text-gray-400'}`} />
+                                    <span className={`
+                                    text-xs
+                                    ${isSelected ? 'text-white/90' : 'text-gray-500'}
+                                  `}>
+                                      {step.triggerType === 'delay'
+                                        ? (step.delayDays === 0 && step.delayHours === 0
+                                          ? 'Send immediately'
+                                          : `${step.delayDays}d ${step.delayHours}h delay`)
+                                        : step.triggerType === 'opened' ? 'If opened'
+                                          : step.triggerType === 'not_opened' ? `If not opened (${step.notOpenedDelayHours || 24}h)`
+                                            : step.triggerType === 'replied' ? 'If replied'
+                                              : step.triggerType === 'skip' ? 'Send immediately'
+                                                : 'Unknown trigger'
+                                      }
+                                      {step.skipTrigger && step.triggerType !== 'skip' && ' (Skipped)'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Selected Indicator */}
+                                {isSelected && (
+                                  <motion.div
+                                    layoutId="selectedIndicator"
+                                    className="absolute left-0 top-0 bottom-0 w-1 bg-white rounded-r-full"
+                                    initial={false}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                  />
+                                )}
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+
+                  {/* Add Step Button at Bottom */}
+                  <div className="p-4 border-t border-gray-200 bg-gray-50">
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Button
+                        onClick={addNewStep}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                        size="lg"
+                      >
+                        <Plus className="w-5 h-5 mr-2" />
+                        Add Email Step
+                      </Button>
+                    </motion.div>
+                  </div>
                 </motion.div>
-              </div>
-            </motion.div>
+              )}
+            </AnimatePresence>
+
+            {isMobile && stepsSidebarOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setStepsSidebarOpen(false)}
+                className="fixed inset-0 bg-black/30 z-40"
+              />
+            )}
 
             {/* Main editing area */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="flex-1 flex flex-col bg-gray-50 min-h-[calc(100vh-8rem)]"
+              className="flex-1 flex flex-col bg-gray-50 min-h-[calc(100vh-10rem)]"
             >
               {/* Header with Tabs */}
               <motion.div
@@ -1060,7 +1136,6 @@ const SequencesNew: React.FC = () => {
                       <p className="text-gray-600 mt-1 text-sm">Create sequences and manage templates</p>
                     </div>
                   </div>
-
                 </div>
               </motion.div>
 

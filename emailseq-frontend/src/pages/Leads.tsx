@@ -352,15 +352,15 @@ const Leads = () => {
           transition={{ delay: 0.2 }}
           className="glass rounded-2xl p-6 shadow-card hover-lift"
         >
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <h2 className="text-xl font-bold text-gray-800">Lead Groups</h2>
-            <div className="relative w-72">
+            <div className="relative w-full sm:w-72">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
                 placeholder="Search groups..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 rounded-xl glass h-9"
+                className="pl-10 rounded-xl glass h-10 w-full"
               />
             </div>
           </div>
@@ -596,53 +596,51 @@ const Leads = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       <Navbar />
 
-      <main className="container mx-auto px-6 pt-20 pb-12">
+      <main className="container mx-auto px-6 pt-24 pb-12">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
             <div>
-              <h1 className="text-4xl font-bold mb-2">Leads</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-3xl sm:text-4xl font-bold mb-2 text-slate-900">Leads</h1>
+              <p className="text-sm sm:text-base text-muted-foreground">
                 Manage your leads and enroll them in email sequences
               </p>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {selectedContacts.length > 0 && (
-                <>
-                  <Button
-                    onClick={handleBulkDelete}
-                    variant="destructive"
-                    className="rounded-xl shadow-luxury"
-                    disabled={bulkDeleting}
-                  >
-                    {bulkDeleting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete Selected ({selectedContacts.length})
-                      </>
-                    )}
-                  </Button>
-                </>
+                <Button
+                  onClick={handleBulkDelete}
+                  variant="destructive"
+                  className="rounded-xl shadow-luxury h-10 w-full sm:w-auto"
+                  disabled={bulkDeleting}
+                >
+                  {bulkDeleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete ({selectedContacts.length})
+                    </>
+                  )}
+                </Button>
               )}
 
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button
                     variant="outline"
-                    className="rounded-xl border-primary/20 hover:border-primary"
+                    className="rounded-xl border-primary/20 hover:border-primary h-10 flex-1 sm:flex-none"
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    Add Contact
+                    Add
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
@@ -772,15 +770,15 @@ const Leads = () => {
               <Button
                 onClick={handleUploadExcel}
                 variant="outline"
-                className="rounded-xl border-primary/20 hover:border-primary"
+                className="rounded-xl border-primary/20 hover:border-primary h-10 flex-1 sm:flex-none"
               >
                 <Upload className="w-4 h-4 mr-2" />
-                Upload Excel
+                Upload
               </Button>
 
               <Button
                 onClick={handleDownloadReport}
-                className="gradient-primary text-white rounded-xl shadow-luxury"
+                className="gradient-primary text-white rounded-xl shadow-luxury h-10 w-full sm:w-auto"
               >
                 <Download className="w-4 h-4 mr-2" />
                 Download Report

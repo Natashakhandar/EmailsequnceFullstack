@@ -189,7 +189,7 @@ const SmtpSettings = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
         <Navbar />
-        <main className="container mx-auto px-6 pt-20 pb-12 max-w-4xl text-center">
+        <main className="container mx-auto px-6 pt-24 pb-12 max-w-4xl text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading SMTP settings...</p>
         </main>
@@ -200,7 +200,7 @@ const SmtpSettings = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       <Navbar />
-      <main className="container mx-auto px-6 pt-20 pb-12 max-w-4xl">
+      <main className="container mx-auto px-6 pt-24 pb-12 max-w-4xl">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold mb-2">Email Configuration</h1>

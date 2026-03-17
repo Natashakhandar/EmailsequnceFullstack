@@ -274,7 +274,7 @@ const SimplifiedSequences = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <main className="container mx-auto px-6 pt-20 pb-12">
+        <main className="container mx-auto px-6 pt-24 pb-12">
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             <span className="ml-2 text-gray-600">Loading...</span>
@@ -288,13 +288,13 @@ const SimplifiedSequences = () => {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
 
-      <main className="container mx-auto px-6 pt-20 pb-12 max-w-4xl">
+      <main className="container mx-auto px-6 pt-24 pb-12 max-w-4xl">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Email Sequence Builder</h1>
-              <p className="text-gray-600">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2 text-slate-800">Email Sequence Builder</h1>
+              <p className="text-sm sm:text-base text-gray-600">
                 Create a 4-step automated email sequence
               </p>
             </div>
@@ -302,7 +302,7 @@ const SimplifiedSequences = () => {
             <Button
               onClick={() => setIsEditTemplatesOpen(true)}
               variant="outline"
-              className="border-gray-300"
+              className="border-gray-300 w-full sm:w-auto"
             >
               Edit Templates
             </Button>

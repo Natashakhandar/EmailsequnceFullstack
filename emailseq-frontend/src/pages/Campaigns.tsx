@@ -525,7 +525,7 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       <Navbar />
 
-      <main className="container mx-auto px-6 pt-20 pb-12">
+      <main className="container mx-auto px-6 pt-24 pb-12">
         {/* Warmup Alert Banner */}
         {warmupStatus.reached && (
           <motion.div 
@@ -551,14 +551,14 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-xl bg-primary/10">
-                <Target className="w-8 h-8 text-primary" />
+                <Target className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold mb-2">Campaign Management</h1>
-                <p className="text-muted-foreground">
+                <h1 className="text-2xl sm:text-4xl font-bold mb-1 sm:mb-2 text-slate-900">Campaign Management</h1>
+                <p className="text-sm sm:text-base text-muted-foreground">
                   Create, manage, and track your email campaigns
                 </p>
               </div>
@@ -582,10 +582,10 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
         >
           <Card className="glass shadow-card">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <Target className="w-5 h-5" />
+                    <Target className="w-5 h-5 text-primary" />
                     All Campaigns
                   </CardTitle>
                   <CardDescription>
@@ -593,21 +593,21 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
                   </CardDescription>
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
                   {/* Search */}
-                  <div className="relative">
+                  <div className="relative w-full sm:w-64">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
                     <Input
                       placeholder="Search campaigns..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 w-64"
+                      className="pl-10 w-full"
                     />
                   </div>
                   
                   {/* Status Filter */}
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-40">
+                    <SelectTrigger className="w-full sm:w-40">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -624,10 +624,11 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
                     onClick={loadCampaigns}
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto"
                     disabled={loadingCampaigns}
                   >
-                  <RefreshCw className={`w-4 h-4 ${loadingCampaigns ? 'animate-spin' : ''}`} />
-
+                  <RefreshCw className={`w-4 h-4 mr-2 sm:mr-0 ${loadingCampaigns ? 'animate-spin' : ''}`} />
+                  <span className="sm:hidden">Refresh</span>
                   </Button>
                 </div>
               </div>
@@ -878,7 +879,9 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
                   {errors.sequenceId}
                 </div>
               )}
-                          {/* Lead Selection */}
+            </div>
+
+            {/* Lead Selection */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">
@@ -1111,7 +1114,7 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
                     Ready
                   </Badge>
                 )}
-              </div>   </div>
+              </div>
               
               {errors.leadIds && (
                 <div className="flex items-center gap-2 text-sm text-red-600">

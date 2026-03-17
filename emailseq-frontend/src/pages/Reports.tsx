@@ -251,7 +251,7 @@ const Reports = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
         <Navbar />
-        <main className="container mx-auto px-6 pt-20 pb-12">
+        <main className="container mx-auto px-6 pt-24 pb-12">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             <span className="ml-3 text-muted-foreground">Loading analytics data...</span>
@@ -265,7 +265,7 @@ const Reports = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
         <Navbar />
-        <main className="container mx-auto px-6 pt-20 pb-12">
+        <main className="container mx-auto px-6 pt-24 pb-12">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="mb-4">
@@ -306,22 +306,22 @@ const Reports = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       <Navbar />
 
-      <main className="container mx-auto px-6 pt-20 pb-12">
+      <main className="container mx-auto px-4 md:px-6 pt-24 pb-12">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8 flex justify-between items-start"
+          className="mb-8 flex flex-col md:flex-row md:justify-between md:items-start gap-6"
         >
           <div>
-            <h1 className="text-4xl font-bold mb-2">Reports</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-3xl md:text-4xl font-bold mb-2 text-slate-900">Reports</h1>
+            <p className="text-sm md:text-base text-muted-foreground">
               Comprehensive analytics and performance insights
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-[180px] bg-background border-border/40 shadow-sm rounded-xl">
+              <SelectTrigger className="w-full sm:w-[180px] bg-background border-border/40 shadow-sm rounded-xl h-10">
                 <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Select time range" />
               </SelectTrigger>
@@ -337,7 +337,7 @@ const Reports = () => {
             <motion.button
               onClick={() => fetchAnalyticsData()}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-luxury shadow-primary/20"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-luxury shadow-primary/20 w-full sm:w-auto h-10"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
