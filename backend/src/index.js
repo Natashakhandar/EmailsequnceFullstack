@@ -241,7 +241,16 @@ for (const p of possibleFrontendPaths) {
 }
 
 // Serve static files from the React app
+// Priority: backend/public (Internal) -> backend/dist -> root public
 app.use(express.static(frontendPath));
+app.use(express.static(path.join(__dirname, '../public'))); 
+
+// Log all incoming requests for debugging 404s
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) return next();
+  console.log(`[ROUTE] Serving: ${req.path}`);
+  next();
+});
 
 // API routes Documentation
 app.get('/api', (req, res) => {
