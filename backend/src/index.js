@@ -69,12 +69,19 @@ const PORT = SYSTEM_PORT || process.env.PORT || 3001;
 app.set('trust proxy', true); // Trust Hostinger proxy for accurate IP tracking
 
 
-if (!process.env.DATABASE_URL) {
-  console.error('❌ DATABASE_URL is not defined in environment variables');
-} else {
-  console.log('✅ DATABASE_URL is configured');
+const REQUIRED_ENVS = ['DATABASE_URL', 'JWT_SECRET', 'NODE_ENV'];
+REQUIRED_ENVS.forEach(env => {
+  if (!process.env[env]) {
+    console.warn(`⚠️ Warning: ${env} is not defined in process.env`);
+  } else {
+    console.log(`✅ ${env} is present`);
+  }
+});
+
+if (process.env.DATABASE_URL) {
   console.log('🔍 DATABASE_URL protocol:', process.env.DATABASE_URL.split(':')[0]);
 }
+
 
 
 // CORS configuration - MUST be before helmet
