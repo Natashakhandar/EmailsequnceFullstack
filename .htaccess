@@ -6,22 +6,18 @@
   RewriteCond %{HTTPS} off
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-  # 2. Allow Node.js to handle Health, API and Socket.io
-  # This prevents Apache from returning 404s for backend routes
-  RewriteCond %{REQUEST_URI} ^/health [NC,OR]
+  # 2. DO NOT interfere with /api /health or /socket.io
+  # Let Hostinger's Node.js handler take these
   RewriteCond %{REQUEST_URI} ^/api [NC,OR]
+  RewriteCond %{REQUEST_URI} ^/health [NC,OR]
   RewriteCond %{REQUEST_URI} ^/socket.io [NC]
   RewriteRule ^ - [L]
 
-
-  # 3. Serve Frontend files if they exist
+  # 3. Serve static files if they exist
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # 4. Route everything else to index.html (SPA routing)
+  # 4. Route everything else to index.html (SPA)
   RewriteRule ^ index.html [L]
 </IfModule>
-
-# Security: Disable directory browsing
-Options -Indexes

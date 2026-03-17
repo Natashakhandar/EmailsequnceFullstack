@@ -233,6 +233,11 @@ apiRouter.get('/', (req, res) => {
 // Register the combined API router
 app.use('/api', apiRouter);
 
+// FALLBACK: If the proxy strips /api, we still want auth to work
+app.use('/auth', authRouter);
+
+app.get('/ping', (req, res) => res.json({ status: 'pong', note: 'Top level reachable' }));
+
 // Static file serving - Serve frontend build
 const possibleFrontendPaths = [
   path.join(__dirname, '../public'),

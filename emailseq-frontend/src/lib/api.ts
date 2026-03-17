@@ -10,10 +10,11 @@ const getApiBaseUrl = () => {
 
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    // For any production domain, use the current origin
+    // For Hostinger/Production, relative path is the SAFEST way to avoid proxy 404s
     if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return window.location.origin;
+      return '/api';
     }
+    return window.location.origin;
   }
 
   return envUrl || '';
@@ -21,7 +22,7 @@ const getApiBaseUrl = () => {
 
 export const RAW_BASE = getApiBaseUrl();
 
-export const API_BASE_URL = RAW_BASE.endsWith('/api')
+export const API_BASE_URL = (RAW_BASE === '/api' || RAW_BASE.endsWith('/api'))
   ? RAW_BASE
   : `${RAW_BASE.replace(/\/$/, '')}/api`;
 
