@@ -32,18 +32,24 @@ router.get('/', async (req, res) => {
     if (enrollmentId) where.enrollmentId = enrollmentId;
     if (contactId) where.contactId = contactId;
 
-    // Handle leadListName (from dropdown) and search (from search bar)
+    // Handle search - search across multiple contact fields
     if (search) {
-      contactWhere.leadListName = { contains: search, mode: 'insensitive' };
+      where.contact = {
+        OR: [
+          { email: { contains: search, mode: 'insensitive' } },
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { leadListName: { contains: search, mode: 'insensitive' } }
+        ]
+      };
     } else if (leadListName !== undefined && leadListName !== 'all') {
+      // Handle leadListName filter (when no search)
       if (!leadListName || leadListName === 'null' || leadListName === 'Uncategorized') {
-        contactWhere.leadListName = null;
+        where.contact = { ...contactWhere, leadListName: null };
       } else {
-        contactWhere.leadListName = leadListName;
+        where.contact = { ...contactWhere, leadListName };
       }
-    }
-
-    if (Object.keys(contactWhere).length > 0) {
+    } else if (Object.keys(contactWhere).length > 0) {
       where.contact = contactWhere;
     }
 
