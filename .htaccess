@@ -1,18 +1,25 @@
-# Hostinger Node.js Web App - Force routing to Node.js process
-# Ensure that all requests reaching here are handled by the Node.js application
-# especially the /api prefix which sometimes gets lost in Hostinger's proxying
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
 
-RewriteEngine On
-RewriteBase /
+  # 1. Force HTTPS
+  RewriteCond %{HTTPS} off
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-# Force SSL
-RewriteCond %{HTTPS} off
-RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  # 2. Allow Node.js to handle API and Socket.io
+  # This prevents Apache from returning 404s for backend routes
+  RewriteCond %{REQUEST_URI} ^/api [NC,OR]
+  RewriteCond %{REQUEST_URI} ^/socket.io [NC]
+  RewriteRule ^ - [L]
 
-# Forward all /api requests explicitly if needed
-# RewriteRule ^api/(.*)$ http://localhost:%{PORT}/api/$1 [P,L]
+  # 3. Serve Frontend files if they exist
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
 
-# The Node.js app handles all routing (API + SPA frontend)
-# Hostinger automatically proxies traffic to the Node.js process 
-# but we keep this file to prevent Apache from serving directories directly.
+  # 4. Route everything else to index.html (SPA routing)
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Security: Disable directory browsing
 Options -Indexes
