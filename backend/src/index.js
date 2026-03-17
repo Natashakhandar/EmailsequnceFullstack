@@ -95,6 +95,8 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
     
+    console.log('🔍 Incoming Request Origin:', origin);
+
     const allowedPatterns = [
       'localhost',
       '127.0.0.1',
@@ -103,7 +105,6 @@ app.use(cors({
       'hostingersite.com'
     ];
 
-    
     const isAllowed = allowedPatterns.some(pattern => origin.includes(pattern));
     
     if (isAllowed) {

@@ -402,7 +402,9 @@ router.get('/:id', async (req, res) => {
         id: lead.id,
         firstName: lead.firstName || '',
         lastName: lead.lastName || '',
-        email: lead.email
+        email: lead.email,
+        status: lead.status || 'ACTIVE',
+        company: lead.company || ''
       })),
       stats: {
         totalEmailsSent: campaign.stats?.emails?.sent || 0,
