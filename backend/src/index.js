@@ -29,7 +29,7 @@ if (!envFound) {
 }
 
 // 🚀 DEPLOYMENT TRIGGER: BoostNow2026 Sync
-// Last updated: 2026-03-17 15:42:00
+// Last updated: 2026-03-17 15:44:00
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
