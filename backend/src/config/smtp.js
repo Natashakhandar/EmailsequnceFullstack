@@ -14,12 +14,28 @@ const smtpConfig = {
   }
 };
 
-const resolvedAppUrl = (
-  process.env.APP_URL ||
-  process.env.BACKEND_URL ||
-  process.env.API_URL ||
-  'http://localhost:3001'
-).replace(/\/$/, '');
+const resolvedAppUrl = (() => {
+  const envUrl = process.env.APP_URL || 
+                 process.env.BACKEND_URL || 
+                 process.env.API_URL;
+  
+  // If APP_URL is set and not localhost, use it
+  if (envUrl && !envUrl.includes('localhost')) {
+    return envUrl.replace(/\/$/, '');
+  }
+  
+  // If in production, force use of production domain
+  if (process.env.NODE_ENV === 'production' && !envUrl?.includes('localhost')) {
+    return 'https://email.boostnow.in';
+  }
+  
+  // Otherwise fallback based on environment
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://email.boostnow.in';
+  }
+  
+  return 'http://localhost:3001';
+})();
 
 const emailConfig = {
   from: {

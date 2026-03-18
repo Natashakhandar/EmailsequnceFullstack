@@ -197,10 +197,17 @@ async function generateUnsubscribeToken(contactId) {
       }
     });
 
-    return `${emailConfig.appUrl}/api/unsubscribe/${token}`;
+    // FALLBACK: If APP_URL is localhost, use production domain
+    const baseUrl = (emailConfig.appUrl && !emailConfig.appUrl.includes('localhost'))
+      ? emailConfig.appUrl
+      : (process.env.APP_URL || 'https://email.boostnow.in').replace(/\/$/, '');
+    
+    console.log(`🔗 Unsubscribe URL using baseUrl: ${baseUrl}`);
+    return `${baseUrl}/api/unsubscribe/${token}`;
   } catch (error) {
     console.error('Error generating unsubscribe token:', error);
-    return `${emailConfig.appUrl}/api/unsubscribe/email`; // Fallback URL
+    const fallbackUrl = (process.env.APP_URL || 'https://email.boostnow.in').replace(/\/$/, '');
+    return `${fallbackUrl}/api/unsubscribe/email`; // Fallback URL
   }
 }
 

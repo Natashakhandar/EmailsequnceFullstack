@@ -9,8 +9,12 @@ function getFrontendBaseUrl() {
   if (process.env.FRONTEND_URL && process.env.FRONTEND_URL.trim()) {
     return process.env.FRONTEND_URL.trim().replace(/\/$/, '');
   }
-  if (process.env.APP_URL && process.env.APP_URL.trim()) {
+  if (process.env.APP_URL && process.env.APP_URL.trim() && !process.env.APP_URL.includes('localhost')) {
     return process.env.APP_URL.trim().replace(/\/$/, '');
+  }
+  // Fallback to production if NODE_ENV is production
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://email.boostnow.in';
   }
   return 'http://localhost:5173';
 }
