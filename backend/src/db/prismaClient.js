@@ -1,39 +1,9 @@
 const { PrismaClient } = require('@prisma/client');
 
 let prisma = null;
-let activeRequests = 0;
-const MAX_CONCURRENT_REQUESTS = 2; // Strictly limit concurrent DB requests
-const requestQueue = [];
-
-// Request queue manager
-const queueRequest = async (operation) => {
-  return new Promise((resolve, reject) => {
-    const tryExecute = async () => {
-      if (activeRequests < MAX_CONCURRENT_REQUESTS) {
-        activeRequests++;
-        try {
-          const result = await operation();
-          resolve(result);
-        } catch (error) {
-          reject(error);
-        } finally {
-          activeRequests--;
-          // Process next in queue
-          if (requestQueue.length > 0) {
-            const next = requestQueue.shift();
-            next();
-          }
-        }
-      } else {
-        requestQueue.push(tryExecute);
-      }
-    };
-    tryExecute();
-  });
-};
 
 // Retry logic with exponential backoff
-const withRetry = async (operation, maxRetries = 5) => {
+const withRetry = async (operation, maxRetries = 3) => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await operation();
@@ -41,10 +11,10 @@ const withRetry = async (operation, maxRetries = 5) => {
       const isConnectionError = 
         error.code === 'ER_TOO_MANY_CONNECTIONS' || 
         error.code === 'ER_CON_COUNT_ERROR' ||
-        error.message.includes('max_connections');
+        error.message?.includes('max_connections');
 
       if (isConnectionError && attempt < maxRetries) {
-        const delay = Math.min(500 * Math.pow(2, attempt - 1), 10000); // Max 10 seconds
+        const delay = Math.min(300 * Math.pow(2, attempt - 1), 3000); // Shorter delays
         console.warn(`⚠️ Connection limit (attempt ${attempt}/${maxRetries}), waiting ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
@@ -54,39 +24,33 @@ const withRetry = async (operation, maxRetries = 5) => {
   }
 };
 
-// Initialize Prisma Client with connection settings for shared hosting
+// Initialize Prisma Client
 if (!process.env.DATABASE_URL) {
   console.error('❌ DATABASE_URL environment variable is not set');
 } else {
   try {
-    console.log('🔌 Creating Prisma client with request queuing...');
-    
-    // Remove connection pool params from URL if they exist
-    const dbUrl = process.env.DATABASE_URL.split('?')[0];
+    console.log('🔌 Creating Prisma client...');
     
     prisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: dbUrl,
-        },
-      },
-      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+      log: process.env.NODE_ENV === 'development' ? ['error'] : ['error'],
       errorFormat: 'minimal',
     });
     
-    // Add middleware to queue and retry all database requests
+    // Add middleware to retry on connection errors
     prisma.$use(async (params, next) => {
-      return withRetry(async () => {
-        return queueRequest(async () => {
-          return next(params);
+      try {
+        return await withRetry(async () => {
+          return await next(params);
         });
-      });
+      } catch (error) {
+        console.error('❌ Prisma query failed:', error.message);
+        throw error;
+      }
     });
     
-    // Async connection test - don't block module load
+    // Test connection
     prisma.$queryRaw`SELECT 1`.then(() => {
       console.log('✅ Prisma database connection verified');
-      console.log('🔋 Request queuing enabled (max 2 concurrent, auto-retry on limits)');
     }).catch((err) => {
       console.warn('⚠️ Prisma connection test failed:', err.message);
     });

@@ -85,8 +85,6 @@ router.post('/login', async (req, res) => {
     console.error('❌ Login error:', error.message);
     handleConnectionError(error, res, 'login');
   }
-    });
-  }
 });
 
 // POST /api/auth/register (only for superadmin/admin to create users)
