@@ -9,11 +9,13 @@ const getApiBaseUrl = () => {
   }
 
   if (typeof window !== 'undefined') {
-    // Use current origin for API calls
+    const hostname = window.location.hostname;
+    // Frontend on email.boostnow.in, Backend on silver-tapir domain
+    if (hostname.includes('email.boostnow.in') || hostname.includes('boostnow.in')) {
+      return 'https://silver-tapir-929419.hostingersite.com';
+    }
     return window.location.origin;
   }
-
-
 
   return envUrl || '';
 };
