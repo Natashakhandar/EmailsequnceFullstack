@@ -212,6 +212,33 @@ router.get('/:token', async (req, res, next) => {
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   
   try {
+    // CRITICAL: Check if Prisma is ready
+    if (!prisma || !prisma.unsubscribeToken) {
+      console.error('❌ Prisma not initialized for unsubscribeToken');
+      return res.setHeader('Content-Type', 'text/html; charset=utf-8').send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; background: linear-gradient(135deg, #f5f7fa 0%, #f0f2f5 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 48px; text-align: center; max-width: 500px; }
+        h1 { color: #f57c00; font-size: 28px; margin-bottom: 12px; }
+        p { color: #666; font-size: 15px; line-height: 1.6; }
+      </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⏳ System Loading</h1>
+        <p>The system is currently initializing. Please try again in a few seconds.</p>
+    </div>
+</body>
+</html>
+      `);
+    }
+    
     const { token } = req.params;
 
     const reservedTokens = new Set(['email', 'submit', 'generate-token', 'my-unsubscribed-contacts', 'reasons', 'page', 'error-generating-token-please-contact-support']);
@@ -708,8 +735,34 @@ router.get('/:token', async (req, res, next) => {
     res.send(htmlPage);
 
   } catch (error) {
-    console.error('Error processing unsubscribe:', error);
-    res.status(500).json({ error: 'Failed to process unsubscribe request' });
+    console.error('❌ Error processing unsubscribe:', error.message);
+    console.error('📋 Error stack:', error.stack);
+    
+    // Return HTML error page to user
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(500).send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; background: linear-gradient(135deg, #f5f7fa 0%, #f0f2f5 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 48px; text-align: center; max-width: 500px; }
+        h1 { color: #d32f2f; font-size: 28px; margin-bottom: 12px; }
+        p { color: #666; font-size: 15px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚠️ Error Processing Unsubscribe</h1>
+        <p>We encountered an error while processing your unsubscribe request. Please try again later or contact support at support@boostnow.in</p>
+        <p style="font-size: 12px; color: #999; margin-top: 20px;">Error: ${error.message}</p>
+    </div>
+</body>
+</html>
+    `);
   }
 });
 
@@ -721,6 +774,12 @@ router.post('/submit', async (req, res) => {
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   
   try {
+    // CRITICAL: Check if Prisma is ready
+    if (!prisma || !prisma.unsubscribeToken) {
+      console.error('❌ Prisma not initialized for unsubscribeToken in POST /submit');
+      return res.status(503).json({ error: 'Database connection not ready. Please try again in a few seconds.' });
+    }
+    
     const { token, reason } = req.body;
 
     if (!token) {
@@ -886,8 +945,9 @@ router.post('/submit', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error submitting unsubscribe reason:', error);
-    res.status(500).json({ error: 'Failed to submit feedback' });
+    console.error('❌ Error submitting unsubscribe reason:', error.message);
+    console.error('📋 Stack:', error.stack);
+    res.status(500).json({ error: 'Failed to submit feedback. Please try again.' });
   }
 });
 
