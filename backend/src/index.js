@@ -338,13 +338,27 @@ app.get('*', (req, res, next) => {
 // Start server
 initializeSocket(server);
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+// Initialize Prisma before starting server
+const { initializePrisma } = require('./db/prismaClient');
 
-  try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
-  // Removed redundant startEmailMonitoring here as it is started by the scheduler
-});
+(async () => {
+  try {
+    console.log('⏳ Initializing database connection...');
+    await initializePrisma();
+    console.log('✅ Database initialized successfully');
+    
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ Server running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+
+      try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error.message);
+    console.error('Retrying in 5 seconds...');
+    setTimeout(() => process.exit(1), 5000);
+  }
+})();
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error.message);
