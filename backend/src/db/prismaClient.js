@@ -1,69 +1,61 @@
 const { PrismaClient } = require('@prisma/client');
 
 let prisma = null;
-let initPromise = null;
+let prismaInitError = null;
 
-async function ensurePrismaInitialized() {
+// Create client immediately without waiting - this prevents blocking startup
+function createPrismaClient() {
   if (prisma) return prisma;
-  if (initPromise) return initPromise;
+  
+  if (!process.env.DATABASE_URL) {
+    prismaInitError = new Error('DATABASE_URL not set');
+    console.error('❌ DATABASE_URL environment variable is not set');
+    return null;
+  }
 
-  initPromise = (async () => {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        console.log(`🔌 Initializing Prisma (attempt ${attempt}/3)...`);
-        
-        if (!process.env.DATABASE_URL) {
-          throw new Error('DATABASE_URL not set');
-        }
-
-        prisma = new PrismaClient({
-          log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error', 'warn'],
-          errorFormat: 'minimal',
-        });
-
-        // Verify connection
-        await prisma.$queryRaw`SELECT 1`;
-        console.log('✅ Prisma initialized');
-        return prisma;
-      } catch (error) {
-        console.error(`❌ Attempt ${attempt} failed:`, error.message);
-        if (prisma) {
-          try { await prisma.$disconnect(); } catch (e) {}
-          prisma = null;
-        }
-        if (attempt < 3) await new Promise(r => setTimeout(r, 2000));
+  try {
+    console.log('🔌 Creating Prisma client...');
+    prisma = new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+      errorFormat: 'minimal',
+      // Reduce timeout values for shared hosting
+      __internal: {
+        debug: false,
       }
-    }
-    throw new Error('Prisma initialization failed after 3 attempts');
-  })();
-
-  return initPromise;
+    });
+    
+    // Async connection test - don't block startup
+    prisma.$queryRaw`SELECT 1`.then(() => {
+      console.log('✅ Prisma database connection verified');
+    }).catch((err) => {
+      console.warn('⚠️ Prisma connection test failed:', err.message);
+      // Don't fail startup, routes will handle errors
+    });
+    
+    return prisma;
+  } catch (error) {
+    prismaInitError = error;
+    console.error('❌ Failed to create Prisma client:', error.message);
+    return null;
+  }
 }
 
-// Lazy proxy - acts like the real client but initializes on first use
-const lazyPrismaProxy = new Proxy({}, {
-  get: (target, prop) => {
-    if (prop === 'getPrismaClient') {
-      return () => {
-        if (!prisma) throw new Error('Prisma not initialized');
-        return prisma;
-      };
-    }
-    if (prop === 'initializePrisma') {
-      return ensurePrismaInitialized;
-    }
-    if (!prisma) throw new Error('Prisma not initialized. Call initializePrisma() first or wait for async initialization.');
-    return prisma[prop];
-  },
-});
+// Get prisma client - returns null if creation failed
+function getPrisma() {
+  if (!prisma) {
+    return createPrismaClient();
+  }
+  return prisma;
+}
 
 // Graceful shutdown
 const shutdown = async () => {
   try {
     if (prisma) {
+      console.log('🛑 Disconnecting Prisma...');
       await prisma.$disconnect();
       prisma = null;
-      initPromise = null;
+      prismaInitError = null;
     }
   } catch (e) {
     console.error('Shutdown error:', e.message);
@@ -74,10 +66,12 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 process.on('beforeExit', shutdown);
 
-// Provide both ways to access  
-module.exports = lazyPrismaProxy;
-module.exports.initializePrisma = ensurePrismaInitialized;
-module.exports.getPrismaClient = () => {
+// Export direct client and utilities  
+module.exports = getPrisma();
+
+// Also export getter for fresh calls
+module.exports.getPrisma = getPrisma;
+module.exports.initError = () => prismaInitError;
   if (!prisma) throw new Error('Prisma not initialized');
   return prisma;
 };

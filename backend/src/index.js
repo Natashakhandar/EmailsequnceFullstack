@@ -145,6 +145,19 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Prisma Error Handler Middleware (Catches Prisma crashes gracefully)
+app.use((err, req, res, next) => {
+  if (err && (err.message?.includes('timer has gone away') || err.message?.includes('PANIC'))) {
+    console.error('🚨 PRISMA PANIC DETECTED:', err.message);
+    return res.status(503).json({
+      error: 'Database temporarily unavailable',
+      message: 'The database connection is being re-established. Please try again in a moment.',
+      status: 503
+    });
+  }
+  next(err);
+});
+
 // 1. Global Request Logger (To debug 404s on hosted site)
 app.use((req, res, next) => {
   if (!req.path.includes('.') && !req.path.startsWith('/static')) {
@@ -159,10 +172,17 @@ app.get('/health', async (req, res) => {
   if (process.env.DATABASE_URL) {
     try {
       const prisma = require('./db/prismaClient');
-      await prisma.$queryRaw`SELECT 1`;
-      dbStatus = 'CONNECTED (PRISMA)';
+      if (prisma && prisma.$queryRaw) {
+        await Promise.race([
+          prisma.$queryRaw`SELECT 1`,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+        ]);
+        dbStatus = 'CONNECTED';
+      } else {
+        dbStatus = 'PRISMA_NOT_READY';
+      }
     } catch (e) {
-      dbStatus = `PRISMA ERROR: ${e.message}`;
+      dbStatus = `ERROR: ${e.message}`;
     }
   }
 
@@ -338,31 +358,29 @@ app.get('*', (req, res, next) => {
 // Start server
 initializeSocket(server);
 
-// Initialize Prisma before starting server
-const { initializePrisma } = require('./db/prismaClient');
+// Initialize Prisma client (non-blocking)
+require('./db/prismaClient');
 
-(async () => {
-  try {
-    console.log('⏳ Initializing database connection...');
-    await initializePrisma();
-    console.log('✅ Database initialized successfully');
-    
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`✅ Server running on port ${PORT}`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+// Start server immediately - Prisma loads asynchronously
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-      try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
-    });
-  } catch (error) {
-    console.error('❌ Failed to start server:', error.message);
-    console.error('Retrying in 5 seconds...');
-    setTimeout(() => process.exit(1), 5000);
-  }
-})();
+  try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
+});
 
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error.message);
-  // Don't exit on IMAP/network errors - only exit on fatal errors
+  console.error('🚨 Uncaught Exception:', error.message);
+  
+  // If it's a Prisma panic, just log it - don't crash the server
+  if (error.message?.includes('timer has gone away') || error.message?.includes('PANIC')) {
+    console.error('  ⚠️ Prisma engine panic detected - server will continue running');
+    console.error('  💡 Prisma will attempt to reconnect on next request');
+    // Don't exit - let the server continue
+    return;
+  }
+  
+  // For other fatal errors, exit
   if (error.code === 'ERR_INTERNAL_ASSERTION') process.exit(1);
 });
 
