@@ -29,6 +29,15 @@ router.post('/login', async (req, res) => {
       return res.status(500).json({ error: 'Server configuration error' });
     }
 
+    // Check if Prisma is available
+    if (!prisma || !prisma.user) {
+      console.error('❌ Prisma not initialized properly');
+      return res.status(503).json({ 
+        error: 'Database service temporarily unavailable',
+        message: 'Prisma client is not ready. Please try again in a moment.'
+      });
+    }
+
     console.log('🔍 Looking for user:', email.toLowerCase());
 
     // Find user by email
