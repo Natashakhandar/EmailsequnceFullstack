@@ -41,9 +41,7 @@ const Leads = () => {
   const [groups, setGroups] = useState<Array<{ name: string; count: number }>>([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
-  const [uploadGroupName, setUploadGroupName] = useState("");
   const [isAddPopoverOpen, setIsAddPopoverOpen] = useState(false);
-  const [isUploadPopoverOpen, setIsUploadPopoverOpen] = useState(false);
 
 
   // Delete functionality state
@@ -188,7 +186,7 @@ const Leads = () => {
         firstName: row.firstName || row.FirstName || row.first_name,
         lastName: row.lastName || row.LastName || row.last_name,
         company: row.company || row.Company,
-        leadListName: uploadGroupName || undefined,
+        leadListName: row.groupName || row.GroupName || row.group_name || undefined,
         timezone: "UTC",
         status: "ACTIVE" as const
       })).filter(contact => contact.email);
@@ -209,7 +207,6 @@ const Leads = () => {
 
       setIsUploadDialogOpen(false);
       setSelectedFile(null);
-      setUploadGroupName("");
     } catch (error) {
       toast.error("Failed to import contacts");
     } finally {
@@ -219,8 +216,8 @@ const Leads = () => {
 
   const downloadSampleCSV = () => {
     const sampleData = [
-      { email: "john@example.com", firstName: "John", lastName: "Doe", company: "Example Inc" },
-      { email: "jane@example.com", firstName: "Jane", lastName: "Smith", company: "Tech Solutions" }
+      { email: "john@example.com", firstName: "John", lastName: "Doe", company: "Example Inc", groupName: "Real Estate" },
+      { email: "jane@example.com", firstName: "Jane", lastName: "Smith", company: "Tech Solutions", groupName: "Technology" }
     ];
     const worksheet = XLSX.utils.json_to_sheet(sampleData);
     const workbook = XLSX.utils.book_new();
@@ -891,51 +888,6 @@ const Leads = () => {
                     {selectedFile ? selectedFile.name : "No file chosen"}
                   </div>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-gray-700 font-medium">Group Name</Label>
-                <Popover open={isUploadPopoverOpen} onOpenChange={setIsUploadPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      className={cn(
-                        "w-full justify-between rounded-md font-normal h-11 px-3 border-gray-300",
-                        !uploadGroupName && "text-muted-foreground"
-                      )}
-                    >
-                      {uploadGroupName || "Select a group..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[450px] p-0" align="start">
-                    <Command>
-                      <CommandList>
-                        <CommandGroup>
-                          {groups.filter(g => g.name !== "All Leads").map((group) => (
-                            <CommandItem
-                              key={group.name}
-                              value={group.name}
-                              onSelect={(currentValue) => {
-                                setUploadGroupName(currentValue);
-                                setIsUploadPopoverOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  uploadGroupName === group.name ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {group.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
               </div>
             </div>
 
