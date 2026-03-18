@@ -167,31 +167,13 @@ app.use((req, res, next) => {
 });
 
 // 1. Health & Ping (Highest Priority)
-app.get('/health', async (req, res) => {
-  let dbStatus = 'NOT CONFIGURED';
-  if (process.env.DATABASE_URL) {
-    try {
-      const prisma = require('./db/prismaClient');
-      if (prisma && prisma.$queryRaw) {
-        await Promise.race([
-          prisma.$queryRaw`SELECT 1`,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-        ]);
-        dbStatus = 'CONNECTED';
-      } else {
-        dbStatus = 'PRISMA_NOT_READY';
-      }
-    } catch (e) {
-      dbStatus = `ERROR: ${e.message}`;
-    }
-  }
-
+app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    db: dbStatus,
-    serverId: SERVER_ID
+    serverId: SERVER_ID,
+    message: 'Server is running'
   });
 });
 
