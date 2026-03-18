@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const prisma = require('../db/prismaClient');
 const { authenticateToken } = require('../middleware/auth');
 const { sendUnsubscribeNotification } = require('../services/unsubscribeNotification');
+const { handleConnectionErrorHtml } = require('../utils/connectionErrorHandler');
 const router = express.Router();
 
 function getFrontendBaseUrl() {
@@ -736,33 +737,7 @@ router.get('/:token', async (req, res, next) => {
 
   } catch (error) {
     console.error('❌ Error processing unsubscribe:', error.message);
-    console.error('📋 Error stack:', error.stack);
-    
-    // Return HTML error page to user
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.status(500).send(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Error</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; background: linear-gradient(135deg, #f5f7fa 0%, #f0f2f5 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 48px; text-align: center; max-width: 500px; }
-        h1 { color: #d32f2f; font-size: 28px; margin-bottom: 12px; }
-        p { color: #666; font-size: 15px; line-height: 1.6; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>⚠️ Error Processing Unsubscribe</h1>
-        <p>We encountered an error while processing your unsubscribe request. Please try again later or contact support at support@boostnow.in</p>
-        <p style="font-size: 12px; color: #999; margin-top: 20px;">Error: ${error.message}</p>
-    </div>
-</body>
-</html>
-    `);
+    handleConnectionErrorHtml(error, res, 'unsubscribe request');
   }
 });
 

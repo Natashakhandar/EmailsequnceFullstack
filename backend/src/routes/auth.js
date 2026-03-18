@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../db/prismaClient');
 const { authenticateToken, requireSuperAdmin, requireAdmin } = require('../middleware/auth');
+const { handleConnectionError } = require('../utils/connectionErrorHandler');
 
 const router = express.Router();
 
@@ -81,27 +82,9 @@ router.post('/login', async (req, res) => {
       token
     });
   } catch (error) {
-    console.error('Login error details:', {
-      message: error.message,
-      stack: error.stack,
-      code: error.code
-    });
-    
-    // Detect database connection errors
-    const isDbError = error.message?.includes('database') || 
-                      error.message?.includes('Can\'t reach') ||
-                      error.code === 'PROTOCOL_CONNECTION_LOST' ||
-                      error.code === 'ER_ACCESS_DENIED_ERROR';
-    
-    const statusCode = isDbError ? 503 : 500;
-    const baseError = isDbError ? 'Database service temporarily unavailable' : (error.message || 'Internal server error');
-    const errorMessage = isDbError ? `${baseError}: ${error.message}` : baseError;
-    
-    res.status(statusCode).json({ 
-      error: errorMessage, 
-      message: error.message,
-      code: error.code,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    console.error('❌ Login error:', error.message);
+    handleConnectionError(error, res, 'login');
+  }
     });
   }
 });
