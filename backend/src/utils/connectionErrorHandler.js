@@ -4,26 +4,52 @@
  */
 
 const isConnectionError = (error) => {
+  const errorMsg = (error.message || '').toLowerCase();
   return error.code === 'ER_TOO_MANY_CONNECTIONS' || 
          error.code === 'ER_CON_COUNT_ERROR' ||
-         error.message.includes('max_connections') ||
-         error.message.includes('too many connections');
+         error.code === 'ECONNREFUSED' ||
+         error.code === 'ENOTFOUND' ||
+         errorMsg.includes('max_connections') ||
+         errorMsg.includes('too many connections') ||
+         errorMsg.includes("can't reach database") ||
+         errorMsg.includes('connection refused') ||
+         errorMsg.includes('getaddrinfo') ||
+         errorMsg.includes('econnrefused');
 };
 
 const handleConnectionError = (error, res, context = 'database operation') => {
-  console.error(`❌ Connection Error in ${context}:`, error.message);
+  // Make sure we haven't already sent a response
+  if (res.headersSent) {
+    console.warn(`⚠️ Headers already sent, cannot send error response for ${context}`);
+    return;
+  }
+
+  const errorMsg = error && error.message ? String(error.message) : 'Unknown error';
+  console.error(`❌ Connection Error in ${context}: ${errorMsg.substring(0, 200)}`);
   
-  if (isConnectionError(error)) {
-    res.status(503).json({
-      error: 'Database service temporarily overloaded',
-      message: 'The database connection limit has been reached. Please try again in a few moments.',
-      retry: true
-    });
-  } else {
-    res.status(500).json({
-      error: 'Database error',
-      message: `Failed to process ${context}. Please try again.`
-    });
+  try {
+    if (isConnectionError(error)) {
+      console.log('📤 Sending 503 ServiceUnavailable');
+      res.status(503).json({
+        error: 'Database service temporarily unavailable',
+        message: 'The database connection limit has been reached. Please try again in a few moments.',
+        retry: true,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      console.log('📤 Sending 500 Internal Server Error');
+      res.status(500).json({
+        error: 'Database error',
+        message: `Failed to process ${context}. Please try again.`,
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (err) {
+    console.error('❌ Error sending error response:', err.message);
+    // If JSON serialization fails, try text response
+    if (!res.headersSent) {
+      res.status(500).send('Internal server error');
+    }
   }
 };
 

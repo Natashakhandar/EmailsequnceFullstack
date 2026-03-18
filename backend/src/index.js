@@ -136,6 +136,11 @@ const limiter = rateLimit({
   legacyHeaders: false,
   message: 'Too many requests, please try again later.',
   skip: (req) => req.method === 'OPTIONS', // Never rate limit preflights
+  // Provide explicit key generator since we use 'trust proxy'
+  keyGenerator: (req, res) => {
+    return req.ip || req.connection.remoteAddress || 'unknown';
+  },
+  trustProxy: false, // Don't let rate limiter worry about proxy - we handle it with app.set
 });
 app.use(limiter);
 
@@ -358,7 +363,12 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
+  // Only start background jobs in production (saves DB connections in development)
+  if (process.env.NODE_ENV === 'production' || process.env.ENABLE_SCHEDULER === 'true') {
+    try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
+  } else {
+    console.log('⏸️  Scheduler disabled (development mode). To enable: set NODE_ENV=production or ENABLE_SCHEDULER=true');
+  }
 });
 
 process.on('uncaughtException', (error) => {

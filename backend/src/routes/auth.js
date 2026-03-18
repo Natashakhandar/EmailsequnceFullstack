@@ -83,7 +83,20 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Login error:', error.message);
-    handleConnectionError(error, res, 'login');
+    
+    // Ensure a response is sent within a timeout
+    const responseTimeout = setTimeout(() => {
+      if (!res.headersSent) {
+        console.error('⚠️ Response timeout - sending fallback error');
+        res.status(500).send('Server error');
+      }
+    }, 3000);
+    
+    try {
+      handleConnectionError(error, res, 'login');
+    } finally {
+      clearTimeout(responseTimeout);
+    }
   }
 });
 
