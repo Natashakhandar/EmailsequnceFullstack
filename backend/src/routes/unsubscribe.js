@@ -163,13 +163,58 @@ router.get('/reasons/:contactId', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/unsubscribe/:token - Handle unsubscribe via token
+// OPTIONS handler for CORS preflight
+router.options('/:token', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.sendStatus(200);
+});
+
+router.options('/submit', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.sendStatus(200);
+});
+
+// GET /api/unsubscribe/:token - Handle unsubscribe via token (for email recipients)
 router.get('/:token', async (req, res, next) => {
+  // Set CORS headers for email recipients accessing from different domains
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  
   try {
     const { token } = req.params;
 
-    const reservedTokens = new Set(['email', 'submit', 'generate-token', 'my-unsubscribed-contacts', 'reasons', 'page']);
+    const reservedTokens = new Set(['email', 'submit', 'generate-token', 'my-unsubscribed-contacts', 'reasons', 'page', 'error-generating-token-please-contact-support']);
     if (reservedTokens.has(token)) {
+      // Handle error case
+      if (token === 'error-generating-token-please-contact-support') {
+        return res.setHeader('Content-Type', 'text/html; charset=utf-8').send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; background: linear-gradient(135deg, #f5f7fa 0%, #f0f2f5 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 48px; text-align: center; max-width: 500px; }
+        h1 { color: #d32f2f; font-size: 28px; margin-bottom: 12px; }
+        p { color: #666; font-size: 15px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚠️ System Error</h1>
+        <p>We encountered a system error while generating your unsubscribe link. Please try again later or contact support at support@boostnow.in</p>
+    </div>
+</body>
+</html>
+        `);
+      }
       return next();
     }
 
@@ -642,8 +687,13 @@ router.get('/:token', async (req, res, next) => {
   }
 });
 
-// POST /api/unsubscribe/submit - Submit unsubscribe reason (from frontend)
+// POST /api/unsubscribe/submit - Submit unsubscribe reason (from frontend/email)
 router.post('/submit', async (req, res) => {
+  // Set CORS headers for email recipients
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  
   try {
     const { token, reason } = req.body;
 
@@ -948,10 +998,11 @@ router.get('/page/:token', async (req, res) => {
   return res.redirect(`/api/unsubscribe/${token}`);
 });
 
-// POST /api/unsubscribe - Handle unsubscribe with contactId, enrollmentId, and reason
-router.post('/', async (req, res) => {
+// POST /api/unsubscribe - Handle unsubscribe with contactId, enrollmentId, and reason (DASHBOARD)
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { contactId, enrollmentId, reason } = req.body;
+    const userId = req.user.id;
 
     // Validate required fields
     if (!contactId || !enrollmentId || !reason) {
@@ -982,6 +1033,11 @@ router.post('/', async (req, res) => {
     // Validate they belong together
     if (enrollment.contactId !== contactId) {
       return res.status(400).json({ error: 'Contact and enrollment do not match' });
+    }
+
+    // Validate user ownership - user must own the sequence
+    if (enrollment.sequence.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized: You do not own this contact' });
     }
 
     // Check if already unsubscribed

@@ -896,32 +896,16 @@ class ApiClient {
     }>(`/reports/campaign-analytics${query ? `?${query}` : ''}`);
   }
 
-  // Unsubscribe API (Public endpoint - no auth required)
+  // Unsubscribe API (Dashboard - requires auth)
   async unsubscribeFromEmail(data: {
     contactId: string;
     enrollmentId: string;
     reason: string;
   }) {
-    try {
-      const response = await fetch(`${this.baseUrl}/unsubscribe`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || errorData.message || `HTTP ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('API request failed: /unsubscribe', error);
-      throw error;
-    }
+    return this.request('/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   async submitUnsubscribeFeedback(data: { token: string; reason: string }) {

@@ -207,7 +207,8 @@ async function generateUnsubscribeToken(contactId) {
   } catch (error) {
     console.error('Error generating unsubscribe token:', error);
     const fallbackUrl = (process.env.APP_URL || 'https://email.boostnow.in').replace(/\/$/, '');
-    return `${fallbackUrl}/api/unsubscribe/email`; // Fallback URL
+    // Fallback to production domain - still use token format but endpoint will return proper error page
+    return `${fallbackUrl}/api/unsubscribe/error-generating-token-please-contact-support`;
   }
 }
 
