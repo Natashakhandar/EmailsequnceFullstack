@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../db/prismaClient');
 const { authenticateToken, requireSuperAdmin, requireAdmin } = require('../middleware/auth');
-const { handleConnectionError } = require('../utils/connectionErrorHandler');
 
 const router = express.Router();
 
@@ -28,15 +27,6 @@ router.post('/login', async (req, res) => {
     if (!process.env.JWT_SECRET) {
       console.error('❌ JWT_SECRET not configured');
       return res.status(500).json({ error: 'Server configuration error' });
-    }
-
-    // Check if Prisma is available
-    if (!prisma || !prisma.user) {
-      console.error('❌ Prisma not initialized properly');
-      return res.status(503).json({ 
-        error: 'Database service temporarily unavailable',
-        message: 'Prisma client is not ready. Please try again in a moment.'
-      });
     }
 
     console.log('🔍 Looking for user:', email.toLowerCase());
@@ -82,21 +72,27 @@ router.post('/login', async (req, res) => {
       token
     });
   } catch (error) {
-    console.error('❌ Login error:', error.message);
+    console.error('Login error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     
-    // Ensure a response is sent within a timeout
-    const responseTimeout = setTimeout(() => {
-      if (!res.headersSent) {
-        console.error('⚠️ Response timeout - sending fallback error');
-        res.status(500).send('Server error');
-      }
-    }, 3000);
+    // Detect database connection errors
+    const isDbError = error.message?.includes('database') || 
+                      error.message?.includes('Can\'t reach') ||
+                      error.code === 'PROTOCOL_CONNECTION_LOST' ||
+                      error.code === 'ER_ACCESS_DENIED_ERROR';
     
-    try {
-      handleConnectionError(error, res, 'login');
-    } finally {
-      clearTimeout(responseTimeout);
-    }
+    const statusCode = isDbError ? 503 : 500;
+    const errorMessage = isDbError ? 'Database service temporarily unavailable' : (error.message || 'Internal server error');
+    
+    res.status(statusCode).json({ 
+      error: errorMessage, 
+      message: error.message,
+      code: error.code,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

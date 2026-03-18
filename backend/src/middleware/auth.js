@@ -14,6 +14,21 @@ const authenticateToken = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.isImpersonating = !!decoded.isImpersonating;
 
+    // 🧪 Development mode: Allow dev users to bypass database validation
+    if (process.env.NODE_ENV === 'development' && decoded.userId && decoded.userId.startsWith('dev-')) {
+      console.log('✅ Development token accepted (bypassing DB check):', decoded.userId);
+      req.user = {
+        id: decoded.userId,
+        email: decoded.email || 'dev@localhost',
+        firstName: decoded.firstName || 'Dev',
+        lastName: decoded.lastName || 'User',
+        role: decoded.role || 'SUPERADMIN',
+        isActive: true,
+        createdAt: new Date()
+      };
+      return next();
+    }
+
     // Get user from database to ensure they still exist and are active
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },

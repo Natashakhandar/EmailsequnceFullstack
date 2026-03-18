@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, Download, Plus, Search, Loader2, Users, Trash2, Check, ChevronsUpDown, LogOut } from "lucide-react";
+import { Upload, Download, Plus, Search, Loader2, Users, Trash2, Check, ChevronsUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -38,7 +38,7 @@ const Leads = () => {
     timezone: "UTC"
   });
 
-  const [groups, setGroups] = useState<Array<{ name: string; count: number; activeCount: number; unsubscribedCount: number }>>([]);
+  const [groups, setGroups] = useState<Array<{ name: string; count: number }>>([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
   const [uploadGroupName, setUploadGroupName] = useState("");
@@ -56,12 +56,6 @@ const Leads = () => {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Unsubscribe dialog state
-  const [isUnsubscribeDialogOpen, setIsUnsubscribeDialogOpen] = useState(false);
-  const [contactToUnsubscribe, setContactToUnsubscribe] = useState<Lead | null>(null);
-  const [unsubscribeReason, setUnsubscribeReason] = useState("");
-  const [unsubscribing, setUnsubscribing] = useState(false);
-
   useEffect(() => {
     loadGroups();
   }, []);
@@ -73,12 +67,10 @@ const Leads = () => {
       
       // Calculate total count for "All Leads"
       const totalCount = data.reduce((acc, curr) => acc + curr.count, 0);
-      const totalActiveCount = data.reduce((acc, curr) => acc + (curr.activeCount || 0), 0);
-      const totalUnsubscribedCount = data.reduce((acc, curr) => acc + (curr.unsubscribedCount || 0), 0);
       
       // Add "All Leads" at the beginning
       const updatedGroups = [
-        { name: "All Leads", count: totalCount, activeCount: totalActiveCount, unsubscribedCount: totalUnsubscribedCount },
+        { name: "All Leads", count: totalCount },
         ...data
       ];
       
@@ -328,56 +320,6 @@ const Leads = () => {
     }
   };
 
-  // Unsubscribe functionality
-  const handleUnsubscribeContact = (contact: Lead) => {
-    setContactToUnsubscribe(contact);
-    setUnsubscribeReason("");
-    setIsUnsubscribeDialogOpen(true);
-  };
-
-  const confirmUnsubscribeContact = async () => {
-    if (!contactToUnsubscribe) return;
-
-    try {
-      setUnsubscribing(true);
-      
-      // First, get the active enrollments for this contact
-      const enrollments = await api.getContactEnrollments(contactToUnsubscribe.id);
-      const activeEnrollment = enrollments.find((e: any) => e.status === 'ACTIVE');
-
-      if (!activeEnrollment) {
-        toast.error("No active enrollments found for this contact");
-        return;
-      }
-
-      // Call the unsubscribe API
-      await api.unsubscribeFromEmail({
-        contactId: contactToUnsubscribe.id,
-        enrollmentId: activeEnrollment.id,
-        reason: unsubscribeReason || "User requested unsubscribe"
-      });
-
-      // Update the contact status in the UI immediately
-      setLeads(leads.map(lead => 
-        lead.id === contactToUnsubscribe.id 
-          ? { ...lead, status: 'UNSUBSCRIBED' }
-          : lead
-      ));
-
-      toast.success(`${contactToUnsubscribe.email} has been unsubscribed`);
-      setIsUnsubscribeDialogOpen(false);
-      setContactToUnsubscribe(null);
-      setUnsubscribeReason("");
-
-      // Refresh groups to update counts
-      loadGroups();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to unsubscribe contact");
-      console.error("Error unsubscribing contact:", error);
-    } finally {
-      setUnsubscribing(false);
-    }
-  };
 
   const getStatusBadge = (status: Contact["status"]) => {
     const variants = {
@@ -455,7 +397,7 @@ const Leads = () => {
                     {group.name}
                   </h3>
                   <p className="text-sm text-gray-500">
-                    Unsubscribed: {group.unsubscribedCount || 0}
+                    Grouped by list name
                   </p>
                   
                   <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -583,19 +525,7 @@ const Leads = () => {
                       <TableCell className="text-muted-foreground">
                         {new Date(lead.createdAt).toLocaleDateString()}
                       </TableCell>
-                      <TableCell className="flex gap-2">
-                        {lead.status === 'ACTIVE' && (
-                          <Button
-                            onClick={() => handleUnsubscribeContact(lead)}
-                            variant="ghost"
-                            size="sm"
-                            title="Unsubscribe this contact"
-                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                            disabled={unsubscribing}
-                          >
-                            <LogOut className="w-4 h-4" />
-                          </Button>
-                        )}
+                      <TableCell>
                         <Button
                           onClick={() => handleDeleteContact(lead)}
                           variant="ghost"
@@ -914,57 +844,6 @@ const Leads = () => {
                   </>
                 ) : (
                   `Delete ${selectedContacts.length} Contact(s)`
-                )}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Unsubscribe Confirmation Dialog */}
-        <AlertDialog open={isUnsubscribeDialogOpen} onOpenChange={setIsUnsubscribeDialogOpen}>
-          <AlertDialogContent className="max-w-md">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-xl">Unsubscribe</AlertDialogTitle>
-              <AlertDialogDescription className="text-sm mt-2">
-                Do you want to stop getting messages from {contactToUnsubscribe?.leadListName || 'this mailing list'}?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            
-            <div className="py-4 space-y-3">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                <p className="font-medium mb-1">Recipient: {contactToUnsubscribe?.email}</p>
-                <p>To unsubscribe from other sender lists, you'll need to contact them directly.</p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="unsubscribe-reason" className="text-xs font-medium text-gray-600">
-                  Reason for unsubscribing (optional)
-                </Label>
-                <Input
-                  id="unsubscribe-reason"
-                  placeholder="e.g., Not interested, Too frequent, etc."
-                  value={unsubscribeReason}
-                  onChange={(e) => setUnsubscribeReason(e.target.value)}
-                  className="rounded-lg text-sm"
-                  disabled={unsubscribing}
-                />
-              </div>
-            </div>
-
-            <AlertDialogFooter className="gap-2">
-              <AlertDialogCancel disabled={unsubscribing}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={confirmUnsubscribeContact}
-                disabled={unsubscribing}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {unsubscribing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Unsubscribing...
-                  </>
-                ) : (
-                  'Unsubscribe'
                 )}
               </AlertDialogAction>
             </AlertDialogFooter>

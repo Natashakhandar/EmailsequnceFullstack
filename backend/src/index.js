@@ -28,8 +28,6 @@ if (!envFound) {
   console.warn('⚠️ No .env file found in standard locations. Using system environment variables.');
 }
 
-// 🚀 DEPLOYMENT TRIGGER: BoostNow2026 Sync
-// Last updated: 2026-03-17 15:44:00
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -54,7 +52,6 @@ const campaignsRouter = require('./routes/campaigns');
 const fixEventDetailsRouter = require('./routes/fixEventDetails');
 const smtpRouter = require('./routes/smtp');
 const warmupRouter = require('./routes/warmup');
-const emailConfigRouter = require('./routes/emailConfig');
 
 // Import scheduler and email monitor
 const { startScheduler } = require('./jobs/scheduler');
@@ -71,24 +68,12 @@ const PORT = SYSTEM_PORT || process.env.PORT || 3001;
 
 app.set('trust proxy', true); // Trust Hostinger proxy for accurate IP tracking
 
-const SERVER_ID = Math.random().toString(36).substring(7);
-console.log(`🆔 Server Instance ID: ${SERVER_ID}`);
 
-
-const REQUIRED_ENVS = ['DATABASE_URL', 'JWT_SECRET', 'NODE_ENV'];
-REQUIRED_ENVS.forEach(env => {
-  if (!process.env[env]) {
-    console.warn(`⚠️ Warning: ${env} is not defined in process.env`);
-  } else {
-    console.log(`✅ ${env} is present`);
-  }
-});
-
-if (process.env.DATABASE_URL) {
-  console.log('🔍 DATABASE_URL protocol:', process.env.DATABASE_URL.split(':')[0]);
+if (!process.env.DATABASE_URL) {
+  console.error('❌ DATABASE_URL is not defined in environment variables');
+} else {
+  console.log('✅ DATABASE_URL is configured');
 }
-
-
 
 // CORS configuration - MUST be before helmet
 app.use(cors({
@@ -100,10 +85,8 @@ app.use(cors({
       'localhost',
       '127.0.0.1',
       'boostnow.in',
-      'email.boostnow.in',
       'hostingersite.com'
     ];
-
     
     const isAllowed = allowedPatterns.some(pattern => origin.includes(pattern));
     
@@ -136,11 +119,6 @@ const limiter = rateLimit({
   legacyHeaders: false,
   message: 'Too many requests, please try again later.',
   skip: (req) => req.method === 'OPTIONS', // Never rate limit preflights
-  // Provide explicit key generator since we use 'trust proxy'
-  keyGenerator: (req, res) => {
-    return req.ip || req.connection.remoteAddress || 'unknown';
-  },
-  trustProxy: false, // Don't let rate limiter worry about proxy - we handle it with app.set
 });
 app.use(limiter);
 
@@ -150,82 +128,17 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Prisma Error Handler Middleware (Catches Prisma crashes gracefully)
-app.use((err, req, res, next) => {
-  if (err && (err.message?.includes('timer has gone away') || err.message?.includes('PANIC'))) {
-    console.error('🚨 PRISMA PANIC DETECTED:', err.message);
-    return res.status(503).json({
-      error: 'Database temporarily unavailable',
-      message: 'The database connection is being re-established. Please try again in a moment.',
-      status: 503
-    });
-  }
-  next(err);
-});
-
-// 1. Global Request Logger (To debug 404s on hosted site)
-app.use((req, res, next) => {
-  if (!req.path.includes('.') && !req.path.startsWith('/static')) {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${req.ip}`);
-  }
-  next();
-});
-
 // 1. Health & Ping (Highest Priority)
 app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    serverId: SERVER_ID,
-    message: 'Server is running'
+    db: !!process.env.DATABASE_URL
   });
 });
 
-// Emergency Direct DB Test (Bypassy Prisma)
-app.get('/db-test', async (req, res) => {
-  if (!process.env.DATABASE_URL) return res.status(500).json({ error: 'DATABASE_URL missing' });
-  
-  try {
-    const mysql = require('mysql2/promise');
-    const connection = await mysql.createConnection(process.env.DATABASE_URL);
-    await connection.query('SELECT 1');
-    await connection.end();
-    res.json({ status: 'SUCCESS', message: 'Direct MySQL connection works!' });
-  } catch (err) {
-    res.status(500).json({ 
-      status: 'FAILED', 
-      error: err.message,
-      code: err.code,
-      hint: 'If you see Access Denied, double check your User and Password in Hostinger Dashboard.'
-    });
-  }
-});
-
-app.get('/api/ping', (req, res) => res.json({ status: 'pong', timestamp: new Date().toISOString(), serverId: SERVER_ID }));
-
-// Debug routes endpoint
-app.get('/api/debug-routes', (req, res) => {
-  const routes = [];
-  try {
-    app._router.stack.forEach(middleware => {
-      if (middleware.route) {
-        routes.push(`${Object.keys(middleware.route.methods).join(',').toUpperCase()} ${middleware.route.path}`);
-      } else if (middleware.name === 'router') {
-        middleware.handle.stack.forEach(handler => {
-          if (handler.route) {
-            const path = handler.route.path;
-            const methods = Object.keys(handler.route.methods).join(',').toUpperCase();
-            routes.push(`${methods} /api${path}`);
-          }
-        });
-      }
-    });
-  } catch (e) {
-    return res.json({ error: e.message });
-  }
-  res.json({ routes, serverId: SERVER_ID });
-});
+app.get('/api/ping', (req, res) => res.json({ status: 'pong' }));
 
 // 2. Consolidate API Routes
 const apiRouter = express.Router();
@@ -254,30 +167,14 @@ apiRouter.use('/campaigns', campaignsRouter);
 apiRouter.use('/fix-event-details', fixEventDetailsRouter);
 apiRouter.use('/smtp', smtpRouter);
 apiRouter.use('/warmup', warmupRouter);
-apiRouter.use('/email-config', emailConfigRouter);
 apiRouter.use('/', emailRouter); // Email tracker routes
 
 apiRouter.get('/', (req, res) => {
   res.json({ message: 'Email Sequencing API', version: '1.0.0' });
 });
 
-// Catch-all for undefined API routes (must be LAST)
-apiRouter.all('*', (req, res) => {
-  console.log(`❌ API route not found: ${req.method} ${req.path}`);
-  res.status(404).json({ 
-    error: 'API endpoint not found',
-    requested: `${req.method} /api${req.path}`,
-    available: ['/auth/login', '/auth/signup', '/contacts', '/sequences']
-  });
-});
-
 // Register the combined API router
 app.use('/api', apiRouter);
-
-// FALLBACK: If the proxy strips /api, we still want auth to work
-app.use('/auth', authRouter);
-
-app.get('/ping', (req, res) => res.json({ status: 'pong', note: 'Top level reachable' }));
 
 // Static file serving - Serve frontend build
 const possibleFrontendPaths = [
@@ -301,23 +198,13 @@ for (const p of possibleFrontendPaths) {
 }
 
 // Serve static files from the React app
-// Priority: backend/public (Internal) -> backend/dist -> root public
 app.use(express.static(frontendPath));
-app.use(express.static(path.join(__dirname, '../public'))); 
-
-// Log all incoming requests for debugging 404s
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api')) return next();
-  console.log(`[ROUTE] Serving: ${req.path}`);
-  next();
-});
 
 // API routes Documentation
 app.get('/api', (req, res) => {
   res.json({
     message: 'Email Sequencing Backend API',
-    version: '1.0.0',
-    endpoints: ['/api/auth/login', '/api/ping', '/health']
+    version: '1.0.0'
   });
 });
 
@@ -339,7 +226,7 @@ app.use((err, req, res, next) => {
 // 4. SPA Fallback - Only for non-API routes
 app.get('*', (req, res, next) => {
   // If it's an API route that reached here, it means 404 in API
-  if (req.path.startsWith('/api')) {
+  if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
   
@@ -355,34 +242,17 @@ app.get('*', (req, res, next) => {
 // Start server
 initializeSocket(server);
 
-// Initialize Prisma client (non-blocking)
-require('./db/prismaClient');
-
-// Start server immediately - Prisma loads asynchronously
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  // Only start background jobs in production (saves DB connections in development)
-  if (process.env.NODE_ENV === 'production' || process.env.ENABLE_SCHEDULER === 'true') {
-    try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
-  } else {
-    console.log('⏸️  Scheduler disabled (development mode). To enable: set NODE_ENV=production or ENABLE_SCHEDULER=true');
-  }
+  try { startScheduler(); } catch (e) { console.error('Scheduler error:', e.message); }
+  // Removed redundant startEmailMonitoring here as it is started by the scheduler
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('🚨 Uncaught Exception:', error.message);
-  
-  // If it's a Prisma panic, just log it - don't crash the server
-  if (error.message?.includes('timer has gone away') || error.message?.includes('PANIC')) {
-    console.error('  ⚠️ Prisma engine panic detected - server will continue running');
-    console.error('  💡 Prisma will attempt to reconnect on next request');
-    // Don't exit - let the server continue
-    return;
-  }
-  
-  // For other fatal errors, exit
+  console.error('Uncaught Exception:', error.message);
+  // Don't exit on IMAP/network errors - only exit on fatal errors
   if (error.code === 'ERR_INTERNAL_ASSERTION') process.exit(1);
 });
 

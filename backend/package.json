@@ -4,7 +4,7 @@
   "description": "Node.js backend for email sequencing system",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "npx prisma generate && node src/index.js",
     "dev": "nodemon src/index.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
@@ -22,7 +22,7 @@
   "author": "BoostNow",
   "license": "MIT",
   "dependencies": {
-    "@prisma/client": "5.21.1",
+    "@prisma/client": "5.15.0",
     "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",

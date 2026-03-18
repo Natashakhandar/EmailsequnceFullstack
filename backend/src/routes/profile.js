@@ -100,6 +100,24 @@ router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
 
+    // 🧪 Development mode: Return dev user profile data
+    if (process.env.NODE_ENV === 'development' && userId.startsWith('dev-')) {
+      console.log('✅ Returning dev profile data for:', userId);
+      return res.json({
+        success: true,
+        user: {
+          id: userId,
+          email: req.user.email,
+          firstName: req.user.firstName,
+          lastName: req.user.lastName,
+          role: req.user.role,
+          signature: '<p>Dev User Signature</p>',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {

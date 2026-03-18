@@ -10,12 +10,14 @@ const getApiBaseUrl = () => {
 
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    // Frontend on email.boostnow.in, Backend on silver-tapir domain
-    if (hostname.includes('email.boostnow.in') || hostname.includes('boostnow.in')) {
+    // Cross-origin setup: Frontend on email.boostnow.in, Backend on silver-tapir
+    if (hostname === 'email.boostnow.in' || hostname === 'boostnow.in') {
       return 'https://silver-tapir-929419.hostingersite.com';
     }
     return window.location.origin;
   }
+
+
 
   return envUrl || '';
 };
@@ -355,7 +357,7 @@ class ApiClient {
   }
 
   async getContactGroups() {
-    return this.request<Array<{ name: string; count: number; activeCount: number; unsubscribedCount: number }>>('/contacts/groups');
+    return this.request<Array<{ name: string; count: number }>>('/contacts/groups');
   }
 
   async createContact(contact: Omit<Contact, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -513,11 +515,6 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
-  }
-
-  async getContactEnrollments(contactId: string) {
-    const result = await this.request<{ enrollments: Enrollment[]; pagination: any }>(`/enrollments?contactId=${contactId}`);
-    return result.enrollments;
   }
 
   // Events API
@@ -894,122 +891,6 @@ class ApiClient {
       }>;
       totalCampaigns: number;
     }>(`/reports/campaign-analytics${query ? `?${query}` : ''}`);
-  }
-
-  // Unsubscribe API (Dashboard - requires auth)
-  async unsubscribeFromEmail(data: {
-    contactId: string;
-    enrollmentId: string;
-    reason: string;
-  }) {
-    return this.request('/unsubscribe', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async submitUnsubscribeFeedback(data: { token: string; reason: string }) {
-    return this.request<{ success: boolean; message: string }>('/unsubscribe/submit', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async getUnsubscribeReasons(contactId: string) {
-    return this.request<Array<{
-      id: string;
-      reason: string;
-      unsubscribedAt: string;
-    }>>(`/unsubscribe/reasons/${contactId}`);
-  }
-
-  async getMyUnsubscribedContacts() {
-    return this.request<Array<{
-      id: string;
-      email: string;
-      firstName: string;
-      lastName: string;
-      company?: string;
-      reason: string;
-      unsubscribedAt: string;
-      sequenceName: string;
-      totalUnsubscribeEvents: number;
-    }>>('/unsubscribe/my-unsubscribed-contacts');
-  }
-
-  // Email Configuration API
-  async getEmailConfig() {
-    return this.request<{
-      id: string;
-      smtpHost: string;
-      smtpPort: number;
-      smtpSecure: boolean;
-      smtpUser: string;
-      fromEmail: string;
-      fromName: string;
-      imapHost?: string;
-      imapPort?: number;
-      imapTls?: boolean;
-      imapUser?: string;
-      createdAt: string;
-      updatedAt: string;
-    }>('/email-config');
-  }
-
-  async saveEmailConfig(data: {
-    smtpHost: string;
-    smtpPort: number;
-    smtpSecure: boolean;
-    smtpUser: string;
-    smtpPassword: string;
-    fromEmail: string;
-    fromName: string;
-    imapHost?: string;
-    imapPort?: number;
-    imapTls?: boolean;
-    imapUser?: string;
-    imapPassword?: string;
-  }) {
-    return this.request<{
-      success: boolean;
-      message: string;
-      emailConfig: any;
-    }>('/email-config', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async verifySMTPConnection(data: {
-    smtpHost: string;
-    smtpPort: number;
-    smtpSecure: boolean;
-    smtpUser: string;
-    smtpPassword: string;
-  }) {
-    return this.request<{
-      success: boolean;
-      message: string;
-    }>('/email-config/verify-smtp', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async verifyIMAPConnection(data: {
-    imapHost: string;
-    imapPort: number;
-    imapTls: boolean;
-    imapUser: string;
-    imapPassword: string;
-  }) {
-    return this.request<{
-      success: boolean;
-      message: string;
-    }>('/email-config/verify-imap', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
   }
 
 }
