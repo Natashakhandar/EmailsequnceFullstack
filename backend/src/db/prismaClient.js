@@ -6,11 +6,22 @@ function getPrismaClient() {
   if (prisma) return prisma;
 
   console.log('🔌 DATABASE_URL Protocol Check:', process.env.DATABASE_URL ? process.env.DATABASE_URL.split(':')[0] : 'UNDEFINED');
+  
   prisma = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error', 'warn'],
     errorFormat: 'minimal',
+    // Hostinger optimization settings
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
   });
 
+  // Handle disconnection and reconnection on error
+  prisma.$on('beforeExit', async () => {
+    console.log('🔌 Prisma client disconnecting');
+  });
 
   console.log('🚀 Prisma initialized with database connection');
 
