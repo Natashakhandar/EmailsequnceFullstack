@@ -163,6 +163,32 @@ router.get('/reasons/:contactId', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/unsubscribe/error - Show error page when no valid token
+router.get('/error', (req, res) => {
+  return res.setHeader('Content-Type', 'text/html; charset=utf-8').send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; background: linear-gradient(135deg, #f5f7fa 0%, #f0f2f5 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 48px; text-align: center; max-width: 500px; }
+        h1 { color: #d32f2f; font-size: 28px; margin-bottom: 12px; }
+        p { color: #666; font-size: 15px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚠️ Invalid Link</h1>
+        <p>This unsubscribe link is invalid. Please check the link or contact support at support@boostnow.in</p>
+    </div>
+</body>
+</html>
+  `);
+});
+
 // OPTIONS handler for CORS preflight
 router.options('/:token', (req, res) => {
   res.header('Access-Control-Allow-Origin', '*');

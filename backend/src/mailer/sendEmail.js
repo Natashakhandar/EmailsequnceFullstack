@@ -197,18 +197,25 @@ async function generateUnsubscribeToken(contactId) {
       }
     });
 
-    // FALLBACK: If APP_URL is localhost, use production domain
-    const baseUrl = (emailConfig.appUrl && !emailConfig.appUrl.includes('localhost'))
-      ? emailConfig.appUrl
-      : (process.env.APP_URL || 'https://email.boostnow.in').replace(/\/$/, '');
+    // IMPORTANT: Unsubscribe endpoint is on BACKEND, not frontend!
+    // Get backend URL - NOT the frontend email.boostnow.in URL
+    let backendUrl;
     
-    console.log(`🔗 Unsubscribe URL using baseUrl: ${baseUrl}`);
-    return `${baseUrl}/api/unsubscribe/${token}`;
+    if (process.env.BACKEND_URL && !process.env.BACKEND_URL.includes('localhost')) {
+      backendUrl = process.env.BACKEND_URL.replace(/\/$/, '');
+    } else if (process.env.NODE_ENV === 'production') {
+      // Production backend domain
+      backendUrl = 'https://silver-tapir-929419.hostingersite.com';
+    } else {
+      backendUrl = 'http://localhost:3001';
+    }
+    
+    console.log(`🔗 Unsubscribe URL using backend: ${backendUrl}`);
+    return `${backendUrl}/api/unsubscribe/${token}`;
   } catch (error) {
     console.error('Error generating unsubscribe token:', error);
-    const fallbackUrl = (process.env.APP_URL || 'https://email.boostnow.in').replace(/\/$/, '');
-    // Fallback to production domain - still use token format but endpoint will return proper error page
-    return `${fallbackUrl}/api/unsubscribe/error-generating-token-please-contact-support`;
+    // Fallback to production backend domain - NOT frontend
+    return 'https://silver-tapir-929419.hostingersite.com/api/unsubscribe/error-generating-token-please-contact-support';
   }
 }
 
@@ -335,13 +342,18 @@ async function sendEmail({
       replaceTokens(signature, contactData, tokenOptions).replace(/\n/g, '<br>') : "";
 
     // Generate unsubscribe URL if contactId is provided (BEFORE creating HTML)
-    let unsubscribeUrl = `${emailConfig.appUrl}/api/unsubscribe/email`;
+    // Default: use backend URL for unsubscribe endpoint (NOT frontend!)
+    let backendUrl = process.env.BACKEND_URL && !process.env.BACKEND_URL.includes('localhost') 
+      ? process.env.BACKEND_URL.replace(/\/$/, '')
+      : (process.env.NODE_ENV === 'production' ? 'https://silver-tapir-929419.hostingersite.com' : 'http://localhost:3001');
+    
+    let unsubscribeUrl = `${backendUrl}/api/unsubscribe/error`;
     if (contactId) {
       console.log(`🔗 Generating unsubscribe token for contactId: ${contactId}`);
       unsubscribeUrl = await generateUnsubscribeToken(contactId);
       console.log(`🔗 Unsubscribe URL generated: ${unsubscribeUrl}`);
     } else {
-      console.log(`⚠️ No contactId provided - using generic unsubscribe URL`);
+      console.log(`⚠️ No contactId provided - using error page URL`);
     }
 
     const fromAddressForUnsub = userConfig?.fromEmail || emailConfig.from.address || 'sales@boostnow.in';
