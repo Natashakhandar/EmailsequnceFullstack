@@ -256,6 +256,16 @@ apiRouter.get('/', (req, res) => {
   res.json({ message: 'Email Sequencing API', version: '1.0.0' });
 });
 
+// Catch-all for undefined API routes (must be LAST)
+apiRouter.all('*', (req, res) => {
+  console.log(`❌ API route not found: ${req.method} ${req.path}`);
+  res.status(404).json({ 
+    error: 'API endpoint not found',
+    requested: `${req.method} /api${req.path}`,
+    available: ['/auth/login', '/auth/signup', '/contacts', '/sequences']
+  });
+});
+
 // Register the combined API router
 app.use('/api', apiRouter);
 
