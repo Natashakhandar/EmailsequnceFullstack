@@ -72,6 +72,3 @@ module.exports = getPrisma();
 // Also export getter for fresh calls
 module.exports.getPrisma = getPrisma;
 module.exports.initError = () => prismaInitError;
-  if (!prisma) throw new Error('Prisma not initialized');
-  return prisma;
-};
