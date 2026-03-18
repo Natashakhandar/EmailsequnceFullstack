@@ -18,6 +18,9 @@ import AdminManagement from "./pages/AdminManagement";
 import SmtpSettings from "./pages/SmtpSettings";
 import CampaignCreate from "./pages/CampaignCreate";
 import Campaigns from "./pages/Campaigns";
+import Unsubscribe from "./pages/Unsubscribe";
+import UnsubscribedContacts from "./pages/UnsubscribedContacts";
+import EmailSettings from "./pages/EmailSettings";
 
 import { api } from "@/lib/api";
 
@@ -39,6 +42,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/unsubscribe" element={<Unsubscribe />} />
 
           {/* Protected Routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -49,6 +53,8 @@ const App = () => (
           <Route path="/campaigns/create" element={<ProtectedRoute><CampaignCreate /></ProtectedRoute>} />
           <Route path="/email-activity" element={<ProtectedRoute><EmailActivity /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/unsubscribed-contacts" element={<ProtectedRoute><UnsubscribedContacts /></ProtectedRoute>} />
+          <Route path="/email-settings" element={<ProtectedRoute><EmailSettings /></ProtectedRoute>} />
           <Route path="/smtp-settings" element={<ProtectedRoute><SmtpSettings /></ProtectedRoute>} />
           <Route path="/sequences-simplified" element={<ProtectedRoute><SimplifiedSequences /></ProtectedRoute>} />
           <Route path="/admin-management" element={<ProtectedRoute><AdminManagement /></ProtectedRoute>} />

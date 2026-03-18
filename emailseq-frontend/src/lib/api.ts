@@ -357,7 +357,7 @@ class ApiClient {
   }
 
   async getContactGroups() {
-    return this.request<Array<{ name: string; count: number }>>('/contacts/groups');
+    return this.request<Array<{ name: string; count: number; activeCount: number; unsubscribedCount: number }>>('/contacts/groups');
   }
 
   async createContact(contact: Omit<Contact, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -515,6 +515,11 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  async getContactEnrollments(contactId: string) {
+    const result = await this.request<{ enrollments: Enrollment[]; pagination: any }>(`/enrollments?contactId=${contactId}`);
+    return result.enrollments;
   }
 
   // Events API
@@ -891,6 +896,138 @@ class ApiClient {
       }>;
       totalCampaigns: number;
     }>(`/reports/campaign-analytics${query ? `?${query}` : ''}`);
+  }
+
+  // Unsubscribe API (Public endpoint - no auth required)
+  async unsubscribeFromEmail(data: {
+    contactId: string;
+    enrollmentId: string;
+    reason: string;
+  }) {
+    try {
+      const response = await fetch(`${this.baseUrl}/unsubscribe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || errorData.message || `HTTP ${response.status}`;
+        throw new Error(errorMessage);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('API request failed: /unsubscribe', error);
+      throw error;
+    }
+  }
+
+  async submitUnsubscribeFeedback(data: { token: string; reason: string }) {
+    return this.request<{ success: boolean; message: string }>('/unsubscribe/submit', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getUnsubscribeReasons(contactId: string) {
+    return this.request<Array<{
+      id: string;
+      reason: string;
+      unsubscribedAt: string;
+    }>>(`/unsubscribe/reasons/${contactId}`);
+  }
+
+  async getMyUnsubscribedContacts() {
+    return this.request<Array<{
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      company?: string;
+      reason: string;
+      unsubscribedAt: string;
+      sequenceName: string;
+      totalUnsubscribeEvents: number;
+    }>>('/unsubscribe/my-unsubscribed-contacts');
+  }
+
+  // Email Configuration API
+  async getEmailConfig() {
+    return this.request<{
+      id: string;
+      smtpHost: string;
+      smtpPort: number;
+      smtpSecure: boolean;
+      smtpUser: string;
+      fromEmail: string;
+      fromName: string;
+      imapHost?: string;
+      imapPort?: number;
+      imapTls?: boolean;
+      imapUser?: string;
+      createdAt: string;
+      updatedAt: string;
+    }>('/email-config');
+  }
+
+  async saveEmailConfig(data: {
+    smtpHost: string;
+    smtpPort: number;
+    smtpSecure: boolean;
+    smtpUser: string;
+    smtpPassword: string;
+    fromEmail: string;
+    fromName: string;
+    imapHost?: string;
+    imapPort?: number;
+    imapTls?: boolean;
+    imapUser?: string;
+    imapPassword?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      emailConfig: any;
+    }>('/email-config', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async verifySMTPConnection(data: {
+    smtpHost: string;
+    smtpPort: number;
+    smtpSecure: boolean;
+    smtpUser: string;
+    smtpPassword: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      message: string;
+    }>('/email-config/verify-smtp', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async verifyIMAPConnection(data: {
+    imapHost: string;
+    imapPort: number;
+    imapTls: boolean;
+    imapUser: string;
+    imapPassword: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      message: string;
+    }>('/email-config/verify-imap', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
 }

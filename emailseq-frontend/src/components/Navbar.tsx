@@ -1,6 +1,6 @@
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LogOut, User, BarChart3, Mail, Users, FileText, Layers, Shield, Target, ArrowLeft, Menu, X } from "lucide-react";
+import { LogOut, User, BarChart3, Mail, Users, FileText, Layers, Shield, Target, ArrowLeft, Menu, X, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -192,6 +192,12 @@ const Navbar = () => {
                     <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       Profile
+                    </DropdownMenuItem>
+                  )}
+                  {!isImpersonating && (
+                    <DropdownMenuItem onClick={() => navigate("/unsubscribed-contacts")} className="cursor-pointer">
+                      <UserX className="mr-2 h-4 w-4" />
+                      Unsubscribed Contacts
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">

@@ -77,8 +77,8 @@ router.get('/groups', async (req, res) => {
     const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
     const where = isAdmin ? {} : { userId: req.user.id };
 
-    const groups = await prisma.contact.groupBy({
-      by: ['leadListName'],
+    const groupedByListAndStatus = await prisma.contact.groupBy({
+      by: ['leadListName', 'status'],
       where,
       _count: {
         _all: true
@@ -88,11 +88,33 @@ router.get('/groups', async (req, res) => {
       }
     });
 
-    // Format for easier frontend use
-    const formattedGroups = groups.map(group => ({
-      name: group.leadListName || 'Uncategorized',
-      count: group._count._all
-    }));
+    const groupsMap = new Map();
+
+    groupedByListAndStatus.forEach((group) => {
+      const name = group.leadListName || 'Uncategorized';
+
+      if (!groupsMap.has(name)) {
+        groupsMap.set(name, {
+          name,
+          count: 0,
+          activeCount: 0,
+          unsubscribedCount: 0
+        });
+      }
+
+      const current = groupsMap.get(name);
+      current.count += group._count._all;
+
+      if (group.status === 'ACTIVE') {
+        current.activeCount += group._count._all;
+      }
+
+      if (group.status === 'UNSUBSCRIBED') {
+        current.unsubscribedCount += group._count._all;
+      }
+    });
+
+    const formattedGroups = Array.from(groupsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
     res.json(formattedGroups);
   } catch (error) {

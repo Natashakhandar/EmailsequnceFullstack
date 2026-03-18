@@ -97,6 +97,32 @@ function generateTextFromHtml(htmlContent) {
   return text;
 }
 
+function appendUnsubscribeFooterToHtml(content, footerHtml) {
+  if (!content || typeof content !== 'string') {
+    return footerHtml;
+  }
+
+  const bodyCloseRegex = /<\/body\s*>/i;
+  if (bodyCloseRegex.test(content)) {
+    return content.replace(bodyCloseRegex, `${footerHtml}</body>`);
+  }
+
+  return `${content}${footerHtml}`;
+}
+
+function injectIntoBodyEnd(htmlContent, blockHtml) {
+  if (!htmlContent || typeof htmlContent !== 'string') {
+    return blockHtml;
+  }
+
+  const bodyCloseRegex = /<\/body\s*>/i;
+  if (bodyCloseRegex.test(htmlContent)) {
+    return htmlContent.replace(bodyCloseRegex, `${blockHtml}</body>`);
+  }
+
+  return `${htmlContent}${blockHtml}`;
+}
+
 // Create reusable transporter object using SMTP transport
 let transporter = null;
 
@@ -171,7 +197,7 @@ async function generateUnsubscribeToken(contactId) {
       }
     });
 
-    return `${emailConfig.appUrl}/api/unsubscribe/page/${token}`;
+    return `${emailConfig.appUrl}/api/unsubscribe/${token}`;
   } catch (error) {
     console.error('Error generating unsubscribe token:', error);
     return `${emailConfig.appUrl}/api/unsubscribe/email`; // Fallback URL
@@ -286,31 +312,88 @@ async function sendEmail({
     const processedSubject = replaceTokens(subject, contactData, tokenOptions);
     console.log(`📝 Final Processed Subject: "${processedSubject}"`);
 
-    // Process email body: replace tokens and convert line breaks to <br> tags
+    // Process email body
     let processedEmailBody = replaceTokens(htmlBody, contactData, tokenOptions);
     console.log(`📝 Body after token replacement length: ${processedEmailBody?.length || 0}`);
 
-    const formattedBody = processedEmailBody.replace(/\n/g, '<br>');
+    const hasDocumentHtmlRaw = /<html[\s>]|<body[\s>]/i.test(processedEmailBody || '');
+    const formattedBody = hasDocumentHtmlRaw
+      ? processedEmailBody
+      : processedEmailBody.replace(/\n/g, '<br>');
     console.log(`📝 Body after formatting length: ${formattedBody?.length || 0}`);
 
     // Process signature: replace tokens and convert line breaks to <br> tags
     const formattedSignature = signature && signature.trim() ?
       replaceTokens(signature, contactData, tokenOptions).replace(/\n/g, '<br>') : "";
 
-    // Generate final email HTML with proper left alignment and structure
-    const fullEmailHtml = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000; text-align: left;">
-        ${formattedBody}
-        ${formattedSignature ? `<div style="margin-top: 20px;">${formattedSignature}</div>` : ''}
-      </div>
+    // Generate unsubscribe URL if contactId is provided (BEFORE creating HTML)
+    let unsubscribeUrl = `${emailConfig.appUrl}/api/unsubscribe/email`;
+    if (contactId) {
+      console.log(`🔗 Generating unsubscribe token for contactId: ${contactId}`);
+      unsubscribeUrl = await generateUnsubscribeToken(contactId);
+      console.log(`🔗 Unsubscribe URL generated: ${unsubscribeUrl}`);
+    } else {
+      console.log(`⚠️ No contactId provided - using generic unsubscribe URL`);
+    }
+
+    const fromAddressForUnsub = userConfig?.fromEmail || emailConfig.from.address || 'sales@boostnow.in';
+    const unsubscribeMailto = `mailto:${fromAddressForUnsub}?subject=unsubscribe`;
+
+    // Old-style footer: small unsubscribe link only at the very bottom.
+    const unsubscribeBlock = `
+    <div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #d9d9d9;">
+      <a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:600;">Unsubscribe</a>
+    </div>
     `;
 
+    console.log(`📧 Unsubscribe footer included in email (length: ${unsubscribeBlock.length} chars)`);
+
+    const topUnsubscribeLine = `<div style="margin: 0 0 14px 0; padding: 8px 10px; border: 1px solid #d8d8d8; background: #fafafa; font-family: Arial, sans-serif; font-size: 13px; color: #111;"><strong>Manage preferences:</strong> <a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color: #0b57d0; text-decoration: underline; font-weight: 600;">Unsubscribe</a></div>`;
+    const signatureBlock = formattedSignature ? `<div style="margin-top: 20px;">${formattedSignature}</div>` : '';
+    const appendBlock = `${signatureBlock}${unsubscribeBlock}`;
+
+    const hasDocumentHtml = hasDocumentHtmlRaw;
+    let fullEmailHtml;
+
+    if (hasDocumentHtml) {
+      // For full-document templates, insert near top; if <body> tag is missing, prepend to document.
+      const withTop = /<body[^>]*>/i.test(formattedBody)
+        ? formattedBody.replace(/<body[^>]*>/i, (match) => `${match}${topUnsubscribeLine}`)
+        : `${topUnsubscribeLine}${formattedBody}`;
+      fullEmailHtml = injectIntoBodyEnd(withTop, appendBlock);
+    } else {
+      const contentWithSignature = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000; text-align: left;">
+          ${topUnsubscribeLine}
+          ${formattedBody}
+          ${appendBlock}
+        </div>
+      `;
+
+      fullEmailHtml = appendUnsubscribeFooterToHtml(contentWithSignature, '');
+    }
+
     console.log(`📝 Full final HTML length: ${fullEmailHtml?.length || 0}`);
+    console.log(`✅ UNSUBSCRIBE FOOTER INCLUDED: ${unsubscribeBlock ? 'YES' : 'NO'}`);
+    
+    // Log a snippet of the footer to verify it's there
+    if (unsubscribeBlock && /unsubscribe/i.test(unsubscribeBlock)) {
+      console.log('✅ Footer contains unsubscribe link text');
+    } else {
+      console.log('❌ Footer missing unsubscribe link text!');
+    }
 
     let processedHtmlBody = fullEmailHtml;
     let processedTextBody = textBody ?
       replaceTokens(textBody, contactData, tokenOptions) :
       generateTextFromHtml(processedHtmlBody);
+
+    // Final fallback: always append a raw unsubscribe line at absolute end.
+    // This protects against template/body parsing quirks in some mail clients.
+    const rawUnsubscribeTail = `<div style="margin-top:10px;font-size:11px;color:#777;"><a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color:#5d7ea5;text-decoration:underline;">Unsubscribe</a></div>`;
+    processedHtmlBody = `${processedHtmlBody}${rawUnsubscribeTail}`;
+
+    processedTextBody = `${processedTextBody}\n\nUnsubscribe: ${unsubscribeUrl}`;
 
     // Generate unique Message-ID for tracking
     const fromName = userConfig?.fromName || emailConfig.from.name || 'Sales';
@@ -327,12 +410,6 @@ async function sendEmail({
       processedHtmlBody = processedHtmlBody + trackingPixel;
     }
 
-    // Generate unsubscribe URL if contactId is provided
-    let unsubscribeUrl = `${emailConfig.appUrl}/api/unsubscribe/email`;
-    if (contactId) {
-      unsubscribeUrl = await generateUnsubscribeToken(contactId);
-    }
-
     // Prepare email options
     const mailOptions = {
       from: {
@@ -347,8 +424,9 @@ async function sendEmail({
       priority: 'normal',
       headers: {
         'Message-ID': messageId,
-        'List-Unsubscribe': `<${unsubscribeUrl}>`,
+        'List-Unsubscribe': `<${unsubscribeMailto}>, <${unsubscribeUrl}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        'List-ID': `BoostNow Mailer <${fromDomain}>`,
         'X-Priority': '3 (Normal)',
         'Importance': 'Normal',
         // Anti-Promotion/Update tab headers
@@ -383,6 +461,17 @@ async function sendEmail({
     console.log('Final payload text length:', mailOptions.text?.length || 0);
     console.log('Recipient:', mailOptions.to);
     console.log('Subject:', mailOptions.subject);
+    
+    // Verify footer is in the HTML
+    const footerInPayload = /unsubscribe/i.test(mailOptions.html || '');
+    console.log(`📧 Footer in payload: ${footerInPayload ? '✅ YES' : '❌ NO'}`);
+    const unsubscribeUrlInPayload = (mailOptions.html || '').includes(unsubscribeUrl);
+    console.log(`📧 Unsubscribe URL in payload: ${unsubscribeUrlInPayload ? '✅ YES' : '❌ NO'}`);
+    
+    // Show last 300 characters to see if footer is there
+    if (mailOptions.html && mailOptions.html.length > 300) {
+      console.log(`📧 Last 300 chars of HTML:\n${mailOptions.html.substring(mailOptions.html.length - 300)}`);
+    }
 
     // Send email - THIS IS THE ONLY SENDMAIL CALL PER SEQUENCE STEP
     console.log(`📤 INITIATING SENDMAIL TO: ${to} VIA ${mailOptions.from.address}`);
@@ -723,11 +812,12 @@ async function sendSequenceEmail(enrollment) {
 }
 
 // Send test email
-async function sendTestEmail(to, subject = 'Test Email', body = 'This is a test email from the Email Sequencing System.', userConfig = null) {
+async function sendTestEmail(to, subject = 'Test Email', body = 'This is a test email from the Email Sequencing System.', userConfig = null, contactId = null) {
   return await sendEmail({
     to,
     subject,
     userConfig,
+    contactId: contactId || null, // Pass contactId if available, will still show unsubscribe footer
     htmlBody: `
       <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">

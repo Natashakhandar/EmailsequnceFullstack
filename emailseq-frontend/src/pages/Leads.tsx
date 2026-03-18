@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, Download, Plus, Search, Loader2, Users, Trash2, Check, ChevronsUpDown } from "lucide-react";
+import { Upload, Download, Plus, Search, Loader2, Users, Trash2, Check, ChevronsUpDown, LogOut } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -38,10 +38,10 @@ const Leads = () => {
     timezone: "UTC"
   });
 
-  const [groups, setGroups] = useState<Array<{ name: string; count: number }>>([]);
+  const [groups, setGroups] = useState<Array<{ name: string; count: number; activeCount: number; unsubscribedCount: number }>>([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
-  const [uploadLeadListName, setUploadLeadListName] = useState("");
+  const [uploadGroupName, setUploadGroupName] = useState("");
   const [isAddPopoverOpen, setIsAddPopoverOpen] = useState(false);
   const [isUploadPopoverOpen, setIsUploadPopoverOpen] = useState(false);
 
@@ -56,6 +56,12 @@ const Leads = () => {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  // Unsubscribe dialog state
+  const [isUnsubscribeDialogOpen, setIsUnsubscribeDialogOpen] = useState(false);
+  const [contactToUnsubscribe, setContactToUnsubscribe] = useState<Lead | null>(null);
+  const [unsubscribeReason, setUnsubscribeReason] = useState("");
+  const [unsubscribing, setUnsubscribing] = useState(false);
+
   useEffect(() => {
     loadGroups();
   }, []);
@@ -67,10 +73,12 @@ const Leads = () => {
       
       // Calculate total count for "All Leads"
       const totalCount = data.reduce((acc, curr) => acc + curr.count, 0);
+      const totalActiveCount = data.reduce((acc, curr) => acc + (curr.activeCount || 0), 0);
+      const totalUnsubscribedCount = data.reduce((acc, curr) => acc + (curr.unsubscribedCount || 0), 0);
       
       // Add "All Leads" at the beginning
       const updatedGroups = [
-        { name: "All Leads", count: totalCount },
+        { name: "All Leads", count: totalCount, activeCount: totalActiveCount, unsubscribedCount: totalUnsubscribedCount },
         ...data
       ];
       
@@ -188,7 +196,7 @@ const Leads = () => {
         firstName: row.firstName || row.FirstName || row.first_name,
         lastName: row.lastName || row.LastName || row.last_name,
         company: row.company || row.Company,
-        leadListName: uploadLeadListName || row.leadListName || row.LeadListName || undefined,
+        leadListName: uploadGroupName || undefined,
         timezone: "UTC",
         status: "ACTIVE" as const
       })).filter(contact => contact.email);
@@ -209,7 +217,7 @@ const Leads = () => {
 
       setIsUploadDialogOpen(false);
       setSelectedFile(null);
-      setUploadLeadListName("");
+      setUploadGroupName("");
     } catch (error) {
       toast.error("Failed to import contacts");
     } finally {
@@ -219,8 +227,8 @@ const Leads = () => {
 
   const downloadSampleCSV = () => {
     const sampleData = [
-      { email: "john@example.com", firstName: "John", lastName: "Doe", company: "Example Inc", leadListName: "New Leads" },
-      { email: "jane@example.com", firstName: "Jane", lastName: "Smith", company: "Tech Solutions", leadListName: "Website Signups" }
+      { email: "john@example.com", firstName: "John", lastName: "Doe", company: "Example Inc" },
+      { email: "jane@example.com", firstName: "Jane", lastName: "Smith", company: "Tech Solutions" }
     ];
     const worksheet = XLSX.utils.json_to_sheet(sampleData);
     const workbook = XLSX.utils.book_new();
@@ -320,6 +328,56 @@ const Leads = () => {
     }
   };
 
+  // Unsubscribe functionality
+  const handleUnsubscribeContact = (contact: Lead) => {
+    setContactToUnsubscribe(contact);
+    setUnsubscribeReason("");
+    setIsUnsubscribeDialogOpen(true);
+  };
+
+  const confirmUnsubscribeContact = async () => {
+    if (!contactToUnsubscribe) return;
+
+    try {
+      setUnsubscribing(true);
+      
+      // First, get the active enrollments for this contact
+      const enrollments = await api.getContactEnrollments(contactToUnsubscribe.id);
+      const activeEnrollment = enrollments.find((e: any) => e.status === 'ACTIVE');
+
+      if (!activeEnrollment) {
+        toast.error("No active enrollments found for this contact");
+        return;
+      }
+
+      // Call the unsubscribe API
+      await api.unsubscribeFromEmail({
+        contactId: contactToUnsubscribe.id,
+        enrollmentId: activeEnrollment.id,
+        reason: unsubscribeReason || "User requested unsubscribe"
+      });
+
+      // Update the contact status in the UI immediately
+      setLeads(leads.map(lead => 
+        lead.id === contactToUnsubscribe.id 
+          ? { ...lead, status: 'UNSUBSCRIBED' }
+          : lead
+      ));
+
+      toast.success(`${contactToUnsubscribe.email} has been unsubscribed`);
+      setIsUnsubscribeDialogOpen(false);
+      setContactToUnsubscribe(null);
+      setUnsubscribeReason("");
+
+      // Refresh groups to update counts
+      loadGroups();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to unsubscribe contact");
+      console.error("Error unsubscribing contact:", error);
+    } finally {
+      setUnsubscribing(false);
+    }
+  };
 
   const getStatusBadge = (status: Contact["status"]) => {
     const variants = {
@@ -397,7 +455,7 @@ const Leads = () => {
                     {group.name}
                   </h3>
                   <p className="text-sm text-gray-500">
-                    Grouped by list name
+                    Unsubscribed: {group.unsubscribedCount || 0}
                   </p>
                   
                   <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -525,7 +583,19 @@ const Leads = () => {
                       <TableCell className="text-muted-foreground">
                         {new Date(lead.createdAt).toLocaleDateString()}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="flex gap-2">
+                        {lead.status === 'ACTIVE' && (
+                          <Button
+                            onClick={() => handleUnsubscribeContact(lead)}
+                            variant="ghost"
+                            size="sm"
+                            title="Unsubscribe this contact"
+                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                            disabled={unsubscribing}
+                          >
+                            <LogOut className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Button
                           onClick={() => handleDeleteContact(lead)}
                           variant="ghost"
@@ -850,6 +920,57 @@ const Leads = () => {
           </AlertDialogContent>
         </AlertDialog>
 
+        {/* Unsubscribe Confirmation Dialog */}
+        <AlertDialog open={isUnsubscribeDialogOpen} onOpenChange={setIsUnsubscribeDialogOpen}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-xl">Unsubscribe</AlertDialogTitle>
+              <AlertDialogDescription className="text-sm mt-2">
+                Do you want to stop getting messages from {contactToUnsubscribe?.leadListName || 'this mailing list'}?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            
+            <div className="py-4 space-y-3">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                <p className="font-medium mb-1">Recipient: {contactToUnsubscribe?.email}</p>
+                <p>To unsubscribe from other sender lists, you'll need to contact them directly.</p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="unsubscribe-reason" className="text-xs font-medium text-gray-600">
+                  Reason for unsubscribing (optional)
+                </Label>
+                <Input
+                  id="unsubscribe-reason"
+                  placeholder="e.g., Not interested, Too frequent, etc."
+                  value={unsubscribeReason}
+                  onChange={(e) => setUnsubscribeReason(e.target.value)}
+                  className="rounded-lg text-sm"
+                  disabled={unsubscribing}
+                />
+              </div>
+            </div>
+
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel disabled={unsubscribing}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmUnsubscribeContact}
+                disabled={unsubscribing}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {unsubscribing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Unsubscribing...
+                  </>
+                ) : (
+                  'Unsubscribe'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Import Leads CSV Dialog */}
         <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
           <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl">
@@ -894,7 +1015,7 @@ const Leads = () => {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-gray-700 font-medium">Assign to Lead Group (Optional)</Label>
+                <Label className="text-gray-700 font-medium">Group Name</Label>
                 <Popover open={isUploadPopoverOpen} onOpenChange={setIsUploadPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -902,43 +1023,30 @@ const Leads = () => {
                       role="combobox"
                       className={cn(
                         "w-full justify-between rounded-md font-normal h-11 px-3 border-gray-300",
-                        !uploadLeadListName && "text-muted-foreground"
+                        !uploadGroupName && "text-muted-foreground"
                       )}
                     >
-                      {uploadLeadListName || "Select or type a group..."}
+                      {uploadGroupName || "Select a group..."}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[450px] p-0" align="start">
                     <Command>
-                      <CommandInput 
-                        placeholder="Search or type group name..." 
-                        onValueChange={(val) => setUploadLeadListName(val)}
-                      />
                       <CommandList>
-                        <CommandEmpty 
-                          className="py-2 px-4 cursor-pointer hover:bg-accent text-sm"
-                          onClick={() => {
-                            setUploadLeadListName(uploadLeadListName);
-                            setIsUploadPopoverOpen(false);
-                          }}
-                        >
-                          Using new group: "{uploadLeadListName}"
-                        </CommandEmpty>
                         <CommandGroup>
-                          {groups.map((group) => (
+                          {groups.filter(g => g.name !== "All Leads").map((group) => (
                             <CommandItem
                               key={group.name}
                               value={group.name}
                               onSelect={(currentValue) => {
-                                setUploadLeadListName(currentValue);
+                                setUploadGroupName(currentValue);
                                 setIsUploadPopoverOpen(false);
                               }}
                             >
                               <Check
                                 className={cn(
                                   "mr-2 h-4 w-4",
-                                  uploadLeadListName === group.name ? "opacity-100" : "opacity-0"
+                                  uploadGroupName === group.name ? "opacity-100" : "opacity-0"
                                 )}
                               />
                               {group.name}
@@ -949,7 +1057,6 @@ const Leads = () => {
                     </Command>
                   </PopoverContent>
                 </Popover>
-                <p className="text-xs text-gray-400">All contacts in this CSV will be tagged with this group name.</p>
               </div>
             </div>
 

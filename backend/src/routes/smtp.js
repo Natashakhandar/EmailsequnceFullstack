@@ -130,12 +130,19 @@ router.post('/test', authenticateToken, async (req, res) => {
 
         // If testRecipient is provided, send a test email
         if (testRecipient) {
+            const appUrl = process.env.APP_URL || 'http://localhost:3001';
+            const unsubscribeUrl = `${appUrl}/api/unsubscribe/email`;
+            const unsubscribeMailto = `mailto:${smtpUser}?subject=unsubscribe`;
             await transporter.sendMail({
                 from: smtpUser,
                 to: testRecipient,
                 subject: 'SMTP Connection Test',
-                text: 'This is a test email to verify your SMTP settings in the Email Sequencing System.',
-                html: '<p>This is a test email to verify your SMTP settings in the Email Sequencing System.</p>'
+                text: `This is a test email to verify your SMTP settings in the Email Sequencing System.\n\nUnsubscribe: ${unsubscribeUrl}`,
+                html: `<p>This is a test email to verify your SMTP settings in the Email Sequencing System.</p><p style="margin-top:20px;font-size:11px;color:#777;"><a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color:#5d7ea5;text-decoration:underline;">Unsubscribe</a></p>`,
+                headers: {
+                    'List-Unsubscribe': `<${unsubscribeMailto}>, <${unsubscribeUrl}>`,
+                    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+                }
             });
         }
 

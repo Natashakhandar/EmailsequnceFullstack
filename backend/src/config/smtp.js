@@ -14,6 +14,13 @@ const smtpConfig = {
   }
 };
 
+const resolvedAppUrl = (
+  process.env.APP_URL ||
+  process.env.BACKEND_URL ||
+  process.env.API_URL ||
+  'http://localhost:3001'
+).replace(/\/$/, '');
+
 const emailConfig = {
   from: {
     name: process.env.FROM_NAME || 'Email Sequencing System',
@@ -21,7 +28,7 @@ const emailConfig = {
   },
   replyTo: process.env.REPLY_TO_EMAIL,
   bounceAddress: process.env.BOUNCE_EMAIL,
-  appUrl: process.env.APP_URL || 'http://localhost:3001'
+  appUrl: resolvedAppUrl
 };
 
 module.exports = {

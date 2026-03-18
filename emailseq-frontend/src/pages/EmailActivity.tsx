@@ -37,6 +37,7 @@ const EmailActivity = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [checkingReplies, setCheckingReplies] = useState(false);
   const [filters, setFilters] = useState<EmailActivityFilters>({});
+  const [searchInput, setSearchInput] = useState(''); // Local input state for immediate feedback
   const [showFilters, setShowFilters] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -54,6 +55,15 @@ const EmailActivity = () => {
     bounced: 0
   });
 
+  // Update filters immediately on search input change
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+    setFilters(prev => ({
+      ...prev,
+      search: value || undefined
+    }));
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
 
   // Auto-refresh every 30 seconds as fallback
   useEffect(() => {
@@ -175,6 +185,8 @@ const EmailActivity = () => {
         setLoading(true);
       }
 
+      console.log('🔍 Loading events with filters:', filters);
+      
       const response = await api.getEvents({
         page: pagination.page,
         limit: pagination.limit,
@@ -371,7 +383,8 @@ const EmailActivity = () => {
       <main className="container mx-auto px-6 pt-24 pb-12">
         {/* Email Activity Header */}
         <div className="mb-8">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6">
+          {/* Title and Buttons Row */}
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2 flex items-center gap-3">
                 <Activity className="w-8 h-8 text-blue-600" />
@@ -381,8 +394,9 @@ const EmailActivity = () => {
                 Track all sent and scheduled emails for each contact
               </p>
             </div>
-            
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:ml-auto">
               <Button
                 onClick={() => setShowFilters(!showFilters)}
                 variant="outline"
@@ -422,6 +436,28 @@ const EmailActivity = () => {
               </Button>
             </div>
           </div>
+
+          {/* Search Bar */}
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Search by email, contact..."
+              value={searchInput}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-10 pr-8 w-full h-9 rounded border border-gray-300 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoComplete="off"
+            />
+            {searchInput && (
+                <button
+                  onClick={() => handleSearchChange('')}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                  type="button"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
 
           {/* Filters */}
           {showFilters && (
@@ -571,8 +607,8 @@ const EmailActivity = () => {
 
         {/* Email Activity Table */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 mb-2">
               <Mail className="w-5 h-5" />
               Email Activity Log
             </CardTitle>

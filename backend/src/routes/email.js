@@ -14,6 +14,38 @@ const transparentPixel = Buffer.from([
   0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
 ]);
 
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    return value;
+  }
+}
+
+function buildEmailIdCandidates(rawEmailId) {
+  const raw = String(rawEmailId || '').trim();
+  if (!raw) return [];
+
+  const decodedOnce = safeDecodeURIComponent(raw);
+  const decodedTwice = safeDecodeURIComponent(decodedOnce);
+
+  const variants = [raw, decodedOnce, decodedTwice]
+    .map((id) => id.trim().replace(/^"+|"+$/g, ''))
+    .filter(Boolean);
+
+  const expanded = new Set();
+  variants.forEach((id) => {
+    const noBrackets = id.replace(/[<>]/g, '');
+    expanded.add(id);
+    expanded.add(noBrackets);
+    if (noBrackets) {
+      expanded.add(`<${noBrackets}>`);
+    }
+  });
+
+  return Array.from(expanded).filter(Boolean);
+}
+
 router.get('/track/open', async (req, res) => {
   try {
     const { emailId } = req.query;
@@ -39,20 +71,17 @@ router.get('/track/open', async (req, res) => {
       return sendPixel();
     }
 
-    // FUZZY MATCHING: Try to find the email even if brackets are missing or added
-    const cleanId = emailId.trim();
-    const idWithBrackets = cleanId.startsWith('<') ? cleanId : `<${cleanId}>`;
-    const idWithoutBrackets = cleanId.replace(/[<>]/g, '');
+    // FUZZY MATCHING: Handle encoded IDs from mail proxies + bracket/no-bracket variants
+    const emailIdCandidates = buildEmailIdCandidates(emailId);
+    if (emailIdCandidates.length === 0) {
+      return sendPixel();
+    }
 
     // Search for the original SENT event
     const sentEvent = await prisma.event.findFirst({
       where: {
         type: 'SENT',
-        OR: [
-          { emailId: cleanId },
-          { emailId: idWithBrackets },
-          { emailId: idWithoutBrackets }
-        ]
+        emailId: { in: emailIdCandidates }
       },
       include: {
         contact: true
@@ -70,11 +99,7 @@ router.get('/track/open', async (req, res) => {
       const alreadyOpened = await tx.event.findFirst({
         where: {
           type: 'OPENED',
-          OR: [
-            { emailId: cleanId },
-            { emailId: idWithBrackets },
-            { emailId: idWithoutBrackets }
-          ]
+          emailId: { in: emailIdCandidates }
         }
       });
 

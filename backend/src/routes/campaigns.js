@@ -15,7 +15,7 @@ router.use(authenticateToken);
 router.post('/', async (req, res) => {
   try {
     // Log complete incoming request body for debugging
-    console.log('📊 Campaign Creation Request - Full Body:', {
+    console.log('≡ƒôè Campaign Creation Request - Full Body:', {
       body: req.body,
       bodyKeys: Object.keys(req.body || {}),
       bodyTypes: Object.entries(req.body || {}).reduce((acc, [key, value]) => {
@@ -34,22 +34,22 @@ router.post('/', async (req, res) => {
 
     // Log warnings for old camelCase payloads for debugging
     if (req.body.campaignName && !req.body.campaign_name) {
-      console.warn('⚠️ Deprecated: Received camelCase "campaignName" field. Please use snake_case "campaign_name" for consistency.');
+      console.warn('ΓÜá∩╕Å Deprecated: Received camelCase "campaignName" field. Please use snake_case "campaign_name" for consistency.');
     }
     if (req.body.sequenceId && !req.body.sequence_id) {
-      console.warn('⚠️ Deprecated: Received camelCase "sequenceId" field. Please use snake_case "sequence_id" for consistency.');
+      console.warn('ΓÜá∩╕Å Deprecated: Received camelCase "sequenceId" field. Please use snake_case "sequence_id" for consistency.');
     }
     if (req.body.startDate && !req.body.start_date) {
-      console.warn('⚠️ Deprecated: Received camelCase "startDate" field. Please use snake_case "start_date" for consistency.');
+      console.warn('ΓÜá∩╕Å Deprecated: Received camelCase "startDate" field. Please use snake_case "start_date" for consistency.');
     }
     if (req.body.endDate && !req.body.end_date) {
-      console.warn('⚠️ Deprecated: Received camelCase "endDate" field. Please use snake_case "end_date" for consistency.');
+      console.warn('ΓÜá∩╕Å Deprecated: Received camelCase "endDate" field. Please use snake_case "end_date" for consistency.');
     }
     if (req.body.leadIds && !req.body.lead_ids) {
-      console.warn('⚠️ Deprecated: Received camelCase "leadIds" field. Please use snake_case "lead_ids" for consistency.');
+      console.warn('ΓÜá∩╕Å Deprecated: Received camelCase "leadIds" field. Please use snake_case "lead_ids" for consistency.');
     }
 
-    console.log('📊 Normalized Field Values:', {
+    console.log('≡ƒôè Normalized Field Values:', {
       campaign_name,
       sequence_id,
       description,
@@ -104,7 +104,7 @@ router.post('/', async (req, res) => {
 
     // Return detailed validation errors if any
     if (validationErrors.length > 0) {
-      console.error('❌ Campaign validation failed:', {
+      console.error('Γ¥î Campaign validation failed:', {
         errors: validationErrors,
         receivedData: { campaign_name, sequence_id, description, start_date, end_date, lead_ids }
       });
@@ -122,7 +122,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    console.log('✅ Campaign validation passed:', {
+    console.log('Γ£à Campaign validation passed:', {
       campaign_name: campaign_name.trim(),
       sequence_id: sequence_id.trim(),
       description: description || null,
@@ -176,7 +176,7 @@ router.post('/', async (req, res) => {
         userId: req.user.id
       };
 
-      console.log('📊 Creating campaign with Prisma data:', {
+      console.log('≡ƒôè Creating campaign with Prisma data:', {
         campaignData,
         dateHandling: {
           start_date_input: start_date,
@@ -219,7 +219,7 @@ router.post('/', async (req, res) => {
           }
         });
 
-        console.log(`📊 Cleared ${contactIds.length} potentially existing enrollments for sequence ${sequence_id}`);
+        console.log(`≡ƒôè Cleared ${contactIds.length} potentially existing enrollments for sequence ${sequence_id}`);
 
         // Create enrollments for all leads in this campaign
         const firstStep = sequence.steps[0];
@@ -237,13 +237,13 @@ router.post('/', async (req, res) => {
           skipDuplicates: true // Extra safety
         });
 
-        console.log(`✅ Created ${resultEnrollments.count} new enrollments for campaign: ${campaign.id}`);
+        console.log(`Γ£à Created ${resultEnrollments.count} new enrollments for campaign: ${campaign.id}`);
       }
 
       return campaign;
     });
 
-    console.log('✅ Campaign created successfully:', {
+    console.log('Γ£à Campaign created successfully:', {
       campaignId: result.id,
       campaignName: result.campaignName,
       leadsAdded: lead_ids.length
@@ -268,7 +268,7 @@ router.post('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error creating campaign:', error);
+    console.error('Γ¥î Error creating campaign:', error);
     res.status(500).json({
       error: 'Failed to create campaign',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -284,7 +284,7 @@ router.get('/', async (req, res) => {
     const { page = 1, limit = 20, isActive, sequenceId } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    console.log('📊 Fetching campaigns with filters:', {
+    console.log('≡ƒôè Fetching campaigns with filters:', {
       page: parseInt(page),
       limit: parseInt(limit),
       isActive,
@@ -328,7 +328,7 @@ router.get('/', async (req, res) => {
         
         // Log for debugging if sequence is missing
         if (!campaign.sequence) {
-          console.warn(`⚠️ Campaign ${campaign.id} is missing sequence relation in fetch!`);
+          console.warn(`ΓÜá∩╕Å Campaign ${campaign.id} is missing sequence relation in fetch!`);
         }
 
         return {
@@ -354,7 +354,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error fetching campaigns:', error);
+    console.error('Γ¥î Error fetching campaigns:', error);
     res.status(500).json({
       error: 'Failed to fetch campaigns',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -371,14 +371,14 @@ router.get('/:id', async (req, res) => {
 
     // Validate ID parameter exists
     if (!id || typeof id !== 'string' || id.trim().length === 0) {
-      console.error('❌ Invalid campaign ID parameter:', { id, type: typeof id });
+      console.error('Γ¥î Invalid campaign ID parameter:', { id, type: typeof id });
       return res.status(400).json({
         error: 'Invalid campaign ID parameter',
         details: 'Campaign ID must be a non-empty string'
       });
     }
 
-    console.log('📊 Fetching campaign details:', { campaignId: id, userId: req.user.id });
+    console.log('≡ƒôè Fetching campaign details:', { campaignId: id, userId: req.user.id });
 
     const campaign = await getCampaignWithStats(id, req.user);
 
@@ -414,7 +414,7 @@ router.get('/:id', async (req, res) => {
       }
     };
 
-    console.log('✅ Campaign details response formatted:', {
+    console.log('Γ£à Campaign details response formatted:', {
       campaignId: response.id,
       campaignName: response.campaignName,
       leadsCount: response.leads.length,
@@ -425,7 +425,7 @@ router.get('/:id', async (req, res) => {
     res.json(response);
 
   } catch (error) {
-    console.error('❌ Error fetching campaign:', error);
+    console.error('Γ¥î Error fetching campaign:', error);
     res.status(500).json({
       error: 'Failed to fetch campaign',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -441,7 +441,7 @@ router.patch('/:id', async (req, res) => {
     const { id } = req.params;
     const { campaign_name, description, start_date, end_date, isActive, add_lead_ids = [], remove_lead_ids = [] } = req.body;
 
-    console.log('📊 Updating campaign:', {
+    console.log('≡ƒôè Updating campaign:', {
       campaignId: id,
       updates: { campaign_name, description, start_date, end_date, isActive },
       add_lead_ids: add_lead_ids.length,
@@ -541,7 +541,7 @@ router.patch('/:id', async (req, res) => {
       return campaign;
     });
 
-    console.log('✅ Campaign updated successfully:', {
+    console.log('Γ£à Campaign updated successfully:', {
       campaignId: result.id,
       leadsAdded: add_lead_ids.length,
       leadsRemoved: remove_lead_ids.length
@@ -559,7 +559,7 @@ router.patch('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error updating campaign:', error);
+    console.error('Γ¥î Error updating campaign:', error);
     res.status(500).json({
       error: 'Failed to update campaign',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -576,7 +576,7 @@ router.delete('/:id', async (req, res) => {
 
     // Validate ID parameter exists
     if (!id || typeof id !== 'string' || id.trim().length === 0) {
-      console.error('❌ Invalid campaign ID parameter:', { id, type: typeof id });
+      console.error('Γ¥î Invalid campaign ID parameter:', { id, type: typeof id });
       return res.status(400).json({
         success: false,
         error: 'Invalid campaign ID parameter',
@@ -584,7 +584,7 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
-    console.log('🗑️ Deleting campaign:', { campaignId: id });
+    console.log('≡ƒùæ∩╕Å Deleting campaign:', { campaignId: id });
 
     // Verify campaign exists and get detailed counts
     const existingCampaign = await prisma.campaign.findFirst({
@@ -615,7 +615,7 @@ router.delete('/:id', async (req, res) => {
       events: await prisma.event.count({ where: { campaignId: id } })
     };
 
-    console.log('📊 Campaign deletion impact:', {
+    console.log('≡ƒôè Campaign deletion impact:', {
       campaignId: id,
       campaignName: existingCampaign.campaignName,
       sequenceName: existingCampaign.sequence?.name,
@@ -653,7 +653,7 @@ router.delete('/:id', async (req, res) => {
       };
     });
 
-    console.log('✅ Campaign deleted successfully:', {
+    console.log('Γ£à Campaign deleted successfully:', {
       campaignId: id,
       campaignName: existingCampaign.campaignName,
       deletionStats: {
@@ -677,7 +677,7 @@ router.delete('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error deleting campaign:', error);
+    console.error('Γ¥î Error deleting campaign:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to delete campaign',
@@ -823,3 +823,4 @@ async function getCampaignStats(campaignId, userId) {
 }
 
 module.exports = router;
+
