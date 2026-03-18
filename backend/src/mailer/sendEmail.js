@@ -199,15 +199,21 @@ async function generateUnsubscribeToken(contactId) {
 
     // IMPORTANT: Unsubscribe endpoint is on BACKEND, not frontend!
     // Get backend URL - NOT the frontend email.boostnow.in URL
-    let backendUrl;
+    let backendUrl = 'https://silver-tapir-929419.hostingersite.com'; // Default to production
     
-    if (process.env.BACKEND_URL && !process.env.BACKEND_URL.includes('localhost')) {
+    // Override with BACKEND_URL if explicitly set
+    if (process.env.BACKEND_URL) {
       backendUrl = process.env.BACKEND_URL.replace(/\/$/, '');
-    } else if (process.env.NODE_ENV === 'production') {
-      // Production backend domain
-      backendUrl = 'https://silver-tapir-929419.hostingersite.com';
-    } else {
+      console.log(`✅ Using explicit BACKEND_URL: ${backendUrl}`);
+    } 
+    // Fallback: Only use localhost if explicitly in development
+    else if (process.env.NODE_ENV === 'development') {
       backendUrl = 'http://localhost:3001';
+      console.log(`🔄 Development mode - using: ${backendUrl}`);
+    }
+    // If none set, verify production is used
+    else {
+      console.log(`✅ Production mode - using hardcoded: ${backendUrl}`);
     }
     
     console.log(`🔗 Unsubscribe URL using backend: ${backendUrl}`);
@@ -342,10 +348,14 @@ async function sendEmail({
       replaceTokens(signature, contactData, tokenOptions).replace(/\n/g, '<br>') : "";
 
     // Generate unsubscribe URL if contactId is provided (BEFORE creating HTML)
-    // Default: use backend URL for unsubscribe endpoint (NOT frontend!)
-    let backendUrl = process.env.BACKEND_URL && !process.env.BACKEND_URL.includes('localhost') 
-      ? process.env.BACKEND_URL.replace(/\/$/, '')
-      : (process.env.NODE_ENV === 'production' ? 'https://silver-tapir-929419.hostingersite.com' : 'http://localhost:3001');
+    // CRITICAL: Always use BACKEND URL, NOT frontend!
+    let backendUrl = 'https://silver-tapir-929419.hostingersite.com'; // Default production
+    
+    if (process.env.BACKEND_URL) {
+      backendUrl = process.env.BACKEND_URL.replace(/\/$/, '');
+    } else if (process.env.NODE_ENV === 'development') {
+      backendUrl = 'http://localhost:3001';
+    }
     
     let unsubscribeUrl = `${backendUrl}/api/unsubscribe/error`;
     if (contactId) {
