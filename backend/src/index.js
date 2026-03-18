@@ -324,7 +324,7 @@ app.use((err, req, res, next) => {
 // 4. SPA Fallback - Only for non-API routes
 app.get('*', (req, res, next) => {
   // If it's an API route that reached here, it means 404 in API
-  if (req.path.startsWith('/api/')) {
+  if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
   
