@@ -22,11 +22,11 @@ jobs:
         working-directory: ./backend
         run: npm install
       
-      - name: Sync Prisma Schema to Database
+      - name: Deploy Database Migrations
         working-directory: ./backend
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma db push --skip-generate
+        run: npx prisma migrate deploy
       
       - name: Regenerate Prisma Client
         working-directory: ./backend
