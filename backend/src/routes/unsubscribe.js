@@ -129,6 +129,77 @@ router.post('/complete', async (req, res) => {
   }
 });
 
+// POST /api/unsubscribe/resubscribe - Public: resubscribe a contact using unsubscribe token
+router.post('/resubscribe', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    const unsubscribeToken = await prisma.unsubscribeToken.findUnique({
+      where: { token },
+      include: { contact: true }
+    });
+
+    if (!unsubscribeToken) {
+      return res.status(404).json({ error: 'Invalid or expired unsubscribe link' });
+    }
+
+    if (!unsubscribeToken.contact) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    // Check token age
+    const tokenAge = Date.now() - unsubscribeToken.createdAt.getTime();
+    if (tokenAge > 90 * 24 * 60 * 60 * 1000) {  // 90 days for resubscribe
+      return res.status(400).json({ error: 'Resubscribe link has expired. Please contact support.' });
+    }
+
+    const now = new Date();
+
+    // Update contact: change from UNSUBSCRIBED back to ACTIVE
+    const contact = await prisma.contact.update({
+      where: { id: unsubscribeToken.contactId },
+      data: {
+        status: 'ACTIVE',
+        unsubscribeReason: null,
+        unsubscribedAt: null,
+        updatedAt: now
+      }
+    });
+
+    console.log(`✅ Contact resubscribed: ${contact.email}`);
+
+    // Log resubscribe event
+    await prisma.event.create({
+      data: {
+        contactId: unsubscribeToken.contactId,
+        type: 'RESUBSCRIBED',
+        details: JSON.stringify({
+          method: 'form',
+          userAgent: req.get('User-Agent'),
+          ip: req.ip || req.connection?.remoteAddress,
+          resubscribedAt: now.toISOString()
+        })
+      }
+    }).catch(err => {
+      console.log('Note: Could not create RESUBSCRIBED event:', err.message);
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Successfully resubscribed', 
+      email: contact.email 
+    });
+
+  } catch (error) {
+    console.error('Error processing resubscribe:', error);
+    res.status(500).json({ error: 'Failed to process resubscribe request' });
+  }
+});
+
 // GET /api/unsubscribe/admin/list - SUPERADMIN/MANAGER: list all unsubscribed contacts
 router.get('/admin/list', authenticateToken, async (req, res) => {
   try {

@@ -21,6 +21,7 @@ const UnsubscribePage = () => {
   const [reason, setReason] = useState("");
   const [status, setStatus] = useState<PageStatus>("loading");
   const [errorMsg, setErrorMsg] = useState("");
+  const [isResubscribing, setIsResubscribing] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -118,6 +119,36 @@ const UnsubscribePage = () => {
     }
   };
 
+  const handleResubscribe = async () => {
+    setIsResubscribing(true);
+    try {
+      const url = `${API_BASE_URL}/unsubscribe/resubscribe`;
+      console.log('📤 Submitting resubscribe to:', url);
+      
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      console.log('✅ Resubscribe response:', { status: res.status, data });
+      
+      if (res.ok && data.success) {
+        setStatus("success");
+        setEmail(data.email || email);
+      } else {
+        setErrorMsg(data.error || "Failed to resubscribe. Please try again.");
+        setStatus("error");
+      }
+    } catch (error) {
+      console.error('❌ Error during resubscribe:', error);
+      setErrorMsg(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setStatus("error");
+    } finally {
+      setIsResubscribing(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -193,9 +224,51 @@ const UnsubscribePage = () => {
             <h2 style={{ color: "#2e7d32", marginBottom: "12px", fontSize: "28px", fontWeight: "600" }}>
               Already Unsubscribed
             </h2>
-            <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6" }}>
+            <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6", marginBottom: "28px" }}>
               You have already been unsubscribed from our mailing list(s). No further action is needed.
             </p>
+            
+            <div style={{ borderTop: "1px solid #e0e0e0", paddingTop: "24px" }}>
+              <p style={{ color: "#666", fontSize: "14px", marginBottom: "16px" }}>
+                Changed your mind?
+              </p>
+              <button
+                onClick={handleResubscribe}
+                disabled={isResubscribing}
+                style={{
+                  width: "100%",
+                  padding: "12px 28px",
+                  fontSize: "15px",
+                  fontWeight: "600",
+                  border: "2px solid #667eea",
+                  borderRadius: "8px",
+                  cursor: isResubscribing ? "not-allowed" : "pointer",
+                  transition: "all 0.3s ease",
+                  background: isResubscribing ? "#f5f5f5" : "#fff",
+                  color: isResubscribing ? "#999" : "#667eea",
+                  opacity: isResubscribing ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (!isResubscribing) {
+                    e.currentTarget.style.background = "#667eea";
+                    e.currentTarget.style.color = "#fff";
+                    e.currentTarget.style.boxShadow = "0 4px 15px rgba(102, 126, 234, 0.3)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isResubscribing) {
+                    e.currentTarget.style.background = "#fff";
+                    e.currentTarget.style.color = "#667eea";
+                    e.currentTarget.style.boxShadow = "none";
+                  }
+                }}
+              >
+                {isResubscribing ? "Processing..." : "Yes, Re-subscribe Me"}
+              </button>
+              <p style={{ color: "#999", fontSize: "13px", marginTop: "12px", margin: "12px 0 0 0" }}>
+                We'll add your email back to our mailing list
+              </p>
+            </div>
           </>
         )}
 

@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     proxy: {
       '/api': {
-        target: 'https://silver-tapir-929419.hostingersite.com',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
       },
       '/socket.io': {
