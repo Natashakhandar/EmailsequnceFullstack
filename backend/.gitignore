@@ -84,7 +84,7 @@ jspm_packages/
 .vscode-test
 
 # Prisma
-prisma/migrations/
+# prisma/migrations/
 !prisma/migrations/.gitkeep
 
 # OS generated files
