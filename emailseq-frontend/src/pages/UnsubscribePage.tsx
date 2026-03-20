@@ -222,15 +222,15 @@ const UnsubscribePage = () => {
           <>
             <div style={{ fontSize: "64px", marginBottom: "20px", animation: "pulse 2s ease-in-out infinite" }}>✅</div>
             <h2 style={{ color: "#2e7d32", marginBottom: "12px", fontSize: "28px", fontWeight: "600" }}>
-              Already Unsubscribed
+              You're Unsubscribed
             </h2>
             <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6", marginBottom: "28px" }}>
-              You have already been unsubscribed from our mailing list(s). No further action is needed.
+              You have been unsubscribed from our mailing list. You won't receive any more emails from us.
             </p>
             
             <div style={{ borderTop: "1px solid #e0e0e0", paddingTop: "24px" }}>
-              <p style={{ color: "#666", fontSize: "14px", marginBottom: "16px" }}>
-                Changed your mind?
+              <p style={{ color: "#666", fontSize: "14px", marginBottom: "16px", fontWeight: "500" }}>
+                Want to receive emails again?
               </p>
               <button
                 onClick={handleResubscribe}
@@ -266,7 +266,7 @@ const UnsubscribePage = () => {
                 {isResubscribing ? "Processing..." : "Yes, Re-subscribe Me"}
               </button>
               <p style={{ color: "#999", fontSize: "13px", marginTop: "12px", margin: "12px 0 0 0" }}>
-                We'll add your email back to our mailing list
+                You'll start receiving our emails again
               </p>
             </div>
           </>
