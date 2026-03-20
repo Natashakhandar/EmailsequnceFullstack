@@ -185,43 +185,28 @@ async function verifyConnectionDetailed(userConfig = null) {
   }
 }
 
-// Generate unsubscribe token and URL
+// Generate unsubscribe token and URL (points to frontend unsubscribe page)
 async function generateUnsubscribeToken(contactId) {
   try {
     const token = uuidv4();
 
     await prisma.unsubscribeToken.create({
-      data: {
-        token,
-        contactId
-      }
+      data: { token, contactId }
     });
 
-    // IMPORTANT: Unsubscribe endpoint is on BACKEND, not frontend!
-    // Get backend URL - NOT the frontend email.boostnow.in URL
-    let backendUrl = 'https://silver-tapir-929419.hostingersite.com'; // Default to production
-    
-    // Override with BACKEND_URL if explicitly set
-    if (process.env.BACKEND_URL) {
-      backendUrl = process.env.BACKEND_URL.replace(/\/$/, '');
-      console.log(`✅ Using explicit BACKEND_URL: ${backendUrl}`);
-    } 
-    // Fallback: Only use localhost if explicitly in development
-    else if (process.env.NODE_ENV === 'development') {
-      backendUrl = 'http://localhost:3001';
-      console.log(`🔄 Development mode - using: ${backendUrl}`);
+    // Use FRONTEND_URL so clients land on the form page (with reason dropdown)
+    let frontendUrl = 'https://email.boostnow.in'; // default production frontend
+    if (process.env.FRONTEND_URL) {
+      frontendUrl = process.env.FRONTEND_URL.replace(/\/$/, '');
+    } else if (process.env.NODE_ENV === 'development') {
+      frontendUrl = 'http://localhost:5173';
     }
-    // If none set, verify production is used
-    else {
-      console.log(`✅ Production mode - using hardcoded: ${backendUrl}`);
-    }
-    
-    console.log(`🔗 Unsubscribe URL using backend: ${backendUrl}`);
-    return `${backendUrl}/api/unsubscribe/${token}`;
+
+    console.log(`🔗 Unsubscribe URL using frontend: ${frontendUrl}`);
+    return `${frontendUrl}/unsubscribe?token=${token}`;
   } catch (error) {
     console.error('Error generating unsubscribe token:', error);
-    // Fallback to production backend domain - NOT frontend
-    return 'https://silver-tapir-929419.hostingersite.com/api/unsubscribe/error-generating-token-please-contact-support';
+    return 'https://email.boostnow.in/unsubscribe?token=error';
   }
 }
 

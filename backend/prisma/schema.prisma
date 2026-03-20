@@ -79,7 +79,9 @@ model Contact {
   company   String?
   timezone  String        @default("UTC")
   status    ContactStatus @default(ACTIVE)
-  leadListName String?    @map("lead_list_name")
+  leadListName      String?   @map("lead_list_name")
+  unsubscribeReason String?   @map("unsubscribe_reason")
+  unsubscribedAt    DateTime? @map("unsubscribed_at")
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -188,7 +190,7 @@ model Enrollment {
 
 model Event {
   id           String    @id @default(cuid())
-  enrollmentId String
+  enrollmentId String?   // Nullable - campaign-level events may not have an enrollment
   contactId    String
   campaignId   String? // Link events to campaigns
   type         EventType
@@ -197,9 +199,9 @@ model Event {
   emailId      String? // Message-ID from sent email
 
   // Relations
-  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  contact    Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  campaign   Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  enrollment Enrollment? @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  contact    Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  campaign   Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@map("events")
 }

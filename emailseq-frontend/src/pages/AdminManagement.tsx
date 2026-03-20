@@ -20,7 +20,10 @@ import {
   Edit2,
   Trash2,
   MoreVertical,
-  Users as UsersIcon
+  Users as UsersIcon,
+  UserX,
+  CalendarDays,
+  MessageSquare
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -56,6 +59,11 @@ const AdminManagement = () => {
   const [passwordUserId, setPasswordUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
 
+  const [activeTab, setActiveTab] = useState<"users" | "unsubscribed">("users");
+  const [unsubscribedUsers, setUnsubscribedUsers] = useState<any[]>([]);
+  const [unsubLoadError, setUnsubLoadError] = useState("");
+  const [unsubLoading, setUnsubLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -87,6 +95,25 @@ const AdminManagement = () => {
 
     checkUserRole();
   }, []);
+
+  const fetchUnsubscribedUsers = async () => {
+    setUnsubLoading(true);
+    setUnsubLoadError("");
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(
+        `${(await import('@/lib/api')).API_BASE_URL}/unsubscribe/admin/list?limit=200`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load');
+      setUnsubscribedUsers(data.contacts || []);
+    } catch (e: any) {
+      setUnsubLoadError(e.message || 'Failed to load unsubscribed users');
+    } finally {
+      setUnsubLoading(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -552,8 +579,122 @@ const AdminManagement = () => {
           </Alert>
         )}
 
+        {/* Tab switcher */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab("users")}
+            className={`flex items-center gap-2 px-5 py-2 rounded-xl font-medium text-sm transition-colors ${
+              activeTab === "users"
+                ? "bg-primary text-white shadow"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            <UsersIcon className="w-4 h-4" />
+            Users
+          </button>
+          {currentUser?.role === 'SUPERADMIN' && (
+            <button
+              onClick={() => {
+                setActiveTab("unsubscribed");
+                fetchUnsubscribedUsers();
+              }}
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl font-medium text-sm transition-colors ${
+                activeTab === "unsubscribed"
+                  ? "bg-primary text-white shadow"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              <UserX className="w-4 h-4" />
+              Unsubscribed Users
+            </button>
+          )}
+        </div>
+
+        {/* Unsubscribed Users Tab */}
+        {activeTab === "unsubscribed" && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            {unsubLoading && (
+              <div className="flex items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+              </div>
+            )}
+            {unsubLoadError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{unsubLoadError}</AlertDescription>
+              </Alert>
+            )}
+            {!unsubLoading && !unsubLoadError && (
+              <>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {unsubscribedUsers.length} contact{unsubscribedUsers.length !== 1 ? 's' : ''} have unsubscribed from email sequences.
+                </p>
+                {unsubscribedUsers.length === 0 ? (
+                  <div className="text-center py-16">
+                    <UserX className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No Unsubscribed Users</h3>
+                    <p className="text-muted-foreground">No contacts have unsubscribed yet.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-muted/30">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-muted/40 text-left">
+                          <th className="px-4 py-3 font-semibold">Email</th>
+                          <th className="px-4 py-3 font-semibold">Name</th>
+                          <th className="px-4 py-3 font-semibold">
+                            <span className="flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" /> Reason</span>
+                          </th>
+                          <th className="px-4 py-3 font-semibold">
+                            <span className="flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5" /> Date</span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {unsubscribedUsers.map((u, i) => (
+                          <tr key={u.id} className={i % 2 === 0 ? "bg-background" : "bg-muted/10"}>
+                            <td className="px-4 py-3 font-medium">{u.email}</td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              {[u.firstName, u.lastName].filter(Boolean).join(' ') || '—'}
+                            </td>
+                            <td className="px-4 py-3">
+                              {u.unsubscribeReason ? (
+                                <span className="inline-block bg-orange-100 text-orange-700 text-xs rounded-full px-2 py-0.5">
+                                  {u.unsubscribeReason}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              {u.unsubscribedAt
+                                ? new Date(u.unsubscribedAt).toLocaleDateString('en-IN', {
+                                    year: 'numeric', month: 'short', day: 'numeric',
+                                    hour: '2-digit', minute: '2-digit'
+                                  })
+                                : u.updatedAt
+                                  ? new Date(u.updatedAt).toLocaleDateString('en-IN', {
+                                      year: 'numeric', month: 'short', day: 'numeric'
+                                    })
+                                  : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </motion.div>
+        )}
+
         {/* Users Grid */}
-        <motion.div
+        {activeTab === "users" && <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -653,7 +794,7 @@ const AdminManagement = () => {
           })}
         </motion.div>
 
-        {users.length === 0 && !loading && (
+        {users.length === 0 && !loading && activeTab === "users" && (
           <div className="text-center py-12">
             <UserIcon className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">No Users Found</h3>

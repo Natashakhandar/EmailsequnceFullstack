@@ -4,6 +4,156 @@ const prisma = require('../db/prismaClient');
 const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
+// GET /api/unsubscribe/info/:token - Public: get contact email for unsubscribe form
+router.get('/info/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const unsubscribeToken = await prisma.unsubscribeToken.findUnique({
+      where: { token },
+      include: { contact: { select: { email: true, status: true } } }
+    });
+
+    if (!unsubscribeToken) {
+      return res.status(404).json({ error: 'Invalid unsubscribe link' });
+    }
+
+    if (unsubscribeToken.usedAt || unsubscribeToken.contact?.status === 'UNSUBSCRIBED') {
+      return res.status(400).json({ error: 'Already unsubscribed', alreadyUnsubscribed: true });
+    }
+
+    const tokenAge = Date.now() - unsubscribeToken.createdAt.getTime();
+    if (tokenAge > 30 * 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ error: 'Unsubscribe link has expired' });
+    }
+
+    res.json({ email: unsubscribeToken.contact.email });
+  } catch (error) {
+    console.error('Error fetching unsubscribe info:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/unsubscribe/complete - Public: complete unsubscribe with reason
+router.post('/complete', async (req, res) => {
+  try {
+    const { token, reason } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    const unsubscribeToken = await prisma.unsubscribeToken.findUnique({
+      where: { token },
+      include: { contact: true }
+    });
+
+    if (!unsubscribeToken) {
+      return res.status(404).json({ error: 'Invalid unsubscribe link' });
+    }
+
+    if (unsubscribeToken.usedAt || unsubscribeToken.contact?.status === 'UNSUBSCRIBED') {
+      return res.status(400).json({ error: 'Already unsubscribed', alreadyUnsubscribed: true });
+    }
+
+    const tokenAge = Date.now() - unsubscribeToken.createdAt.getTime();
+    if (tokenAge > 30 * 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ error: 'Unsubscribe link has expired' });
+    }
+
+    const now = new Date();
+
+    // Update contact: mark unsubscribed with reason and date
+    const contact = await prisma.contact.update({
+      where: { id: unsubscribeToken.contactId },
+      data: {
+        status: 'UNSUBSCRIBED',
+        unsubscribeReason: reason || null,
+        unsubscribedAt: now
+      }
+    });
+
+    // Stop all active enrollments
+    await prisma.enrollment.updateMany({
+      where: { contactId: unsubscribeToken.contactId, status: 'ACTIVE' },
+      data: { status: 'UNSUBSCRIBED', completedAt: now, nextSendAt: null }
+    });
+
+    // Mark token as used
+    await prisma.unsubscribeToken.update({
+      where: { id: unsubscribeToken.id },
+      data: { usedAt: now }
+    });
+
+    // Log unsubscribe event for each affected enrollment
+    const enrollments = await prisma.enrollment.findMany({
+      where: { contactId: unsubscribeToken.contactId, status: 'UNSUBSCRIBED' }
+    });
+
+    for (const enrollment of enrollments) {
+      await prisma.event.create({
+        data: {
+          enrollmentId: enrollment.id,
+          contactId: unsubscribeToken.contactId,
+          type: 'UNSUBSCRIBED',
+          details: JSON.stringify({
+            method: 'form',
+            reason: reason || null,
+            userAgent: req.get('User-Agent'),
+            ip: req.ip
+          })
+        }
+      });
+    }
+
+    res.json({ success: true, message: 'Successfully unsubscribed', email: contact.email });
+  } catch (error) {
+    console.error('Error completing unsubscribe:', error);
+    res.status(500).json({ error: 'Failed to process unsubscribe request' });
+  }
+});
+
+// GET /api/unsubscribe/admin/list - SUPERADMIN/MANAGER: list all unsubscribed contacts
+router.get('/admin/list', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'SUPERADMIN' && req.user.role !== 'MANAGER') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    const [contacts, total] = await prisma.$transaction([
+      prisma.contact.findMany({
+        where: { status: 'UNSUBSCRIBED' },
+        orderBy: { unsubscribedAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          company: true,
+          unsubscribeReason: true,
+          unsubscribedAt: true,
+          updatedAt: true
+        }
+      }),
+      prisma.contact.count({ where: { status: 'UNSUBSCRIBED' } })
+    ]);
+
+    res.json({
+      contacts,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    });
+  } catch (error) {
+    console.error('Error fetching unsubscribed list:', error);
+    res.status(500).json({ error: 'Failed to fetch unsubscribed users' });
+  }
+});
+
 // GET /api/unsubscribe/:token - Handle unsubscribe via token
 router.get('/:token', async (req, res) => {
   try {

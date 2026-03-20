@@ -18,6 +18,7 @@ import AdminManagement from "./pages/AdminManagement";
 import SmtpSettings from "./pages/SmtpSettings";
 import CampaignCreate from "./pages/CampaignCreate";
 import Campaigns from "./pages/Campaigns";
+import UnsubscribePage from "./pages/UnsubscribePage";
 
 import { api } from "@/lib/api";
 
@@ -39,6 +40,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/unsubscribe" element={<UnsubscribePage />} />
 
           {/* Protected Routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
