@@ -188,11 +188,18 @@ async function verifyConnectionDetailed(userConfig = null) {
 // Generate unsubscribe token and URL (points to frontend unsubscribe page)
 async function generateUnsubscribeToken(contactId) {
   try {
+    if (!contactId) {
+      console.error('❌ generateUnsubscribeToken called with no contactId!');
+      return 'https://email.boostnow.in/unsubscribe?token=error';
+    }
+
     const token = uuidv4();
 
-    await prisma.unsubscribeToken.create({
+    const created = await prisma.unsubscribeToken.create({
       data: { token, contactId }
     });
+
+    console.log(`✅ Unsubscribe token created for contact ${contactId}: ${token}`);
 
     // Use FRONTEND_URL so clients land on the form page (with reason dropdown)
     let frontendUrl = 'https://email.boostnow.in'; // default production frontend
@@ -202,10 +209,12 @@ async function generateUnsubscribeToken(contactId) {
       frontendUrl = 'http://localhost:5173';
     }
 
-    console.log(`🔗 Unsubscribe URL using frontend: ${frontendUrl}`);
-    return `${frontendUrl}/unsubscribe?token=${token}`;
+    const unsubscribeUrl = `${frontendUrl}/unsubscribe?token=${token}`;
+    console.log(`🔗 Unsubscribe URL: ${unsubscribeUrl}`);
+    return unsubscribeUrl;
   } catch (error) {
-    console.error('Error generating unsubscribe token:', error);
+    console.error('❌ Error generating unsubscribe token:', error);
+    console.error('Error details:', error.message);
     return 'https://email.boostnow.in/unsubscribe?token=error';
   }
 }

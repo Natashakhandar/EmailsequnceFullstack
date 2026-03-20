@@ -8,29 +8,45 @@ const router = express.Router();
 router.get('/info/:token', async (req, res) => {
   try {
     const { token } = req.params;
+    console.log('📧 Unsubscribe token lookup:', token);
 
     const unsubscribeToken = await prisma.unsubscribeToken.findUnique({
       where: { token },
-      include: { contact: { select: { email: true, status: true } } }
+      include: { contact: { select: { email: true, status: true, id: true } } }
     });
 
     if (!unsubscribeToken) {
-      return res.status(404).json({ error: 'Invalid unsubscribe link' });
+      console.warn('⚠️ Token not found:', token);
+      return res.status(404).json({ error: 'Invalid unsubscribe link. Token not found in database.' });
     }
 
-    if (unsubscribeToken.usedAt || unsubscribeToken.contact?.status === 'UNSUBSCRIBED') {
+    if (!unsubscribeToken.contact) {
+      console.error('❌ Contact not found for token:', token);
+      return res.status(404).json({ error: 'Contact not found for this token.' });
+    }
+
+    if (unsubscribeToken.usedAt) {
+      console.log('⚠️ Token already used:', token);
+      return res.status(400).json({ error: 'Already unsubscribed', alreadyUnsubscribed: true });
+    }
+
+    if (unsubscribeToken.contact?.status === 'UNSUBSCRIBED') {
+      console.log('⚠️ Contact already unsubscribed:', unsubscribeToken.contact.id);
       return res.status(400).json({ error: 'Already unsubscribed', alreadyUnsubscribed: true });
     }
 
     const tokenAge = Date.now() - unsubscribeToken.createdAt.getTime();
     if (tokenAge > 30 * 24 * 60 * 60 * 1000) {
-      return res.status(400).json({ error: 'Unsubscribe link has expired' });
+      console.warn('⚠️ Token expired:', token);
+      return res.status(400).json({ error: 'Unsubscribe link has expired. Please contact support.' });
     }
 
+    console.log('✅ Token valid for:', unsubscribeToken.contact.email);
     res.json({ email: unsubscribeToken.contact.email });
   } catch (error) {
-    console.error('Error fetching unsubscribe info:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('❌ Error fetching unsubscribe info:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Server error. Please try again later.', details: process.env.NODE_ENV === 'development' ? error.message : undefined });
   }
 });
 

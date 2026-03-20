@@ -31,13 +31,27 @@ const UnsubscribePage = () => {
     const fetchInfo = async () => {
       try {
         const url = `${API_BASE_URL}/unsubscribe/info/${encodeURIComponent(token)}`;
-        console.log('🔗 Fetching unsubscribe info from:', url);
+        console.log('🔗 API_BASE_URL:', API_BASE_URL);
+        console.log('🔗 Full URL:', url);
+        console.log('🔗 Token:', token);
         
         const res = await fetch(url, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
-          // Don't include credentials for public endpoint
+          credentials: 'omit',
         });
+        
+        console.log('📨 Response status:', res.status);
+        console.log('📨 Response headers:', res.headers);
+        
+        // Check if response is JSON or HTML
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('text/html')) {
+          console.error('❌ Backend returned HTML instead of JSON (possible server error)');
+          setStatus("error");
+          setErrorMsg("Backend server error. Please try again later.");
+          return;
+        }
         
         const data = await res.json();
         console.log('📨 Unsubscribe response:', { status: res.status, data });
@@ -47,14 +61,23 @@ const UnsubscribePage = () => {
             setStatus("already");
           } else {
             setStatus("invalid");
-            setErrorMsg(data.error || "Invalid unsubscribe link.");
+            setErrorMsg(data.error || "Invalid unsubscribe link. The token may have expired or already been used.");
           }
         } else {
-          setEmail(data.email);
-          setStatus("ready");
+          if (data.email) {
+            setEmail(data.email);
+            setStatus("ready");
+          } else {
+            setStatus("invalid");
+            setErrorMsg("No email found in response.");
+          }
         }
       } catch (error) {
         console.error('❌ Error fetching unsubscribe info:', error);
+        console.error('❌ Error details:', {
+          name: error instanceof Error ? error.name : 'Unknown',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
         setStatus("error");
         setErrorMsg(`Failed to load: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
