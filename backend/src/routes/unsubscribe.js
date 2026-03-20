@@ -25,12 +25,9 @@ router.get('/info/:token', async (req, res) => {
       return res.status(404).json({ error: 'Contact not found for this token.' });
     }
 
-    if (unsubscribeToken.usedAt) {
-      console.log('⚠️ Token already used:', token);
-      return res.status(400).json({ error: 'Already unsubscribed', alreadyUnsubscribed: true });
-    }
-
-    if (unsubscribeToken.contact?.status === 'UNSUBSCRIBED') {
+    // If contact is currently ACTIVE (resubscribed), allow them to unsubscribe again
+    // If contact is UNSUBSCRIBED and token was used, show "already unsubscribed" only if they haven't resubscribed
+    if (unsubscribeToken.contact?.status === 'UNSUBSCRIBED' && unsubscribeToken.usedAt) {
       console.log('⚠️ Contact already unsubscribed:', unsubscribeToken.contact.id);
       return res.status(400).json({ error: 'Already unsubscribed', alreadyUnsubscribed: true });
     }
@@ -68,7 +65,9 @@ router.post('/complete', async (req, res) => {
       return res.status(404).json({ error: 'Invalid unsubscribe link' });
     }
 
-    if (unsubscribeToken.usedAt || unsubscribeToken.contact?.status === 'UNSUBSCRIBED') {
+    // If contact is UNSUBSCRIBED and token was previously used, don't allow another unsubscribe
+    // But if they resubscribed (status = ACTIVE), they can unsubscribe again
+    if (unsubscribeToken.contact?.status === 'UNSUBSCRIBED' && unsubscribeToken.usedAt) {
       return res.status(400).json({ error: 'Already unsubscribed', alreadyUnsubscribed: true });
     }
 

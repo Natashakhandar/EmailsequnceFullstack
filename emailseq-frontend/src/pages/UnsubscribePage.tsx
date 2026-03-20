@@ -11,7 +11,7 @@ const REASONS = [
   "Others",
 ];
 
-type PageStatus = "loading" | "ready" | "submitting" | "success" | "already" | "invalid" | "error";
+type PageStatus = "loading" | "ready" | "submitting" | "success" | "resubscribed" | "already" | "invalid" | "error";
 
 const UnsubscribePage = () => {
   const [searchParams] = useSearchParams();
@@ -134,7 +134,7 @@ const UnsubscribePage = () => {
       console.log('✅ Resubscribe response:', { status: res.status, data });
       
       if (res.ok && data.success) {
-        setStatus("success");
+        setStatus("resubscribed");
         setEmail(data.email || email);
       } else {
         setErrorMsg(data.error || "Failed to resubscribe. Please try again.");
@@ -315,6 +315,35 @@ const UnsubscribePage = () => {
             </div>
             <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6" }}>
               You will no longer receive emails from us. Thank you for letting us know your preferences.
+            </p>
+          </>
+        )}
+
+        {/* Re-subscribed */}
+        {status === "resubscribed" && (
+          <>
+            <div style={{ fontSize: "64px", marginBottom: "20px", animation: "pulse 2s ease-in-out infinite" }}>✅</div>
+            <h2 style={{ color: "#2e7d32", marginBottom: "8px", fontSize: "28px", fontWeight: "600" }}>
+              Re-subscribed Successfully
+            </h2>
+            <div
+              style={{
+                background: "#f0f8f0",
+                padding: "16px",
+                borderRadius: "8px",
+                margin: "20px 0",
+                borderLeft: "4px solid #2e7d32",
+              }}
+            >
+              <p style={{ color: "#1b5e20", fontWeight: "600", fontSize: "16px", margin: "0 0 4px 0" }}>
+                {email}
+              </p>
+              <p style={{ color: "#388e3c", fontSize: "14px", margin: "0" }}>
+                has been re-subscribed to our mailing list
+              </p>
+            </div>
+            <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6" }}>
+              Welcome back! You will now receive emails from us again.
             </p>
           </>
         )}
