@@ -19,6 +19,7 @@ import SmtpSettings from "./pages/SmtpSettings";
 import CampaignCreate from "./pages/CampaignCreate";
 import Campaigns from "./pages/Campaigns";
 import UnsubscribePage from "./pages/UnsubscribePage";
+import UnsubscribedContacts from "./pages/UnsubscribedContacts";
 
 import { api } from "@/lib/api";
 
@@ -55,6 +56,7 @@ const App = () => (
           <Route path="/sequences-simplified" element={<ProtectedRoute><SimplifiedSequences /></ProtectedRoute>} />
           <Route path="/admin-management" element={<ProtectedRoute><AdminManagement /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+          <Route path="/unsubscribed-contacts" element={<ProtectedRoute><UnsubscribedContacts /></ProtectedRoute>} />
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

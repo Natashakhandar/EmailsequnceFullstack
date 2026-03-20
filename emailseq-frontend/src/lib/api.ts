@@ -394,6 +394,23 @@ class ApiClient {
     });
   }
 
+  async getUnsubscribedContacts(params?: { page?: number; limit?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+
+    const query = searchParams.toString();
+    return this.request<{
+      contacts: Array<{
+        id: string;
+        name: string;
+        email: string;
+        reason: string;
+        unsubscribedAt: string;
+      }>;
+      pagination: any;
+    }>(`/unsubscribe/contacts/list${query ? `?${query}` : ''}`).then((data) => data.contacts);
+  }
 
   // Templates API
   async getTemplates(params?: { page?: number; limit?: number; isActive?: boolean }) {

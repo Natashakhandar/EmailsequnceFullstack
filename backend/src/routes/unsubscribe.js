@@ -517,4 +517,64 @@ router.get('/page/:token', async (req, res) => {
   }
 });
 
+// GET /api/unsubscribe/contacts/list - Get authenticated user's unsubscribed contacts
+router.get('/contacts/list', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 100;
+    const skip = (page - 1) * limit;
+
+    // Get unsubscribed contacts for the authenticated user
+    const [contacts, total] = await prisma.$transaction([
+      prisma.contact.findMany({
+        where: {
+          userId: userId,
+          status: 'UNSUBSCRIBED'
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          unsubscribeReason: true,
+          unsubscribedAt: true,
+          updatedAt: true
+        }
+      }),
+      prisma.contact.count({
+        where: {
+          userId: userId,
+          status: 'UNSUBSCRIBED'
+        }
+      })
+    ]);
+
+    // Format response with combined name field
+    const formattedContacts = contacts.map((contact) => ({
+      id: contact.id,
+      name: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email.split('@')[0],
+      email: contact.email,
+      reason: contact.unsubscribeReason || 'Not specified',
+      unsubscribedAt: contact.unsubscribedAt || contact.updatedAt
+    }));
+
+    res.json({
+      contacts: formattedContacts,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching unsubscribed contacts:', error);
+    res.status(500).json({ error: 'Failed to fetch unsubscribed contacts' });
+  }
+});
+
 module.exports = router;
