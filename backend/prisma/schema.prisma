@@ -86,10 +86,11 @@ model Contact {
   updatedAt DateTime      @updatedAt
 
   // Relations
-  enrollments   Enrollment[]
-  events        Event[]
-  campaignLeads CampaignLead[]
-  user          User?          @relation(fields: [userId], references: [id])
+  enrollments       Enrollment[]
+  events            Event[]
+  campaignLeads     CampaignLead[]
+  unsubscribeTokens UnsubscribeToken[]
+  user              User?          @relation(fields: [userId], references: [id])
 
   @@unique([email, userId])
   @@map("contacts")
@@ -210,6 +211,7 @@ model UnsubscribeToken {
   id        String    @id @default(cuid())
   token     String    @unique
   contactId String
+  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())
   usedAt    DateTime?
 
