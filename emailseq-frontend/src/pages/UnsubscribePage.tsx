@@ -28,9 +28,20 @@ const UnsubscribePage = () => {
       return;
     }
 
-    fetch(`${API_BASE_URL}/unsubscribe/info/${encodeURIComponent(token)}`)
-      .then(async (res) => {
+    const fetchInfo = async () => {
+      try {
+        const url = `${API_BASE_URL}/unsubscribe/info/${encodeURIComponent(token)}`;
+        console.log('🔗 Fetching unsubscribe info from:', url);
+        
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          // Don't include credentials for public endpoint
+        });
+        
         const data = await res.json();
+        console.log('📨 Unsubscribe response:', { status: res.status, data });
+        
         if (!res.ok) {
           if (data.alreadyUnsubscribed) {
             setStatus("already");
@@ -42,11 +53,14 @@ const UnsubscribePage = () => {
           setEmail(data.email);
           setStatus("ready");
         }
-      })
-      .catch(() => {
+      } catch (error) {
+        console.error('❌ Error fetching unsubscribe info:', error);
         setStatus("error");
-        setErrorMsg("Failed to load. Please try again.");
-      });
+        setErrorMsg(`Failed to load: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    };
+
+    fetchInfo();
   }, [token]);
 
   const handleUnsubscribe = async () => {
@@ -54,12 +68,18 @@ const UnsubscribePage = () => {
     setStatus("submitting");
 
     try {
-      const res = await fetch(`${API_BASE_URL}/unsubscribe/complete`, {
+      const url = `${API_BASE_URL}/unsubscribe/complete`;
+      console.log('📤 Submitting unsubscribe to:', url);
+      
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, reason }),
+        // Don't include credentials for public endpoint
       });
       const data = await res.json();
+      console.log('✅ Unsubscribe response:', { status: res.status, data });
+      
       if (res.ok && data.success) {
         setStatus("success");
       } else if (data.alreadyUnsubscribed) {
@@ -68,8 +88,9 @@ const UnsubscribePage = () => {
         setErrorMsg(data.error || "Failed to unsubscribe. Please try again.");
         setStatus("error");
       }
-    } catch {
-      setErrorMsg("Network error. Please try again.");
+    } catch (error) {
+      console.error('❌ Error during unsubscribe:', error);
+      setErrorMsg(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setStatus("error");
     }
   };

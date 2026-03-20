@@ -694,12 +694,13 @@ const AdminManagement = () => {
         )}
 
         {/* Users Grid */}
-        {activeTab === "users" && <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-        >
+        {activeTab === "users" && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
           {users.map((user) => {
             const roleInfo = getRoleInfo(user.role);
             const IconComponent = roleInfo.icon;
@@ -793,6 +794,7 @@ const AdminManagement = () => {
             );
           })}
         </motion.div>
+        )}
 
         {users.length === 0 && !loading && activeTab === "users" && (
           <div className="text-center py-12">
