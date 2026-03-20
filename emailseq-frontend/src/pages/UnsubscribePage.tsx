@@ -122,23 +122,49 @@ const UnsubscribePage = () => {
     <div
       style={{
         minHeight: "100vh",
-        backgroundColor: "#f0f0f0",
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontFamily: "Arial, sans-serif",
-        padding: "24px",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif",
+        padding: "20px",
       }}
     >
+      <style>{`
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.7;
+          }
+        }
+      `}</style>
       <div
         style={{
           background: "#fff",
-          borderRadius: "8px",
-          padding: "40px",
-          maxWidth: "520px",
+          borderRadius: "16px",
+          padding: "48px 40px",
+          maxWidth: "540px",
           width: "100%",
           textAlign: "center",
-          boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+          boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+          animation: "slideIn 0.5s ease-out",
         }}
       >
         {/* Loading */}
@@ -146,27 +172,29 @@ const UnsubscribePage = () => {
           <>
             <div
               style={{
-                width: "40px",
-                height: "40px",
-                border: "4px solid #e0e0e0",
-                borderTop: "4px solid #1a73e8",
+                width: "48px",
+                height: "48px",
+                border: "3px solid #f0f0f0",
+                borderTop: "3px solid #667eea",
                 borderRadius: "50%",
-                margin: "0 auto 16px",
+                margin: "0 auto 24px",
                 animation: "spin 0.8s linear infinite",
               }}
             />
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-            <p style={{ color: "#555" }}>Loading...</p>
+            <h2 style={{ color: "#333", marginBottom: "8px", fontSize: "24px", fontWeight: "600" }}>Loading</h2>
+            <p style={{ color: "#888", fontSize: "15px" }}>Please wait while we verify your link...</p>
           </>
         )}
 
         {/* Already unsubscribed */}
         {status === "already" && (
           <>
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>✅</div>
-            <h2 style={{ color: "#2e7d32", marginBottom: "8px" }}>Already Unsubscribed</h2>
-            <p style={{ color: "#555" }}>
-              You have already been unsubscribed from our mailing list(s).
+            <div style={{ fontSize: "64px", marginBottom: "20px", animation: "pulse 2s ease-in-out infinite" }}>✅</div>
+            <h2 style={{ color: "#2e7d32", marginBottom: "12px", fontSize: "28px", fontWeight: "600" }}>
+              Already Unsubscribed
+            </h2>
+            <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6" }}>
+              You have already been unsubscribed from our mailing list(s). No further action is needed.
             </p>
           </>
         )}
@@ -174,63 +202,106 @@ const UnsubscribePage = () => {
         {/* Invalid / Error */}
         {(status === "invalid" || status === "error") && (
           <>
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>❌</div>
-            <h2 style={{ color: "#d32f2f", marginBottom: "8px" }}>
+            <div style={{ fontSize: "64px", marginBottom: "20px" }}>❌</div>
+            <h2 style={{ color: "#d32f2f", marginBottom: "12px", fontSize: "28px", fontWeight: "600" }}>
               {status === "invalid" ? "Invalid Link" : "Something Went Wrong"}
             </h2>
-            <p style={{ color: "#555" }}>
-              {errorMsg || "This unsubscribe link is invalid or has expired."}
+            <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6" }}>
+              {errorMsg || "This unsubscribe link is invalid or has expired. Please try requesting a new unsubscribe link."}
             </p>
+            <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #e0e0e0" }}>
+              <p style={{ color: "#888", fontSize: "14px" }}>
+                Need help? Contact our support team for assistance.
+              </p>
+            </div>
           </>
         )}
 
         {/* Success */}
         {status === "success" && (
           <>
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>✅</div>
-            <p style={{ fontWeight: "bold", marginBottom: "4px" }}>{email}</p>
-            <p style={{ color: "#555", marginBottom: "24px" }}>
-              has been unsubscribed from our mailing list(s).
-            </p>
-            <hr style={{ border: "none", borderTop: "1px solid #e0e0e0", margin: "24px 0" }} />
-            <h2 style={{ color: "#e53935", marginBottom: "8px" }}>
+            <div style={{ fontSize: "64px", marginBottom: "20px", animation: "pulse 2s ease-in-out infinite" }}>✅</div>
+            <h2 style={{ color: "#2e7d32", marginBottom: "8px", fontSize: "28px", fontWeight: "600" }}>
               Unsubscribed Successfully
             </h2>
-            <p style={{ color: "#555" }}>You will no longer receive emails from us.</p>
+            <div
+              style={{
+                background: "#f0f8f0",
+                padding: "16px",
+                borderRadius: "8px",
+                margin: "20px 0",
+                borderLeft: "4px solid #2e7d32",
+              }}
+            >
+              <p style={{ color: "#1b5e20", fontWeight: "600", fontSize: "16px", margin: "0 0 4px 0" }}>
+                {email}
+              </p>
+              <p style={{ color: "#388e3c", fontSize: "14px", margin: "0" }}>
+                has been unsubscribed from our mailing list(s)
+              </p>
+            </div>
+            <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6" }}>
+              You will no longer receive emails from us. Thank you for letting us know your preferences.
+            </p>
           </>
         )}
 
         {/* Ready: show form */}
         {(status === "ready" || status === "submitting") && (
           <>
-            <p style={{ fontWeight: "bold", fontSize: "16px", marginBottom: "4px" }}>{email}</p>
-            <p style={{ color: "#555", marginBottom: "24px" }}>
-              is subscribed to our mailing list(s).
-            </p>
-            <hr style={{ border: "none", borderTop: "1px solid #e0e0e0", margin: "20px 0" }} />
-            <h2 style={{ color: "#e53935", marginBottom: "8px" }}>
-              Unsubscribe from our mailing list
-            </h2>
-            <p style={{ color: "#555", marginBottom: "20px" }}>
-              To help us improve our services, we would be grateful if you could tell us why:
-            </p>
+            <div
+              style={{
+                background: "linear-gradient(135deg, #667eea15 0%, #764ba215 100%)",
+                padding: "16px",
+                borderRadius: "12px",
+                marginBottom: "28px",
+                border: "1px solid #667eea30",
+              }}
+            >
+              <p style={{ color: "#667eea", fontWeight: "600", fontSize: "16px", margin: "0" }}>
+                {email}
+              </p>
+              <p style={{ color: "#888", fontSize: "14px", margin: "4px 0 0 0" }}>
+                is subscribed to our mailing list(s)
+              </p>
+            </div>
+
+            <div style={{ marginBottom: "28px" }}>
+              <h3 style={{ color: "#333", marginBottom: "8px", fontSize: "20px", fontWeight: "600" }}>
+                Unsubscribe from our mailing list
+              </h3>
+              <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6", margin: "0" }}>
+                To help us improve our services, please let us know why you're unsubscribing:
+              </p>
+            </div>
 
             {/* Custom styled select */}
-            <div style={{ position: "relative", marginBottom: "20px" }}>
+            <div style={{ position: "relative", marginBottom: "28px" }}>
               <select
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 disabled={status === "submitting"}
                 style={{
                   width: "100%",
-                  padding: "12px 40px 12px 14px",
-                  fontSize: "14px",
-                  border: "1px solid #bbb",
-                  borderRadius: "4px",
+                  padding: "14px 16px",
+                  fontSize: "15px",
+                  border: "2px solid #e0e0e0",
+                  borderRadius: "8px",
                   appearance: "none",
                   backgroundColor: "#fff",
-                  cursor: "pointer",
-                  color: reason ? "#000" : "#666",
+                  cursor: status === "submitting" ? "not-allowed" : "pointer",
+                  color: reason ? "#333" : "#999",
+                  fontWeight: "500",
+                  transition: "all 0.3s ease",
+                  outline: "none",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "#667eea";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(102, 126, 234, 0.1)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "#e0e0e0";
+                  e.currentTarget.style.boxShadow = "none";
                 }}
               >
                 <option value="" disabled>
@@ -245,12 +316,13 @@ const UnsubscribePage = () => {
               <div
                 style={{
                   position: "absolute",
-                  right: "12px",
+                  right: "16px",
                   top: "50%",
                   transform: "translateY(-50%)",
                   pointerEvents: "none",
-                  fontSize: "12px",
-                  color: "#555",
+                  color: "#667eea",
+                  fontSize: "14px",
+                  fontWeight: "600",
                 }}
               >
                 ▼
@@ -262,20 +334,47 @@ const UnsubscribePage = () => {
               disabled={!reason || status === "submitting"}
               style={{
                 width: "100%",
-                maxWidth: "200px",
-                padding: "12px 24px",
-                backgroundColor: !reason || status === "submitting" ? "#bbb" : "#00bcd4",
-                color: "#fff",
-                border: "none",
-                borderRadius: "24px",
-                fontSize: "15px",
+                padding: "14px 28px",
+                fontSize: "16px",
                 fontWeight: "600",
+                border: "none",
+                borderRadius: "8px",
                 cursor: !reason || status === "submitting" ? "not-allowed" : "pointer",
-                transition: "background 0.2s",
+                transition: "all 0.3s ease",
+                background:
+                  !reason || status === "submitting"
+                    ? "#ccc"
+                    : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                color: "#fff",
+                boxShadow:
+                  !reason || status === "submitting"
+                    ? "none"
+                    : "0 4px 15px rgba(102, 126, 234, 0.4)",
+                textShadow: !reason || status === "submitting" ? "none" : "0 1px 2px rgba(0,0,0,0.1)",
+              }}
+              onMouseEnter={(e) => {
+                if (reason && status !== "submitting") {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 6px 20px rgba(102, 126, 234, 0.5)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (reason && status !== "submitting") {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 4px 15px rgba(102, 126, 234, 0.4)";
+                }
               }}
             >
               {status === "submitting" ? "Processing..." : "Unsubscribe"}
             </button>
+
+            {reason && (
+              <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #e0e0e0" }}>
+                <p style={{ color: "#888", fontSize: "13px", margin: "0" }}>
+                  ✓ We've noted your reason and will use your feedback to improve our service
+                </p>
+              </div>
+            )}
           </>
         )}
       </div>
