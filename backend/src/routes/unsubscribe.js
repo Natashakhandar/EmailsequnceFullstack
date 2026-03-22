@@ -51,8 +51,10 @@ router.get('/info/:token', async (req, res) => {
 router.post('/complete', async (req, res) => {
   try {
     const { token, reason } = req.body;
+    console.log('📤 Unsubscribe request received:', { token, reason });
 
     if (!token) {
+      console.warn('⚠️ Missing token');
       return res.status(400).json({ error: 'Token is required' });
     }
 
@@ -62,20 +64,26 @@ router.post('/complete', async (req, res) => {
     });
 
     if (!unsubscribeToken) {
+      console.warn('⚠️ Token not found:', token);
       return res.status(404).json({ error: 'Invalid unsubscribe link' });
     }
+
+    console.log('✅ Token found, contact:', unsubscribeToken.contact.email);
 
     // If contact is UNSUBSCRIBED and token was previously used, don't allow another unsubscribe
     // But if they resubscribed (status = ACTIVE), they can unsubscribe again
     if (unsubscribeToken.contact?.status === 'UNSUBSCRIBED' && unsubscribeToken.usedAt) {
+      console.log('⚠️ Contact already unsubscribed:', unsubscribeToken.contact.email);
       return res.status(400).json({ error: 'Already unsubscribed', alreadyUnsubscribed: true });
     }
 
     const tokenAge = Date.now() - unsubscribeToken.createdAt.getTime();
     if (tokenAge > 30 * 24 * 60 * 60 * 1000) {
+      console.warn('⚠️ Token expired');
       return res.status(400).json({ error: 'Unsubscribe link has expired' });
     }
 
+    console.log('🔄 Updating contact status to UNSUBSCRIBED...');
     const now = new Date();
 
     // Update contact: mark unsubscribed with reason and date
@@ -88,17 +96,23 @@ router.post('/complete', async (req, res) => {
       }
     });
 
+    console.log('✅ Contact updated:', contact.email);
+
     // Stop all active enrollments
     await prisma.enrollment.updateMany({
       where: { contactId: unsubscribeToken.contactId, status: 'ACTIVE' },
       data: { status: 'UNSUBSCRIBED', completedAt: now, nextSendAt: null }
     });
 
+    console.log('✅ Enrollments updated');
+
     // Mark token as used
     await prisma.unsubscribeToken.update({
       where: { id: unsubscribeToken.id },
       data: { usedAt: now }
     });
+
+    console.log('✅ Token marked as used');
 
     // Log unsubscribe event for each affected enrollment
     const enrollments = await prisma.enrollment.findMany({
@@ -121,10 +135,12 @@ router.post('/complete', async (req, res) => {
       });
     }
 
+    console.log('✅ Unsubscribe events logged, sending success response');
     res.json({ success: true, message: 'Successfully unsubscribed', email: contact.email });
   } catch (error) {
-    console.error('Error completing unsubscribe:', error);
-    res.status(500).json({ error: 'Failed to process unsubscribe request' });
+    console.error('❌ Error completing unsubscribe:', error);
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({ error: 'Failed to process unsubscribe request', details: error.message });
   }
 });
 

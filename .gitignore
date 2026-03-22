@@ -8,7 +8,8 @@ emailseq-frontend/.env
 
 node_modules/
 *.log
-dist/
+# dist/ - REMOVED to allow frontend build deployment to hosted server
+# dist/
 .DS_Store
 
 # Local routing config
