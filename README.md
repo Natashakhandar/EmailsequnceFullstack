@@ -129,42 +129,50 @@ Ensure the frontend `.env` (if used) points to backend base URL (`http://localho
 
 ## Authentication & Roles
 
-- **Login**: `/api/auth/login` returns JWT + user payload.
-- **Middleware**: `authenticateToken`, `requireAdmin`, `requireSuperAdmin` guard backend routes.
-- **Roles**:
-  - `SUPERADMIN`: Full access, can manage other admins/users.
-  - `ADMIN`: Elevated permissions for operational tasks (no access to superadmin-only endpoints).
-  - `USER`: Standard access for sequencing tasks.
+- **Login**: All users (superadmin, managers, and users) login via `/api/auth/login` with their email and password. Returns JWT + user payload.
+- **Middleware**: `authenticateToken`, `requireSuperAdmin` guard backend routes.
+- **Roles & Permissions**:
+  - `SUPERADMIN`: Full access. Only role that can create users and managers via the Admin Management dashboard. Can view work of any user (impersonate). Assigns managers to users.
+  - `MANAGER`: Can view and manage only the users assigned to them by superadmin. Can view their assigned users' work. Cannot create new users or managers.
+  - `USER`: Standard access for sequencing tasks. Cannot manage other users.
+
+**User Creation Flow**:
+1. Superadmin logs in with their credentials
+2. Navigates to "Admin Management" tab in the dashboard
+3. Creates new users (role: USER) and managers (role: MANAGER)
+4. Assigns managers to specific users (defines which users each manager can oversee)
+5. Users and managers use their email/password to login separately
+
 - Initial superadmin seeded via `create-superadmin.js` (credentials configurable through `.env`).
 
 ---
 
 ## Admin Management
 
-### CLI (`backend/manage-admins.js`)
+Only **superadmin** can create users and managers. This is done through the web UI integrated into the dashboard.
 
-```bash
-# Help / default usage
-node manage-admins.js
+### Web UI (`emailseq-frontend/src/pages/AdminManagement.tsx`)
 
-# Create admin
-node manage-admins.js create admin@company.com StrongP@ss! Jane Doe ADMIN
+After superadmin logs in, click **"Admin Management"** tab in the dashboard to:
 
-# Update admin
-node manage-admins.js update admin@company.com StrongerP@ss! Jane Doe SUPERADMIN
+1. **Create Users** - Add new users with email, password, and name
+2. **Create Managers** - Add managers and assign which users they manage
+3. **Edit Users/Managers** - Update email, name, or role
+4. **Delete Accounts** - Remove users or managers
+5. **Reset Passwords** - Change any user's password
+6. **View User Work** - Click a user to impersonate and view their sequences, campaigns, and activities (read-only mode)
+7. **Manage Assignments** - For managers, assign which users they should oversee
 
-# List all admins
-node manage-admins.js list
+**Manager Workflow**:
+- Superadmin creates a manager and assigns specific users to them
+- Manager logs in with their credentials
+- See only their assigned users
+- Can view work of assigned users (impersonate for read-only viewing)
+- Cannot create new users or managers
 
-# Activate / Deactivate
-node manage-admins.js activate admin@company.com
-node manage-admins.js deactivate admin@company.com
-```
+###CLI (`backend/manage-admins.js`) - Deprecated
 
-### Web UI
-
-- Navigate to `/admin-management` (only visible to superadmins in navbar/dropdown).
-- Create, update, activate/deactivate, and delete admin accounts with inline feedback.
+The CLI script is deprecated. Use the web UI instead for all user management.
 
 ---
 

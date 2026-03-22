@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../db/prismaClient');
-const { authenticateToken, requireSuperAdmin, requireAdmin } = require('../middleware/auth');
+const { authenticateToken, requireSuperAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -96,8 +96,8 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/register (only for superadmin/admin to create users)
-router.post('/register', authenticateToken, requireAdmin, async (req, res) => {
+// POST /api/auth/register (only for superadmin to create users)
+router.post('/register', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { email, password, firstName, lastName, role = 'USER', managedUserIds = [] } = req.body;
 
@@ -179,10 +179,10 @@ router.post('/logout', authenticateToken, async (req, res) => {
 // GET /api/auth/users - List users (superadmin can see all, manager can see managed users)
 router.get('/users', authenticateToken, async (req, res) => {
   try {
-    const isAdmin = req.user.role === 'SUPERADMIN' || req.user.role === 'ADMIN';
+    const isSuperAdmin = req.user.role === 'SUPERADMIN';
     const isManager = req.user.role === 'MANAGER';
 
-    if (!isAdmin && !isManager) {
+    if (!isSuperAdmin && !isManager) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -218,8 +218,8 @@ router.get('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/auth/users/:id - Update user (superadmin/admin only)
-router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+// PUT /api/auth/users/:id - Update user (superadmin only)
+router.put('/users/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { email, firstName, lastName, role, isActive, managedUserIds } = req.body;
@@ -274,8 +274,8 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/auth/users/:id - Delete user (superadmin/admin only)
-router.delete('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+// DELETE /api/auth/users/:id - Delete user (superadmin only)
+router.delete('/users/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 

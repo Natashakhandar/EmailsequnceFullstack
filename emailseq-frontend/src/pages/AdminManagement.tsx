@@ -376,7 +376,6 @@ const AdminManagement = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="USER">User</SelectItem>
-                          <SelectItem value="ADMIN">Admin</SelectItem>
                           <SelectItem value="MANAGER">Manager</SelectItem>
                         </SelectContent>
                       </Select>
@@ -475,7 +474,6 @@ const AdminManagement = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="USER">User</SelectItem>
-                        <SelectItem value="ADMIN">Admin</SelectItem>
                         <SelectItem value="MANAGER">Manager</SelectItem>
                       </SelectContent>
                     </Select>
