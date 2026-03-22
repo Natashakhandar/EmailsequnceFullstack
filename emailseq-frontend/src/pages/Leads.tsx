@@ -54,6 +54,8 @@ const Leads = () => {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+
+
   useEffect(() => {
     loadGroups();
   }, []);
@@ -318,6 +320,8 @@ const Leads = () => {
   };
 
 
+
+
   const getStatusBadge = (status: Contact["status"]) => {
     const variants = {
       ACTIVE: "bg-green-100 text-green-700 hover:bg-green-100",
@@ -523,15 +527,18 @@ const Leads = () => {
                         {new Date(lead.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          onClick={() => handleDeleteContact(lead)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          disabled={deleting}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            onClick={() => handleDeleteContact(lead)}
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            disabled={deleting}
+                            title="Delete contact"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </motion.tr>
                   ))
@@ -846,6 +853,9 @@ const Leads = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+
+
 
         {/* Import Leads CSV Dialog */}
         <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>

@@ -412,6 +412,43 @@ class ApiClient {
     }>(`/unsubscribe/contacts/list${query ? `?${query}` : ''}`).then((data) => data.contacts);
   }
 
+  // Admin unsubscribe a contact with reason
+  async adminUnsubscribeContact(contactId: string, reason: string) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      contact: {
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        status: string;
+        unsubscribeReason: string;
+        unsubscribedAt: string;
+      };
+    }>(`/unsubscribe/admin/${contactId}`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+  }
+
+  // Admin resubscribe a contact
+  async adminResubscribeContact(contactId: string) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      contact: {
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        status: string;
+      };
+    }>(`/unsubscribe/admin/resubscribe/${contactId}`, {
+      method: 'POST'
+    });
+  }
+
   // Templates API
   async getTemplates(params?: { page?: number; limit?: number; isActive?: boolean }) {
     const searchParams = new URLSearchParams();

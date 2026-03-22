@@ -663,4 +663,177 @@ router.get('/contacts/list', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/unsubscribe/admin/resubscribe/:contactId - Re-subscribe a contact
+// MUST COME BEFORE /admin/:contactId route so that specific routes match first
+router.post('/admin/resubscribe/:contactId', authenticateToken, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+
+    if (!contactId) {
+      return res.status(400).json({ error: 'Contact ID is required' });
+    }
+
+    // Find the contact and ensure it belongs to the user
+    const contact = await prisma.contact.findFirst({
+      where: {
+        id: contactId,
+        userId: req.user.id
+      }
+    });
+
+    if (!contact) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    if (contact.status !== 'UNSUBSCRIBED') {
+      return res.status(400).json({
+        error: 'Contact is not unsubscribed',
+        contact
+      });
+    }
+
+    const now = new Date();
+
+    // Update contact: change from UNSUBSCRIBED back to ACTIVE
+    const updatedContact = await prisma.contact.update({
+      where: { id: contactId },
+      data: {
+        status: 'ACTIVE',
+        unsubscribeReason: null,
+        unsubscribedAt: null,
+        updatedAt: now
+      }
+    });
+
+    console.log(`✅ Contact ${contactId} resubscribed by admin`);
+
+    // Log resubscribe event
+    await prisma.event.create({
+      data: {
+        contactId,
+        type: 'RESUBSCRIBED',
+        details: JSON.stringify({
+          method: 'admin',
+          adminId: req.user.id,
+          userAgent: req.get('User-Agent'),
+          ip: req.ip || req.connection?.remoteAddress,
+          resubscribedAt: now.toISOString()
+        })
+      }
+    }).catch(err => {
+      console.log('Note: Could not create RESUBSCRIBED event:', err.message);
+    });
+
+    res.json({
+      success: true,
+      message: 'Contact successfully resubscribed',
+      contact: {
+        id: updatedContact.id,
+        email: updatedContact.email,
+        firstName: updatedContact.firstName,
+        lastName: updatedContact.lastName,
+        status: updatedContact.status
+      }
+    });
+
+  } catch (error) {
+    console.error('Error resubscribing contact:', error);
+    res.status(500).json({ error: 'Failed to resubscribe contact', details: error.message });
+  }
+});
+
+// POST /api/unsubscribe/admin/:contactId - Admin/User initiated unsubscribe with reason
+router.post('/admin/:contactId', authenticateToken, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { reason } = req.body;
+
+    if (!contactId) {
+      return res.status(400).json({ error: 'Contact ID is required' });
+    }
+
+    // Find the contact and ensure it belongs to the user
+    const contact = await prisma.contact.findFirst({
+      where: {
+        id: contactId,
+        userId: req.user.id
+      }
+    });
+
+    if (!contact) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    if (contact.status === 'UNSUBSCRIBED') {
+      return res.status(400).json({
+        error: 'Contact is already unsubscribed',
+        contact
+      });
+    }
+
+    const now = new Date();
+
+    // Update contact: mark unsubscribed with reason and date
+    const updatedContact = await prisma.contact.update({
+      where: { id: contactId },
+      data: {
+        status: 'UNSUBSCRIBED',
+        unsubscribeReason: reason || 'Admin unsubscribe',
+        unsubscribedAt: now,
+        updatedAt: now
+      }
+    });
+
+    // Stop all active enrollments
+    const stoppedEnrollments = await prisma.enrollment.updateMany({
+      where: { contactId, status: 'ACTIVE' },
+      data: { status: 'UNSUBSCRIBED', completedAt: now, nextSendAt: null }
+    });
+
+    console.log(`✅ Contact ${contactId} unsubscribed by admin. Stopped ${stoppedEnrollments.count} enrollments`);
+
+    // Log unsubscribe event for each enrollment
+    const enrollments = await prisma.enrollment.findMany({
+      where: { contactId, status: 'UNSUBSCRIBED' }
+    });
+
+    for (const enrollment of enrollments) {
+      await prisma.event.create({
+        data: {
+          enrollmentId: enrollment.id,
+          contactId,
+          type: 'UNSUBSCRIBED',
+          details: JSON.stringify({
+            method: 'admin',
+            reason: reason || 'Admin unsubscribe',
+            adminId: req.user.id,
+            userAgent: req.get('User-Agent'),
+            ip: req.ip || req.connection?.remoteAddress
+          })
+        }
+      }).catch(err => {
+        console.log('Note: Could not create UNSUBSCRIBED event:', err.message);
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Contact successfully unsubscribed',
+      contact: {
+        id: updatedContact.id,
+        email: updatedContact.email,
+        firstName: updatedContact.firstName,
+        lastName: updatedContact.lastName,
+        status: updatedContact.status,
+        unsubscribeReason: updatedContact.unsubscribeReason,
+        unsubscribedAt: updatedContact.unsubscribedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error unsubscribing contact:', error);
+    res.status(500).json({ error: 'Failed to unsubscribe contact', details: error.message });
+  }
+});
+
 module.exports = router;
