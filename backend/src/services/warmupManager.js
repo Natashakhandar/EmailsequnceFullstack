@@ -5,53 +5,53 @@ class WarmupManager {
    * Get or create warmup settings for a user
    */
   async getSettings(userId) {
-    let settings = await prisma.warmupSettings.findUnique({
-      where: { userId }
-    });
-
-    if (!settings) {
-      settings = await prisma.warmupSettings.create({
-        data: {
-          userId,
-          isEnabled: false,
-          currentBatchSize: 10,
-          dailyIncrement: 5,
-          maxLimit: 200,
-          dailySentCount: 0,
-          lastSentDate: new Date()
-        }
-      });
+    const rows = await prisma.query('SELECT * FROM warmup_settings WHERE userId = ? LIMIT 1', [userId]);
+    if (rows.length > 0) {
+      // Cast integers and booleans
+      const s = rows[0];
+      s.isEnabled = !!s.isEnabled;
+      return s;
     }
 
-    return settings;
+    const id = require('crypto').randomBytes(8).toString('hex').toUpperCase();
+    const now = new Date();
+    await prisma.query(
+      `INSERT INTO warmup_settings (id, userId, isEnabled, currentBatchSize, dailyIncrement, maxLimit, dailySentCount, lastSentDate, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, userId, 0, 10, 5, 200, 0, now, now, now]
+    );
+    const newRows = await prisma.query('SELECT * FROM warmup_settings WHERE userId = ? LIMIT 1', [userId]);
+    const s = newRows[0];
+    s.isEnabled = !!s.isEnabled;
+    return s;
   }
 
   /**
    * Update warmup settings
    */
   async updateSettings(userId, data) {
-    return await prisma.warmupSettings.upsert({
-      where: { userId },
-      update: data,
-      create: {
-        userId,
-        ...data
-      }
-    });
+    const settings = await this.getSettings(userId);
+    const updates = [];
+    const values = [];
+    if (data.isEnabled !== undefined) { updates.push('isEnabled = ?'); values.push(data.isEnabled ? 1 : 0); }
+    if (data.currentBatchSize !== undefined) { updates.push('currentBatchSize = ?'); values.push(data.currentBatchSize); }
+    if (data.dailyIncrement !== undefined) { updates.push('dailyIncrement = ?'); values.push(data.dailyIncrement); }
+    if (data.maxLimit !== undefined) { updates.push('maxLimit = ?'); values.push(data.maxLimit); }
+    
+    if (updates.length > 0) {
+      values.push(new Date(), userId);
+      await prisma.query(`UPDATE warmup_settings SET ${updates.join(', ')}, updatedAt = ? WHERE userId = ?`, values);
+    }
+    return this.getSettings(userId);
   }
 
   /**
    * ATOMIC: Check if user can send an email and "claim" a slot by incrementing the count.
-   * This prevents race conditions where multiple processes check the limit at once.
-   * Returns true if slot was claimed, false otherwise.
    */
   async claimWarmupSlot(userId) {
-    // 1. Get the CURRENT settings to see where we stand
     const settings = await this.getSettings(userId);
-    
     if (!settings.isEnabled) return true;
 
-    // 2. Check for Day Reset
     const lastDate = new Date(settings.lastSentDate);
     const today = new Date();
     
@@ -60,71 +60,30 @@ class WarmupManager {
                      lastDate.getUTCFullYear() !== today.getUTCFullYear();
 
     if (isNewDay) {
-      // It's a new day, handle increment logic
       let newBatchSize = settings.currentBatchSize;
       if (settings.dailySentCount >= settings.currentBatchSize * 0.8) {
         newBatchSize = Math.min(settings.maxLimit, settings.currentBatchSize + settings.dailyIncrement);
       }
-
-      // ATOMIC RESET: Only update if someone else hasn't reset it yet
-      const resetResult = await prisma.warmupSettings.updateMany({
-        where: { 
-          userId,
-          lastSentDate: settings.lastSentDate // Date hasn't changed since we checked
-        },
-        data: {
-          currentBatchSize: newBatchSize,
-          dailySentCount: 1, 
-          lastSentDate: today
-        }
-      });
       
-      if (resetResult.count > 0) return true;
-      
-      // If we failed to reset, it means another process did it. 
-      // Refresh settings and proceed to normal increment logic below.
+      const result = await prisma.query(
+        `UPDATE warmup_settings SET currentBatchSize = ?, dailySentCount = 1, lastSentDate = ? 
+         WHERE userId = ? AND lastSentDate = ?`,
+        [newBatchSize, today, userId, settings.lastSentDate]
+      );
+      if (result && result.affectedRows > 0) return true;
       return await this.claimWarmupSlot(userId); 
     }
 
-    // 3. ATOMIC INCREMENT: Only update if dailySentCount < currentBatchSize
-    // This is the most critical part for strict enforcement
-    const updateResult = await prisma.warmupSettings.updateMany({
-      where: {
-        userId,
-        dailySentCount: {
-          lt: settings.currentBatchSize
-        },
-        // Also ensure date is still today to avoid crossing reset boundaries
-        lastSentDate: {
-          gte: new Date(new Date().setHours(0,0,0,0))
-        }
-      },
-      data: {
-        dailySentCount: {
-          increment: 1
-        },
-        lastSentDate: today
-      }
-    });
-
-    return updateResult.count > 0;
+    const updateResult = await prisma.query(
+      `UPDATE warmup_settings SET dailySentCount = dailySentCount + 1, lastSentDate = ? 
+       WHERE userId = ? AND dailySentCount < currentBatchSize AND lastSentDate >= ?`,
+      [today, userId, new Date(new Date().setHours(0,0,0,0))]
+    );
+    return (updateResult && updateResult.affectedRows > 0);
   }
 
-  /**
-   * If an email failed to send, we can "refund" the warmup slot
-   */
   async refundWarmupSlot(userId) {
-    await prisma.warmupSettings.updateMany({
-      where: { 
-        userId,
-        dailySentCount: { gt: 0 }
-      },
-      data: {
-        dailySentCount: {
-          decrement: 1
-        }
-      }
-    });
+    await prisma.query(`UPDATE warmup_settings SET dailySentCount = dailySentCount - 1 WHERE userId = ? AND dailySentCount > 0`, [userId]);
   }
 }
 
