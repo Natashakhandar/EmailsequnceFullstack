@@ -15,20 +15,33 @@ let pool = null;
 async function getPool() {
   if (pool) return pool;
 
-  // Parse DATABASE_URL or use individual env vars
   const dbUrl = process.env.DATABASE_URL || '';
   let config = {};
   
   if (dbUrl.startsWith('mysql://')) {
-    // Parse mysql://user:password@host:port/database
+    // Parse mysql://user:password@host:port/database?params
     const url = new URL(dbUrl);
     config = {
       host: url.hostname,
       user: url.username,
       password: url.password,
       database: url.pathname.substring(1),
-      port: url.port || 3306,
+      port: parseInt(url.port) || 3306,
     };
+    
+    // Extract connection pool params from URL query string
+    if (url.searchParams.has('connectionLimit')) {
+      config.connectionLimit = parseInt(url.searchParams.get('connectionLimit'));
+    }
+    if (url.searchParams.has('waitForConnections')) {
+      config.waitForConnections = url.searchParams.get('waitForConnections') === 'true';
+    }
+    if (url.searchParams.has('enableKeepAlive')) {
+      config.enableKeepAlive = url.searchParams.get('enableKeepAlive') === 'true';
+    }
+    if (url.searchParams.has('keepAliveInitialDelaySeconds')) {
+      config.keepAliveInitialDelaySeconds = parseInt(url.searchParams.get('keepAliveInitialDelaySeconds'));
+    }
   } else {
     // Use individual env vars (fallback for Hostinger)
     config = {
@@ -40,25 +53,35 @@ async function getPool() {
     };
   }
 
-  config.waitForConnections = true;
-  config.connectionLimit = 10;
+  // Set defaults if not provided
+  if (!config.connectionLimit) config.connectionLimit = 5;
+  if (config.waitForConnections === undefined) config.waitForConnections = true;
+  if (config.enableKeepAlive === undefined) config.enableKeepAlive = true;
+  if (!config.keepAliveInitialDelaySeconds) config.keepAliveInitialDelaySeconds = 0;
+  
   config.queueLimit = 0;
-  config.enableKeepAlive = true;
-  config.keepAliveInitialDelaySeconds = 5;
-
-  console.log('🚀 MySQL pool connecting to:', config.host, 'user:', config.user);
+  
+  console.log('🚀 MySQL pool config:', {
+    host: config.host,
+    port: config.port,
+    database: config.database,
+    user: config.user,
+    connectionLimit: config.connectionLimit
+  });
   
   try {
     pool = await mysql.createPool(config);
-    console.log('🚀 MySQL pool ready (bypassing Prisma)');
+    console.log('🚀 MySQL pool created');
     
     // Test connection
     const conn = await pool.getConnection();
-    await conn.ping();
+    await conn.query('SELECT 1');
     conn.release();
     console.log('✅ MySQL connection verified');
   } catch (err) {
     console.error('❌ MySQL connection failed:', err.message);
+    console.error('MySQL error code:', err.code);
+    console.error('MySQL error errno:', err.errno);
     pool = null;
     throw err;
   }
