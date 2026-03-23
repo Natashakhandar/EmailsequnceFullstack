@@ -54,13 +54,23 @@ async function getPool() {
 // For backward compatibility - return object with common Prisma methods
 const prismaProxy = {
   user: {
-    findUnique: async ({ where }) => {
+    findUnique: async ({ where, select }) => {
       try {
         const pool = await getPool();
-        const [rows] = await pool.query(
-          'SELECT * FROM users WHERE email = ?',
-          [where.email]
-        );
+        let query = 'SELECT * FROM users WHERE ';
+        let params = [];
+        
+        if (where.id) {
+          query += 'id = ?';
+          params.push(where.id);
+        } else if (where.email) {
+          query += 'email = ?';
+          params.push(where.email);
+        } else {
+          throw new Error('findUnique requires id OR email in where clause');
+        }
+        
+        const [rows] = await pool.query(query, params);
         return rows[0] || null;
       } catch (err) {
         console.error('❌ User.findUnique error:', err.message);
@@ -193,6 +203,17 @@ const prismaProxy = {
         throw err;
       }
     },
+  },
+  // Generic query method for raw SQL
+  query: async (sql, params = []) => {
+    try {
+      const pool = await getPool();
+      const [rows] = await pool.query(sql, params);
+      return rows;
+    } catch (err) {
+      console.error('❌ Query error:', err.message);
+      throw err;
+    }
   },
   $disconnect: async () => {
     try {
