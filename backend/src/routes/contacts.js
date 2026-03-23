@@ -12,6 +12,8 @@ router.get('/', async (req, res) => {
     const { page = 1, limit = 50, status, search, leadListName } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    console.log('📥 GET /contacts params:', { leadListName, search, status, page, limit });
+
     const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPERADMIN';
     const where = isAdmin ? {} : {
       userId: req.user.id
@@ -25,6 +27,8 @@ router.get('/', async (req, res) => {
         where.leadListName = leadListName;
       }
     }
+
+    console.log('🔍 WHERE clause:', where);
     
     if (search) {
       where.OR = [
@@ -47,14 +51,14 @@ router.get('/', async (req, res) => {
             include: {
               sequence: true
             }
-          },
-          _count: {
-            select: { events: true }
           }
+          // Removed _count for events as email_activities table may not exist
         }
       }),
       prisma.contact.count({ where })
     ]);
+
+    console.log(`✅ Returned ${contacts.length} of ${total} contacts`);
 
     res.json({
       contacts,

@@ -344,13 +344,16 @@ class ApiClient {
   }
 
   // Contacts API
-  async getContacts(params?: { page?: number; limit?: number; status?: string; search?: string; leadListName?: string }) {
+  async getContacts(params?: { page?: number; limit?: number; status?: string; search?: string; leadListName?: string | null }) {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.limit) searchParams.append('limit', params.limit.toString());
     if (params?.status) searchParams.append('status', params.status);
     if (params?.search) searchParams.append('search', params.search);
-    if (params?.leadListName !== undefined) searchParams.append('leadListName', params.leadListName as string);
+    // Only append leadListName if it's explicitly set (including null for Uncategorized)
+    if (params?.leadListName !== undefined) {
+      searchParams.append('leadListName', params.leadListName === null ? '' : params.leadListName);
+    }
 
     const query = searchParams.toString();
     return this.request<{ contacts: Contact[]; pagination: any }>(`/contacts${query ? `?${query}` : ''}`);

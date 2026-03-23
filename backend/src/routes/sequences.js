@@ -253,60 +253,69 @@ router.post('/', async (req, res) => {
 
     console.log('✅ All step validations passed, creating sequence...');
 
+    // Step 1: Create the sequence first (without nested steps)
     const sequence = await prisma.sequence.create({
       data: {
         name: name.trim(),
         description: description?.trim(),
         isActive,
-        userId: req.user.id,
-        steps: {
-          create: steps.map(step => {
-            // CRITICAL LOGGING: Track body integrity during database save
-            if (step.body) {
-              console.log(`💾 SAVING STEP ${step.stepOrder} BODY TO DB`);
-              console.log('Frontend body length:', step.body?.length || 0);
-              console.log('Frontend body type:', typeof step.body);
-              console.log('Body preview (first 50 chars):', step.body?.substring(0, 50) + '...');
-            }
-
-            return {
-              templateId: step.templateId || null,
-              stepOrder: step.stepOrder,
-              delayDays: step.delayDays || 0,
-              delayHours: step.delayHours || 0,
-              delayMinutes: step.delayMinutes || 0,
-
-              // NEW: Trigger and content fields
-              subject: step.subject || null,
-              body: step.body || null,
-              triggerType: step.triggerType || 'delay',
-              triggerStepId: step.triggerStepId || null,
-
-              isActive: step.isActive !== false
-            };
-          })
-        }
-      },
-      include: {
-        steps: {
-          orderBy: { stepOrder: 'asc' },
-          include: {
-            template: true
-          }
-        }
+        userId: req.user.id
       }
     });
+
+    console.log('✅ Sequence created: ' + sequence.id);
+
+    // Step 2: Create all steps for this sequence
+    if (steps && steps.length > 0) {
+      for (const step of steps) {
+        // CRITICAL LOGGING: Track body integrity during database save
+        if (step.body) {
+          console.log(`💾 SAVING STEP ${step.stepOrder} BODY TO DB`);
+          console.log('Frontend body length:', step.body?.length || 0);
+          console.log('Frontend body type:', typeof step.body);
+          console.log('Body preview (first 50 chars):', step.body?.substring(0, 50) + '...');
+        }
+
+        await prisma.sequenceStep.create({
+          data: {
+            sequenceId: sequence.id,
+            templateId: step.templateId || null,
+            stepOrder: step.stepOrder,
+            delayDays: step.delayDays || 0,
+            delayHours: step.delayHours || 0,
+            delayMinutes: step.delayMinutes || 0,
+            subject: step.subject || null,
+            body: step.body || null,
+            triggerType: step.triggerType || 'delay',
+            triggerStepId: step.triggerStepId || null,
+            isActive: step.isActive !== false
+          }
+        });
+      }
+      console.log(`✅ Created ${steps.length} steps for sequence`);
+    }
+
+    // Step 3: Fetch the complete sequence with steps
+    const stepsData = await prisma.sequenceStep.findMany({
+      where: { sequenceId: sequence.id },
+      orderBy: { stepOrder: 'asc' }
+    });
+
+    const completeSequence = {
+      ...sequence,
+      steps: stepsData
+    };
 
     console.log('🎉 Sequence created successfully:', {
       id: sequence.id,
       name: sequence.name,
-      stepCount: sequence.steps.length
+      stepCount: stepsData.length
     });
 
     res.status(201).json({
       success: true,
       message: "Sequence saved successfully",
-      data: sequence
+      data: completeSequence
     });
   } catch (error) {
     console.error('❌ Error creating sequence:', error);

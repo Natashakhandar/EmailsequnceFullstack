@@ -60,6 +60,13 @@ const Leads = () => {
     loadGroups();
   }, []);
 
+  // Load contacts when selected group changes
+  useEffect(() => {
+    if (selectedGroupName !== null) {
+      loadContacts(selectedGroupName);
+    }
+  }, [selectedGroupName]);
+
   const loadGroups = async () => {
     try {
       setLoadingGroups(true);
@@ -108,7 +115,7 @@ const Leads = () => {
 
   const handleGroupClick = (groupName: string) => {
     setSelectedGroupName(groupName);
-    loadContacts(groupName);
+    // loadContacts will be called by the useEffect when selectedGroupName changes
   };
 
   const handleBackToGroups = () => {

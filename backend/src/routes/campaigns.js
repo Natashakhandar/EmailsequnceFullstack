@@ -308,14 +308,8 @@ router.get('/', async (req, res) => {
         include: {
           sequence: {
             select: { id: true, name: true }
-          },
-          _count: {
-            select: {
-              campaignLeads: true,
-              enrollments: true,
-              events: true
-            }
           }
+          // Removed _count for campaignLeads, enrollments, and events
         }
       }),
       prisma.campaign.count({ where })
