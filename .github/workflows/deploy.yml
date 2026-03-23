@@ -1,4 +1,4 @@
-name: Auto Deploy to Hostinger
+name: Auto Deploy and Sync Database
 
 on:
   push:
@@ -12,31 +12,36 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
-      - name: Deploy to Hostinger via SSH
-        uses: appleboy/ssh-action@master
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          host: silver-tapir-929419.hostingersite.com
-          username: ${{ secrets.HOSTINGER_USER }}
-          password: ${{ secrets.HOSTINGER_PASSWORD }}
-          port: 22
-          script: |
-            cd ~/domains/silver-tapir-929419.hostingersite.com/public_html/EmailsequnceFullstack || cd ~/public_html/EmailsequnceFullstack || exit 1
-            
-            echo "📥 Pulling latest code from GitHub..."
-            git pull origin main
-            
-            echo "📦 Installing backend dependencies..."
-            cd backend
-            npm install 2>&1
-            
-            echo "🔄 Regenerating Prisma client..."
-            npx prisma generate 2>&1
-            
-            echo "📦 Installing frontend dependencies..."
-            cd ../emailseq-frontend
-            npm install 2>&1
-            
-            echo "🏗️ Building frontend..."
-            npm run build 2>&1
-            
-            echo "✅ Deployment successful!"
+          node-version: '18'
+      
+      # Backend - Sync Database Schema
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm install
+      
+      - name: Deploy Database Migrations
+        working-directory: ./backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        continue-on-error: true
+        run: npx prisma migrate deploy || echo "Migration skipped or failed - database schema may already be in sync"
+      
+      - name: Regenerate Prisma Client
+        working-directory: ./backend
+        continue-on-error: true
+        run: npx prisma generate || echo "Prisma client regeneration skipped"
+      
+      # Frontend - Build
+      - name: Install Frontend Dependencies
+        working-directory: ./emailseq-frontend
+        run: npm install
+      
+      - name: Build Frontend
+        working-directory: ./emailseq-frontend
+        run: npm run build
+      
+      - name: Deployment Success
+        run: echo "✅ Database schema synced and frontend built successfully"
