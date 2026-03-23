@@ -6,11 +6,11 @@ function getPrismaClient() {
   if (prisma) return prisma;
 
   prisma = new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error', 'warn'],
+    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
     errorFormat: 'minimal',
   });
 
-  console.log('🚀 Prisma initialized with database connection');
+  console.log('🚀 Prisma initialized with connection pooling');
 
   return prisma;
 }
@@ -24,7 +24,7 @@ const shutdown = async () => {
       prisma = null;
     }
   } catch (e) {
-    console.error('Error during Prisma disconnect:', e);
+    console.error('Error during Prisma disconnect:', e.message);
   }
 };
 
