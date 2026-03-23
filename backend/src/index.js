@@ -52,7 +52,6 @@ const campaignsRouter = require('./routes/campaigns');
 const fixEventDetailsRouter = require('./routes/fixEventDetails');
 const smtpRouter = require('./routes/smtp');
 const warmupRouter = require('./routes/warmup');
-const deployWebhookRouter = require('../deploy-webhook');
 
 // Import scheduler and email monitor
 const { startScheduler } = require('./jobs/scheduler');
@@ -168,7 +167,6 @@ apiRouter.use('/campaigns', campaignsRouter);
 apiRouter.use('/fix-event-details', fixEventDetailsRouter);
 apiRouter.use('/smtp', smtpRouter);
 apiRouter.use('/warmup', warmupRouter);
-apiRouter.use('/deploy', deployWebhookRouter);
 apiRouter.use('/', emailRouter); // Email tracker routes
 
 apiRouter.get('/', (req, res) => {
