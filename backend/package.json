@@ -1,6 +1,6 @@
 {
   "name": "email-sequencing-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Node.js backend for email sequencing system",
   "main": "src/index.js",
   "scripts": {
