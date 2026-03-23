@@ -4,13 +4,8 @@
   "description": "Node.js backend for email sequencing system",
   "main": "src/index.js",
   "scripts": {
-    "start": "npx prisma generate && node src/index.js",
-    "dev": "nodemon src/index.js",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
   },
   "keywords": [
     "email",
