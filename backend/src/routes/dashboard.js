@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
+const prisma = require('../db/prismaClient');
 const router = express.Router();
 
 router.use(authenticateToken);
@@ -10,144 +11,216 @@ router.use(authenticateToken);
  */
 router.get('/stats', async (req, res) => {
   try {
-    const { startDate, endDate, sequenceId } = req.query;
+    const userId = req.user.id;
+    const pool = await prisma.getPool();
 
-    // Return basic dashboard stats (mock data)
+    // 1. Get base counts
+    const [[{ totalSequences }]] = await pool.query('SELECT COUNT(*) as totalSequences FROM sequences WHERE userId = ?', [userId]);
+    const [[{ totalContacts }]] = await pool.query('SELECT COUNT(*) as totalContacts FROM contacts WHERE userId = ?', [userId]);
+
+    // 2. Get active enrollments 
+    const [[{ activeEnrollments }]] = await pool.query(`
+      SELECT COUNT(*) as activeEnrollments 
+      FROM enrollments e 
+      JOIN sequences s ON e.sequenceId = s.id 
+      WHERE s.userId = ? AND e.status = 'ACTIVE'
+    `, [userId]);
+
+    // 3. Get event breakdown
+    const [eventCounts] = await pool.query(`
+      SELECT e.type, COUNT(*) as count 
+      FROM events e 
+      JOIN contacts c ON e.contactId = c.id 
+      WHERE c.userId = ?
+      GROUP BY e.type
+    `, [userId]);
+
+    const eventBreakdown = {
+      sent: 0, delivered: 0, opened: 0, clicked: 0, 
+      replied: 0, bounced: 0, unsubscribed: 0, failed: 0
+    };
+
+    eventCounts.forEach(row => {
+      const type = row.type.toLowerCase();
+      if (typeof eventBreakdown[type] !== 'undefined') {
+        eventBreakdown[type] = row.count;
+      }
+    });
+
+    // 4. Calculate daily activity (current week, Sunday to Saturday)
+    const [dailyQuery] = await pool.query(`
+      SELECT CAST(DAYOFWEEK(e.timestamp) AS UNSIGNED) as dayOfWeek, COUNT(*) as count 
+      FROM events e 
+      JOIN contacts c ON e.contactId = c.id 
+      WHERE c.userId = ? 
+        AND e.type = 'SENT'
+        AND e.timestamp >= DATE_SUB(CURDATE(), INTERVAL DAYOFWEEK(CURDATE())-1 DAY)
+      GROUP BY DAYOFWEEK(e.timestamp)
+    `, [userId]);
+
+    const dailyActivity = [0, 0, 0, 0, 0, 0, 0];
+    dailyQuery.forEach(row => {
+      // DAYOFWEEK returns 1 for Sunday, 2 for Monday
+      if (row.dayOfWeek >= 1 && row.dayOfWeek <= 7) {
+        dailyActivity[row.dayOfWeek - 1] = Number(row.count);
+      }
+    });
+
+    // 5. Calculate weekly performance (current month, weeks 1 to 4)
+    const [weeklyQuery] = await pool.query(`
+      SELECT CAST(CEIL(DAY(e.timestamp)/7) AS UNSIGNED) as weekOfMonth, COUNT(*) as count 
+      FROM events e 
+      JOIN contacts c ON e.contactId = c.id 
+      WHERE c.userId = ? 
+        AND e.type = 'SENT'
+        AND YEAR(e.timestamp) = YEAR(CURDATE()) AND MONTH(e.timestamp) = MONTH(CURDATE())
+      GROUP BY CEIL(DAY(e.timestamp)/7)
+    `, [userId]);
+
+    const weeklyPerformance = [0, 0, 0, 0];
+    weeklyQuery.forEach(row => {
+      // Map week 1-5 to array index 0-3 (cap 5th week into 4th)
+      const index = Math.min(row.weekOfMonth - 1, 3);
+      if (index >= 0) {
+        weeklyPerformance[index] += Number(row.count);
+      }
+    });
+
+    const totalSentCount = eventBreakdown.sent || 0;
+    const calculateRate = (count, total) => total > 0 ? Number(((count / total) * 100).toFixed(1)) : 0;
+
     const response = {
-      totalEmailsSent: 24,
+      totalEmailsSent: totalSentCount,
       openRate: {
-        percentage: 42.5,
-        count: 10
+        percentage: calculateRate(eventBreakdown.opened, totalSentCount),
+        count: eventBreakdown.opened
       },
       replyRate: {
-        percentage: 16.7,
-        count: 4
+        percentage: calculateRate(eventBreakdown.replied, totalSentCount),
+        count: eventBreakdown.replied
       },
       bounceRate: {
-        percentage: 8.3,
-        count: 2
+        percentage: calculateRate(eventBreakdown.bounced, totalSentCount),
+        count: eventBreakdown.bounced
       },
-      dailyActivity: [5, 8, 3, 6, 2, 4, 6],
-      weeklyPerformance: [12, 18, 22, 28],
+      dailyActivity,
+      weeklyPerformance,
       additionalMetrics: {
-        totalSequences: 3,
-        totalContacts: 150,
-        activeEnrollments: 42,
-        totalDelivered: 22,
-        totalClicked: 5,
-        totalUnsubscribed: 1,
-        totalFailed: 1
+        totalSequences: Number(totalSequences) || 0,
+        totalContacts: Number(totalContacts) || 0,
+        activeEnrollments: Number(activeEnrollments) || 0,
+        totalDelivered: eventBreakdown.delivered,
+        totalClicked: eventBreakdown.clicked,
+        totalUnsubscribed: eventBreakdown.unsubscribed,
+        totalFailed: eventBreakdown.failed
       },
-      eventBreakdown: {
-        sent: 24,
-        delivered: 22,
-        opened: 10,
-        clicked: 5,
-        replied: 4,
-        bounced: 2,
-        unsubscribed: 1,
-        failed: 1
-      },
+      eventBreakdown,
       dateRange: {
-        startDate: startDate || 'All time',
-        endDate: endDate || 'All time',
-        sequenceId: sequenceId || 'All sequences'
+        startDate: 'All time',
+        endDate: 'All time',
+        sequenceId: 'All sequences'
       }
     };
 
-    console.log('✅ Dashboard statistics returned');
+    console.log('✅ Dashboard statistics successfully generated for user:', userId);
     res.json(response);
 
   } catch (error) {
-    console.error('❌ Error fetching dashboard statistics:', error.message);
-    res.status(500).json({
-      error: 'Failed to fetch dashboard statistics',
-      ...(process.env.NODE_ENV !== 'production' && { details: error.message })
-    });
+    console.error('❌ Error fetching dashboard statistics:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard statistics' });
   }
 });
 
 /**
  * GET /api/dashboard/recent-activity
- * Get recent email activity for dashboard feed
  */
 router.get('/recent-activity', async (req, res) => {
   try {
+    const userId = req.user.id;
     const limit = parseInt(req.query.limit) || 10;
+    const pool = await prisma.getPool();
 
-    // Return mock recent activity
-    const recentActivity = [
-      {
-        id: '1',
-        type: 'SENT',
-        timestamp: new Date(),
-        contact: { email: 'john@example.com', name: 'John Doe' },
-        sequence: 'Sales Sequence'
+    const [recentActivity] = await pool.query(`
+      SELECT e.id, e.type, e.timestamp, 
+             c.email as contactEmail, c.firstName as contactFirstName, c.lastName as contactLastName,
+             s.name as sequenceName
+      FROM events e
+      JOIN contacts c ON e.contactId = c.id
+      LEFT JOIN enrollments en ON e.enrollmentId = en.id
+      LEFT JOIN sequences s ON en.sequenceId = s.id
+      WHERE c.userId = ?
+      ORDER BY e.timestamp DESC
+      LIMIT ?
+    `, [userId, limit]);
+
+    const formattedActivity = recentActivity.map(row => ({
+      id: row.id,
+      type: row.type,
+      timestamp: row.timestamp,
+      contact: {
+        email: row.contactEmail,
+        name: `${row.contactFirstName || ''} ${row.contactLastName || ''}`.trim() || 'Unknown'
       },
-      {
-        id: '2',
-        type: 'OPENED',
-        timestamp: new Date(Date.now() - 3600000),
-        contact: { email: 'jane@example.com', name: 'Jane Smith' },
-        sequence: 'Welcome Sequence'
-      },
-      {
-        id: '3',
-        type: 'CLICKED',
-        timestamp: new Date(Date.now() - 7200000),
-        contact: { email: 'bob@example.com', name: 'Bob Johnson' },
-        sequence: 'Sales Sequence'
-      }
-    ].slice(0, limit);
+      sequence: row.sequenceName || 'Unknown Sequence'
+    }));
 
-    console.log(`✅ Returning ${recentActivity.length} mock activity events`);
-
-    res.json({
-      recentActivity,
-      count: recentActivity.length
-    });
+    res.json({ recentActivity: formattedActivity, count: formattedActivity.length });
   } catch (error) {
     console.error('❌ Error in recent activity:', error);
-    res.status(500).json({
-      error: 'Failed to fetch recent activity',
-      details: error.message
-    });
+    res.status(500).json({ error: 'Failed to fetch recent activity' });
   }
 });
 
 /**
  * GET /api/dashboard/performance-trends
- * Get performance trends over time
  */
 router.get('/performance-trends', async (req, res) => {
   try {
-    const { days = 30, sequenceId } = req.query;
+    const userId = req.user.id;
+    const days = parseInt(req.query.days) || 30;
+    const pool = await prisma.getPool();
 
-    // Return mock trend data
-    const trends = [
-      { date: new Date(Date.now() - 6*24*3600000), sent: 12, opened: 5, clicked: 2, replied: 1 },
-      { date: new Date(Date.now() - 5*24*3600000), sent: 15, opened: 7, clicked: 3, replied: 2 },
-      { date: new Date(Date.now() - 4*24*3600000), sent: 10, opened: 4, clicked: 2, replied: 0 },
-      { date: new Date(Date.now() - 3*24*3600000), sent: 18, opened: 8, clicked: 4, replied: 2 },
-      { date: new Date(Date.now() - 2*24*3600000), sent: 20, opened: 9, clicked: 5, replied: 3 },
-      { date: new Date(Date.now() - 1*24*3600000), sent: 14, opened: 6, clicked: 2, replied: 1 },
-      { date: new Date(), sent: 24, opened: 10, clicked: 5, replied: 4 }
-    ];
+    // Generate dates for the last N days
+    const trendsMap = new Map();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      trendsMap.set(dateStr, { date: dateStr, sent: 0, opened: 0, clicked: 0, replied: 0 });
+    }
 
-    console.log(`✅ Returning trend data for ${days} days`);
+    // Query events grouped by date and type
+    const [eventTrends] = await pool.query(`
+      SELECT DATE(e.timestamp) as dateStr, e.type, COUNT(*) as count
+      FROM events e
+      JOIN contacts c ON e.contactId = c.id
+      WHERE c.userId = ? 
+        AND e.timestamp >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        AND e.type IN ('SENT', 'OPENED', 'CLICKED', 'REPLIED')
+      GROUP BY DATE(e.timestamp), e.type
+    `, [userId, days]);
+
+    eventTrends.forEach(row => {
+      // row.dateStr might be a Date object depending on mysql2 driver settings, we format it to YYYY-MM-DD
+      const dateKey = row.dateStr instanceof Date 
+         ? row.dateStr.toISOString().split('T')[0] 
+         : String(row.dateStr).split('T')[0];
+         
+      if (trendsMap.has(dateKey)) {
+        const type = row.type.toLowerCase();
+        trendsMap.get(dateKey)[type] = Number(row.count);
+      }
+    });
 
     res.json({
-      trends,
+      trends: Array.from(trendsMap.values()),
       period: `${days} days`,
-      totalDays: trends.length
+      totalDays: days
     });
 
   } catch (error) {
     console.error('❌ Error fetching performance trends:', error);
-    res.status(500).json({
-      error: 'Failed to fetch performance trends',
-      ...(process.env.NODE_ENV !== 'production' && { details: error.message })
-    });
+    res.status(500).json({ error: 'Failed to fetch performance trends' });
   }
 });
 
