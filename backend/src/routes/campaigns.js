@@ -209,10 +209,29 @@ router.post('/', async (req, res) => {
 
       // Step 3: Delete any existing enrollments for these contacts in this sequence
       const contactPlaceholders = lead_ids.map(() => '?').join(',');
-      await pool.query(
-        `DELETE FROM enrollments WHERE contactId IN (${contactPlaceholders}) AND sequenceId = ?`,
+      
+      // Get the existing enrollments to detach their events
+      const [existingEnrolls] = await pool.query(
+        `SELECT id FROM enrollments WHERE contactId IN (${contactPlaceholders}) AND sequenceId = ?`,
         [...lead_ids, sequence_id]
       );
+      
+      if (existingEnrolls.length > 0) {
+        const enrollIds = existingEnrolls.map(e => e.id);
+        const enrollPlaceholders = enrollIds.map(() => '?').join(',');
+        
+        // Unlink events from enrollments to prevent ON DELETE CASCADE wiping out historical logs
+        await pool.query(
+          `UPDATE events SET enrollmentId = NULL WHERE enrollmentId IN (${enrollPlaceholders})`,
+          enrollIds
+        );
+        
+        // Now it's safe to delete the enrollments
+        await pool.query(
+          `DELETE FROM enrollments WHERE id IN (${enrollPlaceholders})`,
+          enrollIds
+        );
+      }
 
       console.log(`📈 Cleared potentially existing enrollments for sequence ${sequence_id}`);
 
