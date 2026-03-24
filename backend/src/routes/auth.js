@@ -118,21 +118,30 @@ router.post('/register', authenticateToken, requireSuperAdmin, async (req, res) 
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create user
+    // Create user (plain fields only - no Prisma relational syntax)
     const user = await prisma.user.create({
       data: {
         email: email.toLowerCase(),
         password: hashedPassword,
         firstName,
         lastName,
-        role,
-        ...(role === 'MANAGER' && managedUserIds.length > 0 && {
-          managedUsers: {
-            connect: managedUserIds.map(id => ({ id }))
-          }
-        })
+        role
       }
     });
+
+    // If creating a MANAGER with managed users, update them separately
+    if (role === 'MANAGER' && managedUserIds.length > 0 && user.id) {
+      try {
+        for (const userId of managedUserIds) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: { managerId: user.id }
+          });
+        }
+      } catch (managerErr) {
+        console.error('Warning: Failed to assign managed users:', managerErr.message);
+      }
+    }
 
     // Return user data (without password)
     const { password: _, ...userWithoutPassword } = user;

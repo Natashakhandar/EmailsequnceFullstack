@@ -77,31 +77,116 @@ const prismaProxy = {
         throw err;
       }
     },
-    findMany: async ({ where = {}, skip = 0, take = 10 }) => {
+    findMany: async ({ where = {}, skip = 0, take = 100, select, orderBy = {} }) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM users';
         const params = [];
+        const conditions = [];
+        
         if (where.role) {
-          query += ' WHERE role = ?';
+          conditions.push('role = ?');
           params.push(where.role);
         }
+        if (where.managerId) {
+          conditions.push('managerId = ?');
+          params.push(where.managerId);
+        }
+        
+        if (conditions.length > 0) {
+          query += ' WHERE ' + conditions.join(' AND ');
+        }
+        
+        // Handle orderBy
+        const orderField = Object.keys(orderBy)[0] || 'createdAt';
+        const orderDir = orderBy[orderField] === 'asc' ? 'ASC' : 'DESC';
+        query += ` ORDER BY ${orderField} ${orderDir}`;
+        
         query += ` LIMIT ${take} OFFSET ${skip}`;
         const [rows] = await pool.query(query, params);
+        
+        // Add managedUsers relation for each user
+        for (const row of rows) {
+          try {
+            const [managed] = await pool.query(
+              'SELECT id, email, firstName, lastName FROM users WHERE managerId = ?',
+              [row.id]
+            );
+            row.managedUsers = managed || [];
+          } catch (e) {
+            row.managedUsers = [];
+          }
+        }
+        
         return rows;
       } catch (err) {
         console.error('❌ User.findMany error:', err.message);
         throw err;
       }
     },
-    update: async ({ where, data }) => {
+    findFirst: async ({ where }) => {
       try {
         const pool = await getPool();
-        const updates = Object.keys(data).map(k => `${k} = ?`).join(', ');
-        const values = Object.values(data);
-        values.push(where.id);
-        await pool.query(`UPDATE users SET ${updates} WHERE id = ?`, values);
-        return { id: where.id, ...data };
+        let query = 'SELECT * FROM users WHERE 1=1';
+        const params = [];
+        
+        if (where.id) {
+          query += ' AND id = ?';
+          params.push(where.id);
+        }
+        if (where.managerId) {
+          query += ' AND managerId = ?';
+          params.push(where.managerId);
+        }
+        
+        const [rows] = await pool.query(query + ' LIMIT 1', params);
+        return rows[0] || null;
+      } catch (err) {
+        console.error('❌ User.findFirst error:', err.message);
+        throw err;
+      }
+    },
+    update: async ({ where, data, select }) => {
+      try {
+        const pool = await getPool();
+        
+        // Handle managedUsers relation separately
+        if (data.managedUsers) {
+          if (data.managedUsers.set) {
+            // Clear existing managed users
+            await pool.query('UPDATE users SET managerId = NULL WHERE managerId = ?', [where.id]);
+            // Set new managed users
+            for (const u of data.managedUsers.set) {
+              await pool.query('UPDATE users SET managerId = ? WHERE id = ?', [where.id, u.id]);
+            }
+          }
+          delete data.managedUsers;
+        }
+        
+        // Don't run UPDATE if no plain fields to update
+        if (Object.keys(data).length > 0) {
+          const updates = Object.keys(data).map(k => `${k} = ?`).join(', ');
+          const values = Object.values(data);
+          values.push(where.id);
+          await pool.query(`UPDATE users SET ${updates} WHERE id = ?`, values);
+        }
+        
+        // Fetch and return the updated user
+        const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [where.id]);
+        const user = rows[0] || { id: where.id, ...data };
+        
+        // Add managedUsers relation
+        try {
+          const [managed] = await pool.query(
+            'SELECT id, email, firstName, lastName FROM users WHERE managerId = ?',
+            [user.id]
+          );
+          user.managedUsers = managed || [];
+        } catch (e) {
+          user.managedUsers = [];
+        }
+        
+        return user;
       } catch (err) {
         console.error('❌ User.update error:', err.message);
         throw err;
@@ -110,13 +195,44 @@ const prismaProxy = {
     create: async ({ data }) => {
       try {
         const pool = await getPool();
-        const keys = Object.keys(data);
-        const values = Object.values(data);
+        const id = require('crypto').randomBytes(12).toString('hex');
+        const now = new Date();
+        
+        const insertData = {
+          id,
+          email: data.email,
+          password: data.password,
+          firstName: data.firstName || null,
+          lastName: data.lastName || null,
+          role: data.role || 'USER',
+          isActive: data.isActive !== undefined ? (data.isActive ? 1 : 0) : 1,
+          createdAt: now,
+          updatedAt: now
+        };
+        
+        const keys = Object.keys(insertData);
+        const values = Object.values(insertData);
         const placeholders = keys.map(() => '?').join(', ');
         await pool.query(`INSERT INTO users (${keys.join(', ')}) VALUES (${placeholders})`, values);
-        return data;
+        
+        return { ...insertData, id, isActive: true, createdAt: now, updatedAt: now };
       } catch (err) {
         console.error('❌ User.create error:', err.message);
+        throw err;
+      }
+    },
+    delete: async ({ where }) => {
+      try {
+        const pool = await getPool();
+        await pool.query('DELETE FROM users WHERE id = ?', [where.id]);
+        return { id: where.id };
+      } catch (err) {
+        console.error('❌ User.delete error:', err.message);
+        if (err.message?.includes('not found') || err.code === 'ER_ROW_IS_REFERENCED') {
+          const error = new Error('User not found');
+          error.code = 'P2025';
+          throw error;
+        }
         throw err;
       }
     },

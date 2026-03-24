@@ -3,9 +3,6 @@
 .env.local
 emailseq-frontend/.env
 
-# But allow backend/.env to be deployed to production
-!backend/.env
-
 node_modules/
 *.log
 # dist/ - REMOVED to allow frontend build deployment to hosted server
