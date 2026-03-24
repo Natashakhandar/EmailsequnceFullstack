@@ -184,6 +184,7 @@ class EmailMonitorService {
 
       if (isPotentialBounce) {
         console.log(`🚩 Potential bounce detected: "${subject}" from ${fromEmail}`);
+        console.log(`   Headers - In-Reply-To: ${parsed.inReplyTo || 'None'}, References: ${Array.isArray(parsed.references) ? parsed.references.join(', ') : (parsed.references || 'None')}`);
       }
 
       if (!isPotentialBounce && ignorePrefixes.some(prefix => subject.startsWith(prefix))) {
@@ -215,6 +216,8 @@ class EmailMonitorService {
             type: isPotentialBounce ? 'BOUNCED' : 'REPLIED',
             originalEvent: sentEvent 
           };
+        } else {
+          console.log(`ℹ️ Header match attempted with ${allHeaders.length} IDs but no SENT event found in DB.`);
         }
       }
 
@@ -249,6 +252,9 @@ class EmailMonitorService {
       // 4. FALLBACK: Match by contact and timing if it LOOKS like a reply
       const replyDate = parsed.date ? new Date(parsed.date) : new Date();
       const bounceData = isPotentialBounce ? this.extractBounceRecipient(parsed) : null;
+      if (isPotentialBounce) {
+        console.log(`🔍 Bounce extraction result: ${bounceData ? `Recipient: ${bounceData.recipient}, Reason: ${bounceData.reason}` : 'FAILED to extract recipient'}`);
+      }
       const targetEmail = bounceData ? bounceData.recipient : fromEmail;
 
       if (targetEmail) {
@@ -294,7 +300,15 @@ class EmailMonitorService {
               originalEvent: recentSentEvent 
             };
           } else {
-            console.log(`⚠️ Found contact ${targetEmail} but no SENT event prior to ${replyDate}`);
+            console.log(`⚠️ Found contact ${targetEmail} but no SENT event prior to ${replyDate} (checked ${contacts.length} contacts)`);
+            // Log the first contact's ID for debugging
+            if (contacts[0]) {
+              console.log(`   Debug: Contact ID: ${contacts[0].id}, targetEmail used: ${targetEmail}`);
+            }
+          }
+        } else {
+          if (isPotentialBounce) {
+            console.log(`⚠️ No contacts found in DB matching extracted recipient: ${targetEmail}`);
           }
         }
       }

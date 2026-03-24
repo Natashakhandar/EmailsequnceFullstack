@@ -189,33 +189,40 @@ async function verifyConnectionDetailed(userConfig = null) {
 async function generateUnsubscribeToken(contactId) {
   try {
     if (!contactId) {
-      console.error('❌ generateUnsubscribeToken called with no contactId!');
-      return 'https://email.boostnow.in/unsubscribe?token=error';
+      console.warn('⚠️ generateUnsubscribeToken called with no contactId - using placeholder');
+      return 'http://localhost:5173/unsubscribe?token=test-placeholder';
     }
 
     const token = uuidv4();
 
-    const created = await prisma.unsubscribeToken.create({
+    await prisma.unsubscribeToken.create({
       data: { token, contactId }
     });
 
     console.log(`✅ Unsubscribe token created for contact ${contactId}: ${token}`);
 
-    // Use FRONTEND_URL so clients land on the form page (with reason dropdown)
-    let frontendUrl = 'https://email.boostnow.in'; // default production frontend
-    if (process.env.FRONTEND_URL) {
-      frontendUrl = process.env.FRONTEND_URL.replace(/\/$/, '');
-    } else if (process.env.NODE_ENV === 'development') {
-      frontendUrl = 'http://localhost:5173';
+    // Determine frontend URL based on environment
+    let frontendUrl = process.env.FRONTEND_URL;
+    
+    // Default to production domain if not in development
+    if (process.env.NODE_ENV === 'production') {
+      frontendUrl = frontendUrl || 'https://email.boostnow.in';
+    } else {
+      // Development defaults
+      frontendUrl = frontendUrl || 'http://localhost:8080';
     }
 
-    const unsubscribeUrl = `${frontendUrl}/unsubscribe?token=${token}`;
-    console.log(`🔗 Unsubscribe URL: ${unsubscribeUrl}`);
+    const unsubscribeUrl = `${frontendUrl.replace(/\/$/, '')}/unsubscribe?token=${token}`;
+    console.log(`🔗 UNSUBSCRIBE LINK GENERATED (${process.env.NODE_ENV || 'development'}): ${unsubscribeUrl}`);
     return unsubscribeUrl;
   } catch (error) {
-    console.error('❌ Error generating unsubscribe token:', error);
-    console.error('Error details:', error.message);
-    return 'https://email.boostnow.in/unsubscribe?token=error';
+    console.error('❌ Error generating unsubscribe token:', error.message);
+    console.error('Stack:', error.stack);
+    // Use correct fallback URL based on environment
+    const fallbackBase = process.env.NODE_ENV === 'production'
+      ? (process.env.FRONTEND_URL || 'https://email.boostnow.in')
+      : 'http://localhost:8080';
+    return `${fallbackBase}/unsubscribe?token=error-${Date.now()}`;
   }
 }
 
@@ -501,22 +508,69 @@ async function sendEmail({
     console.log(`📤 INITIATING SENDMAIL TO: ${to} VIA ${mailOptions.from.address}`);
     const info = await transport.sendMail(mailOptions);
 
-    // DELIVERY CONFIRMATION
-    console.log('✅ EMAIL DELIVERY CONFIRMED BY SMTP SERVER');
-    console.log(`📧 Status: ${info.response}`);
-    console.log(`Message ID: ${info.messageId}`);
-    console.log(`Accepted: ${info.accepted.join(', ')}`);
-    if (info.rejected.length > 0) {
-      console.log(`❌ Rejected: ${info.rejected.join(', ')}`);
+    // 5. Check for immediate SMTP rejections (Bounces)
+    const isRejected = info.rejected && info.rejected.length > 0 && info.rejected.includes(to);
+
+    if (isRejected) {
+      console.log(`❌ EMAIL BOUNCED: ${to} was rejected by SMTP server`);
+      
+      if (enrollmentId && contactId) {
+        // Log BOUNCED event
+        await prisma.event.create({
+          data: {
+            enrollmentId,
+            contactId,
+            campaignId,
+            type: 'BOUNCED',
+            emailId: messageId,
+            details: JSON.stringify({
+              to,
+              subject: processedSubject,
+              response: info.response,
+              rejected: info.rejected,
+              sentFrom: mailOptions.from.address,
+              error: 'SMTP Server Rejected Recipient (Invalid Email)'
+            })
+          }
+        });
+
+        // Update Contact status to BOUNCED
+        await prisma.contact.update({
+          where: { id: contactId },
+          data: { status: 'BOUNCED' }
+        });
+
+        // Stop the enrollment
+        await prisma.enrollment.update({
+          where: { id: enrollmentId },
+          data: { 
+            status: 'STOPPED',
+            completedAt: new Date(),
+            nextSendAt: null
+          }
+        });
+
+        // Broadcast real-time event via socket
+        broadcastRealTimeEvent({
+          type: 'BOUNCED',
+          campaignId,
+          contactId,
+          enrollmentId,
+          to,
+          subject: processedSubject,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      return {
+        success: false,
+        error: 'Email bounced/rejected by recipient server',
+        response: info.response,
+        emailId: messageId
+      };
     }
-    console.log('--- END OF SEND_EMAIL LOG ---');
 
-    // Save to IMAP Sent folder (async, non-blocking)
-    saveToSentFolder(mailOptions, userConfig).catch(err => {
-      console.log('⚠️ Could not save to Sent folder:', err.message);
-    });
-
-    // Log sent event if enrollment provided
+    // 6. If not rejected, log sent event if enrollment provided
     if (enrollmentId && contactId) {
       await prisma.event.create({
         data: {
@@ -549,6 +603,11 @@ async function sendEmail({
       });
     }
 
+    // 7. Save to IMAP Sent folder (async, non-blocking)
+    saveToSentFolder(mailOptions, userConfig).catch(err => {
+      console.log('⚠️ Could not save to Sent folder:', err.message);
+    });
+
     return {
       success: true,
       messageId: info.messageId,
@@ -559,15 +618,22 @@ async function sendEmail({
   } catch (error) {
     console.error(`❌ Failed to send email to ${to}:`, error.message);
 
-    // Log failed event if enrollment provided
+    // Classification: If it's a DNS error or Invalid Address, treat as BOUNCED
+    const isBounceError = error.code === 'EENVELOPE' || error.code === 'EDNS' || 
+                         error.message?.includes('Invalid recipient') || 
+                         error.message?.includes('DNS Error');
+
+    const eventType = isBounceError ? 'BOUNCED' : 'FAILED';
+
+    // Log failed/bounced event if enrollment provided
     if (enrollmentId && contactId) {
       try {
         await prisma.event.create({
           data: {
             enrollmentId,
             contactId,
-            campaignId, // Include campaign ID for tracking
-            type: 'FAILED',
+            campaignId,
+            type: eventType,
             details: JSON.stringify({
               to,
               error: error.message,
@@ -575,6 +641,34 @@ async function sendEmail({
               command: error.command
             })
           }
+        });
+
+        if (isBounceError) {
+          // Update Contact status to BOUNCED
+          await prisma.contact.update({
+            where: { id: contactId },
+            data: { status: 'BOUNCED' }
+          });
+
+          // Stop the enrollment
+          await prisma.enrollment.update({
+            where: { id: enrollmentId },
+            data: { 
+              status: 'STOPPED',
+              completedAt: new Date(),
+              nextSendAt: null
+            }
+          });
+        }
+        
+        broadcastRealTimeEvent({
+          type: eventType,
+          campaignId,
+          contactId,
+          enrollmentId,
+          to,
+          subject: processedSubject,
+          timestamp: new Date().toISOString()
         });
       } catch (logError) {
         console.error('Failed to log email failure event:', logError);

@@ -51,8 +51,36 @@ async function getPool() {
   }
 }
 
+const COLUMN_MAPPINGS = {
+  leadListName: 'lead_list_name',
+  unsubscribeReason: 'unsubscribe_reason',
+  unsubscribedAt: 'unsubscribed_at'
+};
+
+const mapContact = (row) => {
+  if (!row) return null;
+  const mapped = { ...row };
+  if ('lead_list_name' in mapped) {
+    mapped.leadListName = mapped.lead_list_name;
+    delete mapped.lead_list_name;
+  }
+  if ('unsubscribe_reason' in mapped) {
+    mapped.unsubscribeReason = mapped.unsubscribe_reason;
+    delete mapped.unsubscribe_reason;
+  }
+  if ('unsubscribed_at' in mapped) {
+    mapped.unsubscribedAt = mapped.unsubscribed_at;
+    delete mapped.unsubscribed_at;
+  }
+  return mapped;
+};
+
 // For backward compatibility - return object with common Prisma methods
 const prismaProxy = {
+  query: async (sql, params) => {
+    const pool = await getPool();
+    return await pool.query(sql, params);
+  },
   user: {
     findUnique: async ({ where, select }) => {
       try {
@@ -77,7 +105,7 @@ const prismaProxy = {
         throw err;
       }
     },
-    findMany: async ({ where = {}, skip = 0, take = 100, select, orderBy = {} }) => {
+    findMany: async ({ where = {}, skip = 0, take = 100, select, orderBy = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM users';
@@ -265,14 +293,21 @@ const prismaProxy = {
     create: async ({ data }) => {
       try {
         const pool = await getPool();
-        const keys = Object.keys(data);
-        const values = Object.values(data);
+        const insertData = {
+          id: data.id || require('crypto').randomBytes(8).toString('hex').toUpperCase(),
+          token: data.token,
+          contactId: data.contactId,
+          createdAt: data.createdAt || new Date(),
+          usedAt: data.usedAt || null
+        };
+        const keys = Object.keys(insertData);
+        const values = Object.values(insertData);
         const placeholders = keys.map(() => '?').join(', ');
         await pool.query(
           `INSERT INTO unsubscribe_tokens (${keys.join(', ')}) VALUES (${placeholders})`,
           values
         );
-        return data;
+        return insertData;
       } catch (err) {
         console.error('❌ UnsubscribeToken.create error:', err.message);
         throw err;
@@ -300,7 +335,7 @@ const prismaProxy = {
           'SELECT * FROM contacts WHERE id = ?',
           [where.id]
         );
-        return rows[0] || null;
+        return mapContact(rows[0]);
       } catch (err) {
         console.error('❌ Contact.findUnique error:', err.message);
         throw err;
@@ -327,13 +362,13 @@ const prismaProxy = {
         }
         
         const [rows] = await pool.query(query + ' LIMIT 1', params);
-        return rows[0] || null;
+        return mapContact(rows[0]);
       } catch (err) {
         console.error('❌ Contact.findFirst error:', err.message);
         throw err;
       }
     },
-    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {} }) => {
+    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM contacts WHERE 1=1';
@@ -365,18 +400,25 @@ const prismaProxy = {
           let orConditions = [];
           const orParams = [];
           for (const orCondition of where.OR) {
-            // Each orCondition has one property like { email: { contains: '...' } }
             const key = Object.keys(orCondition)[0];
             const value = orCondition[key];
+            const dbKey = key === 'leadListName' ? 'lead_list_name' : key;
             
-            if (value && value.contains) {
-              const searchTerm = `%${value.contains}%`;
-              if (key === 'leadListName') {
-                orConditions.push(`lead_list_name LIKE ?`);
-              } else {
-                orConditions.push(`${key} LIKE ?`);
+            if (value && typeof value === 'object') {
+              if (value.contains) {
+                orConditions.push(`${dbKey} LIKE ?`);
+                orParams.push(`%${value.contains}%`);
+              } else if (value.startsWith) {
+                orConditions.push(`${dbKey} LIKE ?`);
+                orParams.push(`${value.startsWith}%`);
+              } else if (value.equals) {
+                orConditions.push(`${dbKey} = ?`);
+                orParams.push(value.equals);
               }
-              orParams.push(searchTerm);
+            } else if (value !== undefined) {
+              // Direct equality
+              orConditions.push(`${dbKey} = ?`);
+              orParams.push(value);
             }
           }
           if (orConditions.length > 0) {
@@ -440,25 +482,8 @@ const prismaProxy = {
           }
         }
         
-        // Map snake_case DB columns to camelCase for frontend compatibility
-        const mappedRows = (rows || []).map(row => {
-          const mapped = { ...row };
-          if ('lead_list_name' in mapped) {
-            mapped.leadListName = mapped.lead_list_name;
-            delete mapped.lead_list_name;
-          }
-          if ('unsubscribe_reason' in mapped) {
-            mapped.unsubscribeReason = mapped.unsubscribe_reason;
-            delete mapped.unsubscribe_reason;
-          }
-          if ('unsubscribed_at' in mapped) {
-            mapped.unsubscribedAt = mapped.unsubscribed_at;
-            delete mapped.unsubscribed_at;
-          }
-          return mapped;
-        });
-        
-        return mappedRows;
+        // Map all to camelCase and return
+        return (rows || []).map(mapContact);
       } catch (err) {
         console.error('❌ Contact.findMany error:', err.message);
         throw err;
@@ -470,22 +495,15 @@ const prismaProxy = {
         const id = require('crypto').randomBytes(8).toString('hex').toUpperCase();
         const now = new Date();
         
-        const insertData = {
-          id,
-          userId: data.userId,
-          email: data.email,
-          firstName: data.firstName || null,
-          lastName: data.lastName || null,
-          company: data.company || null,
-          lead_list_name: data.leadListName || null,
-          timezone: data.timezone || 'UTC',
-          status: data.status || 'ACTIVE',
-          createdAt: now,
-          updatedAt: now
-        };
+        // Map camelCase to snake_case
+        const dbData = { id, createdAt: now, updatedAt: now };
+        for (const [key, value] of Object.entries(data)) {
+          const dbKey = COLUMN_MAPPINGS[key] || key;
+          dbData[dbKey] = value === undefined ? null : value;
+        }
         
-        const keys = Object.keys(insertData);
-        const values = Object.values(insertData);
+        const keys = Object.keys(dbData);
+        const values = Object.values(dbData);
         const placeholders = keys.map(() => '?').join(', ');
         
         await pool.query(
@@ -493,7 +511,7 @@ const prismaProxy = {
           values
         );
         
-        return insertData;
+        return { ...data, ...dbData, id };
       } catch (err) {
         console.error('❌ Contact.create error:', err.message);
         throw err;
@@ -502,9 +520,20 @@ const prismaProxy = {
     update: async ({ where, data }) => {
       try {
         const pool = await getPool();
-        const updates = Object.keys(data).map(k => `${k} = ?`).join(', ');
-        const values = Object.values(data);
+        
+        // Map camelCase to snake_case for columns
+        const updateEntries = Object.entries(data).map(([key, value]) => {
+          const dbKey = COLUMN_MAPPINGS[key] || key;
+          return { dbKey, value };
+        });
+        
+        const updates = updateEntries.map(e => `${e.dbKey} = ?`).join(', ');
+        const values = updateEntries.map(e => e.value);
+        
         values.push(where.id);
+        
+        console.log('📝 Contact.update SQL:', `UPDATE contacts SET ${updates} WHERE id = ?`, values);
+        
         await pool.query(`UPDATE contacts SET ${updates} WHERE id = ?`, values);
         return { id: where.id, ...data };
       } catch (err) {
@@ -512,7 +541,7 @@ const prismaProxy = {
         throw err;
       }
     },
-    count: async ({ where = {} }) => {
+    count: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT COUNT(*) as count FROM contacts WHERE 1=1';
@@ -534,7 +563,7 @@ const prismaProxy = {
         throw err;
       }
     },
-    groupBy: async ({ by, where = {}, _count = {}, orderBy = {} }) => {
+    groupBy: async ({ by, where = {}, _count = {}, orderBy = {} } = {}) => {
       try {
         const pool = await getPool();
         // Group by status and lead_list_name (database column name)
@@ -597,7 +626,7 @@ const prismaProxy = {
     }
   },
   sequence: {
-    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {} }) => {
+    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM sequences WHERE 1=1';
@@ -775,7 +804,7 @@ const prismaProxy = {
         throw err;
       }
     },
-    count: async ({ where = {} }) => {
+    count: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT COUNT(*) as count FROM sequences WHERE 1=1';
@@ -799,7 +828,7 @@ const prismaProxy = {
     },
   },
   sequenceStep: {
-    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {} }) => {
+    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM sequence_steps WHERE 1=1';
@@ -1119,7 +1148,7 @@ const prismaProxy = {
         return [];
       }
     },
-    count: async ({ where = {} }) => {
+    count: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT COUNT(*) as count FROM enrollments WHERE 1=1';
@@ -1311,6 +1340,10 @@ const prismaProxy = {
             }
           }
         }
+        if (where.campaignId) {
+          query += ' AND campaignId = ?';
+          vals.push(where.campaignId);
+        }
         
         const [result] = await pool.query(query, vals);
         return { count: result.affectedRows || 0 };
@@ -1319,7 +1352,7 @@ const prismaProxy = {
         throw err;
       }
     },
-    deleteMany: async ({ where = {} }) => {
+    deleteMany: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'DELETE FROM enrollments WHERE 1=1';
@@ -1349,6 +1382,10 @@ const prismaProxy = {
             params.push(where.id);
           }
         }
+        if (where.campaignId) {
+          query += ' AND campaignId = ?';
+          params.push(where.campaignId);
+        }
         
         const [result] = await pool.query(query, params);
         return { count: result.affectedRows || 0 };
@@ -1357,9 +1394,36 @@ const prismaProxy = {
         throw err;
       }
     },
+    createMany: async ({ data }) => {
+      try {
+        const pool = await getPool();
+        if (!Array.isArray(data) || data.length === 0) return { count: 0 };
+        const now = new Date();
+        for (const item of data) {
+          const id = require('crypto').randomBytes(8).toString('hex').toUpperCase();
+          const insertData = {
+            id,
+            sequenceId: item.sequenceId,
+            contactId: item.contactId,
+            campaignId: item.campaignId || null,
+            status: item.status || 'ACTIVE',
+            createdAt: now,
+            updatedAt: now
+          };
+          const keys = Object.keys(insertData);
+          const vals = Object.values(insertData);
+          const ph = keys.map(() => '?').join(', ');
+          await pool.query(`INSERT INTO enrollments (${keys.join(', ')}) VALUES (${ph})`, vals);
+        }
+        return { count: data.length };
+      } catch (err) {
+        console.error('❌ Enrollment.createMany error:', err.message);
+        throw err;
+      }
+    },
   },
   emailConfig: {
-    findMany: async ({ where = {} }) => {
+    findMany: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM email_configs WHERE 1=1';
@@ -1474,7 +1538,7 @@ const prismaProxy = {
     },
   },
   campaign: {
-    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {} }) => {
+    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM campaigns WHERE 1=1';
@@ -1583,7 +1647,7 @@ const prismaProxy = {
         return null;
       }
     },
-    count: async ({ where = {} }) => {
+    count: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT COUNT(*) as count FROM campaigns WHERE 1=1';
@@ -1661,7 +1725,7 @@ const prismaProxy = {
     },
   },
   template: {
-    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {} }) => {
+    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM templates WHERE 1=1';
@@ -1731,7 +1795,7 @@ const prismaProxy = {
         return null;
       }
     },
-    count: async ({ where = {} }) => {
+    count: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT COUNT(*) as count FROM templates WHERE 1=1';
@@ -1813,11 +1877,11 @@ const prismaProxy = {
         const params = [];
         
         if (where.campaignId) {
-          query += ' AND campaign_id = ?';
+          query += ' AND campaignId = ?';
           params.push(where.campaignId);
         }
         if (where.contactId) {
-          query += ' AND contact_id = ?';
+          query += ' AND contactId = ?';
           params.push(where.contactId);
         }
         
@@ -1829,7 +1893,7 @@ const prismaProxy = {
         return [];
       }
     },
-    count: async ({ where = {} }) => {
+    count: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT COUNT(*) as count FROM campaign_leads WHERE 1=1';
@@ -1894,9 +1958,55 @@ const prismaProxy = {
         throw err;
       }
     },
+    deleteMany: async ({ where = {} } = {}) => {
+      try {
+        const pool = await getPool();
+        let query = 'DELETE FROM campaign_leads WHERE 1=1';
+        const params = [];
+        if (where.campaignId) {
+          query += ' AND campaignId = ?';
+          params.push(where.campaignId);
+        }
+        if (where.contactId) {
+          query += ' AND contactId = ?';
+          params.push(where.contactId);
+        }
+        const [result] = await pool.query(query, params);
+        return { count: result.affectedRows || 0 };
+      } catch (err) {
+        console.error('❌ CampaignLead.deleteMany error:', err.message);
+        throw err;
+      }
+    },
+    createMany: async ({ data }) => {
+      try {
+        const pool = await getPool();
+        if (!Array.isArray(data) || data.length === 0) return { count: 0 };
+        const now = new Date();
+        for (const item of data) {
+          const id = require('crypto').randomBytes(8).toString('hex').toUpperCase();
+          const insertData = {
+            id,
+            campaignId: item.campaignId,
+            contactId: item.contactId,
+            status: item.status || 'ADDED',
+            createdAt: now,
+            updatedAt: now
+          };
+          const keys = Object.keys(insertData);
+          const vals = Object.values(insertData);
+          const ph = keys.map(() => '?').join(', ');
+          await pool.query(`INSERT INTO campaign_leads (${keys.join(', ')}) VALUES (${ph})`, vals);
+        }
+        return { count: data.length };
+      } catch (err) {
+        console.error('❌ CampaignLead.createMany error:', err.message);
+        throw err;
+      }
+    },
   },
   emailActivity: {
-    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {} }) => {
+    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM email_activities WHERE 1=1';
@@ -1922,7 +2032,7 @@ const prismaProxy = {
         return [];
       }
     },
-    count: async ({ where = {} }) => {
+    count: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT COUNT(*) as count FROM email_activities WHERE 1=1';
@@ -2014,23 +2124,6 @@ const prismaProxy = {
       try {
         const pool = await getPool();
         let query = 'SELECT e.* FROM events e';
-        const params = [];
-        const joins = [];
-        
-        // Handle contact-based filters (userId, search, leadListName)
-        if (where.contact) {
-          joins.push('JOIN contacts c ON e.contactId = c.id');
-          if (where.contact.userId) {
-            params.push(where.contact.userId);
-            joins.push(''); // placeholder
-          }
-        }
-        
-        // Build WHERE clause after joins
-        query += (joins.length > 0 ? ' ' + joins.filter(j => j).join(' ') : '') + ' WHERE 1=1';
-        
-        // Reset and rebuild properly
-        query = 'SELECT e.* FROM events e';
         const conditions = [];
         const condParams = [];
         
@@ -2052,6 +2145,16 @@ const prismaProxy = {
             condParams.push(where.type);
           }
         }
+        if (where.contactId) {
+          if (typeof where.contactId === 'object' && where.contactId.in) {
+            const ph = where.contactId.in.map(() => '?').join(',');
+            conditions.push(`e.contactId IN (${ph})`);
+            condParams.push(...where.contactId.in);
+          } else {
+            conditions.push('e.contactId = ?');
+            condParams.push(where.contactId);
+          }
+        }
         if (where.enrollmentId) {
           if (typeof where.enrollmentId === 'object' && where.enrollmentId.in) {
             const ph = where.enrollmentId.in.map(() => '?').join(',');
@@ -2062,13 +2165,28 @@ const prismaProxy = {
             condParams.push(where.enrollmentId);
           }
         }
-        if (where.contactId) {
-          conditions.push('e.contactId = ?');
-          condParams.push(where.contactId);
-        }
         if (where.campaignId) {
           conditions.push('e.campaignId = ?');
           condParams.push(where.campaignId);
+        }
+        if (where.emailId) {
+          if (typeof where.emailId === 'object' && where.emailId.in) {
+            const ph = where.emailId.in.map(() => '?').join(',');
+            conditions.push(`e.emailId IN (${ph})`);
+            condParams.push(...where.emailId.in);
+          } else {
+            conditions.push('e.emailId = ?');
+            condParams.push(where.emailId);
+          }
+        }
+        if (where.details) {
+          if (typeof where.details === 'object' && where.details.contains) {
+            conditions.push('e.details LIKE ?');
+            condParams.push(`%${where.details.contains}%`);
+          } else {
+            conditions.push('e.details = ?');
+            condParams.push(where.details);
+          }
         }
         if (where.timestamp) {
           if (where.timestamp.gte) {
@@ -2147,62 +2265,16 @@ const prismaProxy = {
         return [];
       }
     },
-    findFirst: async ({ where = {}, include = {} }) => {
+    findFirst: async ({ where = {}, include = {}, orderBy = { timestamp: 'desc' } } = {}) => {
       try {
-        const pool = await getPool();
-        let query = 'SELECT * FROM events WHERE 1=1';
-        const params = [];
-        
-        if (where.id) {
-          query += ' AND id = ?';
-          params.push(where.id);
-        }
-        if (where.enrollmentId) {
-          query += ' AND enrollmentId = ?';
-          params.push(where.enrollmentId);
-        }
-        if (where.contactId) {
-          query += ' AND contactId = ?';
-          params.push(where.contactId);
-        }
-        if (where.type) {
-          query += ' AND type = ?';
-          params.push(where.type);
-        }
-        if (where.emailId) {
-          if (typeof where.emailId === 'object' && where.emailId.in) {
-            const ph = where.emailId.in.map(() => '?').join(',');
-            query += ` AND emailId IN (${ph})`;
-            params.push(...where.emailId.in);
-          } else {
-            query += ' AND emailId = ?';
-            params.push(where.emailId);
-          }
-        }
-        
-        query += ' LIMIT 1';
-        const [rows] = await pool.query(query, params);
-        const event = rows[0] || null;
-        
-        if (event && include.contact) {
-          const [contacts] = await pool.query('SELECT * FROM contacts WHERE id = ?', [event.contactId]);
-          if (contacts[0]) {
-            const c = contacts[0];
-            if ('lead_list_name' in c) {
-              c.leadListName = c.lead_list_name;
-              delete c.lead_list_name;
-            }
-            event.contact = c;
-          } else {
-            event.contact = null;
-          }
-        }
-        if (event && include.enrollment) {
-          const [enrollments] = await pool.query('SELECT * FROM enrollments WHERE id = ?', [event.enrollmentId]);
-          event.enrollment = enrollments[0] || null;
-        }
-        
-        return event;
+        // Reuse findMany logic but with take 1
+        const results = await prismaProxy.event.findMany({
+          where,
+          include,
+          orderBy,
+          take: 1
+        });
+        return results[0] || null;
       } catch (err) {
         console.error('❌ Event.findFirst error:', err.message);
         return null;
@@ -2335,7 +2407,7 @@ const prismaProxy = {
         throw err;
       }
     },
-    deleteMany: async ({ where = {} }) => {
+    deleteMany: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'DELETE FROM events WHERE 1=1';
@@ -2392,7 +2464,7 @@ const prismaProxy = {
         throw err;
       }
     },
-    delete: async ({ where = {} }) => {
+    delete: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         if (where.id) {
