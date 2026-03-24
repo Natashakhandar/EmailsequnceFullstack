@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { api } from "@/lib/api";
 
@@ -44,6 +45,9 @@ const SmtpSettings = () => {
     maxLimit: 200,
     dailySentCount: 0
   });
+
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [showImapPassword, setShowImapPassword] = useState(false);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -261,9 +265,14 @@ const SmtpSettings = () => {
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">Username</label>
                 <input name="smtpUser" value={formData.smtpUser} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="you@example.com" />
               </div>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 relative">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">Password</label>
-                <input name="smtpPassword" type="password" value={formData.smtpPassword} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="••••••••" />
+                <div className="relative">
+                  <input name="smtpPassword" type={showSmtpPassword ? "text" : "password"} value={formData.smtpPassword} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2 w-full pr-10" placeholder="••••••••" />
+                  <button type="button" onClick={() => setShowSmtpPassword(!showSmtpPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showSmtpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">From Email</label>
@@ -313,9 +322,14 @@ const SmtpSettings = () => {
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">Username</label>
                 <input name="imapUser" value={formData.imapUser} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="you@example.com" />
               </div>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 relative">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">Password</label>
-                <input name="imapPassword" type="password" value={formData.imapPassword} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2" placeholder="••••••••" />
+                <div className="relative">
+                  <input name="imapPassword" type={showImapPassword ? "text" : "password"} value={formData.imapPassword} onChange={handleInputChange} className="input bg-background border border-border rounded-md px-3 py-2 w-full pr-10" placeholder="••••••••" />
+                  <button type="button" onClick={() => setShowImapPassword(!showImapPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showImapPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground uppercase tracking-wide">Purpose</label>

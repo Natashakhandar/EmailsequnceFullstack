@@ -139,9 +139,9 @@ function createTransporter(userConfig = null) {
       pool: true,
       maxConnections: 10,
       maxMessages: 100,
-      connectionTimeout: 10000, // 10 seconds
-      greetingTimeout: 10000,
-      socketTimeout: 20000,
+      connectionTimeout: 30000, // 30 seconds to support Hostinger anti-spam
+      greetingTimeout: 30000,
+      socketTimeout: 40000,
       tls: {
         rejectUnauthorized: false,
         servername: userConfig.smtpHost
