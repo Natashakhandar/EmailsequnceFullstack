@@ -313,9 +313,48 @@ const UnsubscribePage = () => {
                 has been unsubscribed from our mailing list(s)
               </p>
             </div>
-            <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6" }}>
+            <p style={{ color: "#666", fontSize: "15px", lineHeight: "1.6", marginBottom: "24px" }}>
               You will no longer receive emails from us. Thank you for letting us know your preferences.
             </p>
+
+            <div style={{ borderTop: "1px solid #e0e0e0", paddingTop: "24px" }}>
+              <p style={{ color: "#666", fontSize: "14px", marginBottom: "16px", fontWeight: "500" }}>
+                Changed your mind? You can re-subscribe anytime.
+              </p>
+              <button
+                onClick={handleResubscribe}
+                disabled={isResubscribing}
+                style={{
+                  width: "100%",
+                  padding: "12px 28px",
+                  fontSize: "15px",
+                  fontWeight: "600",
+                  border: "2px solid #667eea",
+                  borderRadius: "8px",
+                  cursor: isResubscribing ? "not-allowed" : "pointer",
+                  transition: "all 0.3s ease",
+                  background: isResubscribing ? "#f5f5f5" : "#fff",
+                  color: isResubscribing ? "#999" : "#667eea",
+                  opacity: isResubscribing ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (!isResubscribing) {
+                    e.currentTarget.style.background = "#667eea";
+                    e.currentTarget.style.color = "#fff";
+                    e.currentTarget.style.boxShadow = "0 4px 15px rgba(102, 126, 234, 0.3)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isResubscribing) {
+                    e.currentTarget.style.background = "#fff";
+                    e.currentTarget.style.color = "#667eea";
+                    e.currentTarget.style.boxShadow = "none";
+                  }
+                }}
+              >
+                {isResubscribing ? "Processing..." : "✉️ Re-subscribe to emails"}
+              </button>
+            </div>
           </>
         )}
 
