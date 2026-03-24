@@ -312,16 +312,16 @@ const EmailActivity = () => {
       OPENED: { variant: "default" as const, color: "bg-purple-100 text-purple-800" },
       CLICKED: { variant: "default" as const, color: "bg-indigo-100 text-indigo-800" },
       REPLIED: { variant: "default" as const, color: "bg-emerald-100 text-emerald-800" },
-      BOUNCED: { variant: "destructive" as const, color: "bg-red-100 text-red-800" },
+      BOUNCED: { variant: "default" as const, color: "bg-orange-100 text-orange-800" },
       FAILED: { variant: "destructive" as const, color: "bg-red-100 text-red-800" },
       UNSUBSCRIBED: { variant: "secondary" as const, color: "bg-gray-100 text-gray-800" }
     };
 
     const config = statusConfig[type.toUpperCase() as keyof typeof statusConfig] || statusConfig.SENT;
     
-    // Custom label for Bouncel
+    // Custom label for Bounces
     let label = type.toUpperCase();
-    if (type === 'BOUNCED') label = "UNDELIVERED";
+    if (type === 'BOUNCED') label = "BOUNCED";
     if (type === 'REPLIED') label = "REPLY RECEIVED";
 
     return (
