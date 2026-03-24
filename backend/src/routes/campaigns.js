@@ -1,8 +1,10 @@
 const express = require('express');
+const crypto = require('crypto');
 const prisma = require('../db/prismaClient');
 const { authenticateToken } = require('../middleware/auth');
 const { broadcastCampaignStats, broadcastGeneralStats } = require('../services/socketService');
 const { calculateNextSendDate } = require('../utils/schedulerUtils');
+const { processDueEmails } = require('../jobs/scheduler');
 const router = express.Router();
 
 // Apply authentication middleware to all campaign routes
@@ -164,101 +166,101 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Create campaign with transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Prepare data with proper null defaults for dates
-      const campaignData = {
-        campaignName: campaign_name.trim(),
-        description: description && description.trim() ? description.trim() : null,
-        sequenceId: sequence_id.trim(),
-        startDate: (start_date && start_date !== '') ? new Date(start_date) : null,
-        endDate: (end_date && end_date !== '') ? new Date(end_date) : null,
-        userId: req.user.id
-      };
+    // Create campaign using raw SQL (proxy doesn't support $transaction)
+    const pool = await prisma.getPool();
+    const campaignId = crypto.randomBytes(12).toString('hex').toUpperCase().substring(0, 25);
+    const now = new Date();
 
-      console.log('≡ƒôè Creating campaign with Prisma data:', {
-        campaignData,
-        dateHandling: {
-          start_date_input: start_date,
-          end_date_input: end_date,
-          start_date_processed: campaignData.startDate,
-          end_date_processed: campaignData.endDate
-        }
-      });
+    const campaignData = {
+      campaignName: campaign_name.trim(),
+      description: description && description.trim() ? description.trim() : null,
+      sequenceId: sequence_id.trim(),
+      startDate: (start_date && start_date !== '') ? new Date(start_date) : null,
+      endDate: (end_date && end_date !== '') ? new Date(end_date) : null,
+      userId: req.user.id
+    };
 
-      // Create campaign with enhanced data validation
-      const campaign = await tx.campaign.create({
-        data: {
-          ...campaignData,
-          userId: req.user.id // Link campaign to the logged-in user
-        },
-        include: {
-          sequence: {
-            include: { steps: true }
-          }
-        }
-      });
-
-      // Add leads to campaign
-      if (lead_ids.length > 0) {
-        await tx.campaignLead.createMany({
-          data: lead_ids.map(contactId => ({
-            campaignId: campaign.id,
-            contactId
-          }))
-        });
-
-        // Delete any existing enrollments for these contacts in this sequence 
-        // to allow them to re-start the sequence in the new campaign.
-        // This solves the issue where leads wouldn't send if they were previously enrolled.
-        const contactIds = lead_ids;
-        await tx.enrollment.deleteMany({
-          where: {
-            contactId: { in: contactIds },
-            sequenceId: sequence_id
-          }
-        });
-
-        console.log(`≡ƒôè Cleared ${contactIds.length} potentially existing enrollments for sequence ${sequence_id}`);
-
-        // Create enrollments for all leads in this campaign
-        const firstStep = sequence.steps[0];
-        const enrollmentData = lead_ids.map(contactId => ({
-          contactId,
-          sequenceId: sequence_id,
-          campaignId: campaign.id,
-          currentStep: 1,
-          // Calculate nextSendAt based on first step schedule and campaign start date
-          nextSendAt: calculateNextSendDate(firstStep, campaign.startDate || new Date())
-        }));
-
-        const resultEnrollments = await tx.enrollment.createMany({
-          data: enrollmentData,
-          skipDuplicates: true // Extra safety
-        });
-
-        console.log(`Γ£à Created ${resultEnrollments.count} new enrollments for campaign: ${campaign.id}`);
+    console.log('📈 Creating campaign with raw SQL:', {
+      campaignData,
+      dateHandling: {
+        start_date_input: start_date,
+        end_date_input: end_date,
+        start_date_processed: campaignData.startDate,
+        end_date_processed: campaignData.endDate
       }
-
-      return campaign;
     });
 
-    console.log('Γ£à Campaign created successfully:', {
-      campaignId: result.id,
-      campaignName: result.campaignName,
+    // Step 1: Insert campaign
+    await pool.query(
+      `INSERT INTO campaigns (id, userId, campaignName, description, sequenceId, startDate, endDate, isActive, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      [campaignId, campaignData.userId, campaignData.campaignName, campaignData.description, campaignData.sequenceId, campaignData.startDate, campaignData.endDate, now, now]
+    );
+
+    // Step 2: Add leads to campaign
+    if (lead_ids.length > 0) {
+      for (const contactId of lead_ids) {
+        const clId = crypto.randomBytes(12).toString('hex').toUpperCase().substring(0, 25);
+        await pool.query(
+          'INSERT INTO campaign_leads (id, campaignId, contactId, createdAt) VALUES (?, ?, ?, ?)',
+          [clId, campaignId, contactId, now]
+        );
+      }
+
+      // Step 3: Delete any existing enrollments for these contacts in this sequence
+      const contactPlaceholders = lead_ids.map(() => '?').join(',');
+      await pool.query(
+        `DELETE FROM enrollments WHERE contactId IN (${contactPlaceholders}) AND sequenceId = ?`,
+        [...lead_ids, sequence_id]
+      );
+
+      console.log(`📈 Cleared potentially existing enrollments for sequence ${sequence_id}`);
+
+      // Step 4: Create enrollments for all leads
+      const firstStep = sequence.steps[0];
+      for (const contactId of lead_ids) {
+        const enrollId = crypto.randomBytes(12).toString('hex').toUpperCase().substring(0, 25);
+        // For step 1, set nextSendAt to now for immediate sending
+        const nextSendAt = new Date();
+        await pool.query(
+          `INSERT INTO enrollments (id, contactId, sequenceId, campaignId, currentStep, nextSendAt, status, startedAt, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, 1, ?, 'ACTIVE', ?, ?, ?)`,
+          [enrollId, contactId, sequence_id, campaignId, nextSendAt, now, now, now]
+        );
+      }
+
+      console.log(`✅ Created ${lead_ids.length} new enrollments for campaign: ${campaignId}`);
+    }
+
+    console.log('✅ Campaign created successfully:', {
+      campaignId,
+      campaignName: campaignData.campaignName,
       leadsAdded: lead_ids.length
     });
 
     // Fetch complete campaign data with stats
-    const campaignWithStats = await getCampaignWithStats(result.id, req.user);
+    const campaignWithStats = await getCampaignWithStats(campaignId, req.user);
 
     // Broadcast campaign stats update via socket
-    broadcastCampaignStats(result.id, campaignWithStats.stats);
+    broadcastCampaignStats(campaignId, campaignWithStats.stats);
 
     // Broadcast general stats update
+    const poolForCounts = await prisma.getPool();
+    const [totalCampaignsResult] = await poolForCounts.query(
+      'SELECT COUNT(*) AS count FROM campaigns WHERE userId = ? AND isActive = 1',
+      [req.user.id]
+    );
+    const totalCampaigns = totalCampaignsResult[0].count;
+
+    const [totalLeadsResult] = await poolForCounts.query(
+      'SELECT COUNT(*) AS count FROM contacts WHERE userId = ? AND status = ?',
+      [req.user.id, 'ACTIVE']
+    );
+    const totalLeads = totalLeadsResult[0].count;
+
     broadcastGeneralStats({
-      totalCampaigns: await prisma.campaign.count({ where: { userId: req.user.id, isActive: true } }),
-      totalLeads: await prisma.contact.count({ where: { userId: req.user.id, status: 'ACTIVE' } }),
+      totalCampaigns: totalCampaigns,
+      totalLeads: totalLeads,
       event: 'campaign_created'
     });
 
@@ -266,6 +268,14 @@ router.post('/', async (req, res) => {
       message: 'Campaign created successfully',
       campaign: campaignWithStats
     });
+
+    // Trigger immediate email processing so campaign emails go out right away
+    console.log('📧 Triggering immediate email processing for new campaign...');
+    setTimeout(() => {
+      processDueEmails().catch(err => {
+        console.error('❌ Error in immediate email processing:', err.message);
+      });
+    }, 1000);
 
   } catch (error) {
     console.error('Γ¥î Error creating campaign:', error);
@@ -684,54 +694,64 @@ router.delete('/:id', async (req, res) => {
  * Helper function to get campaign with complete stats
  */
 async function getCampaignWithStats(campaignId, user) {
+  const pool = await prisma.getPool();
   const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
-  const campaign = await prisma.campaign.findFirst({
-    where: {
-      id: campaignId,
-      ...(isAdmin ? {} : { userId: user.id })
-    },
-    include: {
-      sequence: {
-        include: { steps: true }
-      },
-      campaignLeads: {
-        include: {
-          contact: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              company: true,
-              status: true
-            }
-          }
-        }
-      },
-      enrollments: {
-        include: {
-          contact: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true
-            }
-          }
-        }
-      }
-    }
-  });
-
+  
+  // Fetch campaign
+  let campaignQuery = 'SELECT * FROM campaigns WHERE id = ?';
+  const campaignParams = [campaignId];
+  if (!isAdmin) {
+    campaignQuery += ' AND userId = ?';
+    campaignParams.push(user.id);
+  }
+  
+  const [campaigns] = await pool.query(campaignQuery, campaignParams);
+  const campaign = campaigns[0] || null;
+  
   if (!campaign) return null;
-
+  
+  // Fetch sequence
+  const [sequences] = await pool.query('SELECT * FROM sequences WHERE id = ?', [campaign.sequenceId]);
+  campaign.sequence = sequences[0] || null;
+  
+  // Fetch sequence steps if sequence exists
+  if (campaign.sequence) {
+    const [steps] = await pool.query('SELECT * FROM sequence_steps WHERE sequenceId = ? ORDER BY stepOrder ASC', [campaign.sequence.id]);
+    campaign.sequence.steps = steps;
+  }
+  
+  // Fetch campaign leads with contact info
+  const [campaignLeads] = await pool.query(
+    `SELECT cl.id as clId, cl.campaignId, cl.contactId, cl.createdAt as clCreatedAt,
+            c.id, c.email, c.firstName, c.lastName, c.company, c.status
+     FROM campaign_leads cl 
+     JOIN contacts c ON cl.contactId = c.id
+     WHERE cl.campaignId = ?`,
+    [campaignId]
+  );
+  
+  const leads = campaignLeads.map(row => ({
+    id: row.contactId || row.id,
+    email: row.email,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    company: row.company,
+    status: row.status
+  }));
+  
+  // Fetch enrollments
+  const [enrollments] = await pool.query(
+    'SELECT * FROM enrollments WHERE campaignId = ?',
+    [campaignId]
+  );
+  campaign.enrollments = enrollments;
+  
   const stats = await getCampaignStats(campaignId, user.id);
-
+  
   return {
     ...campaign,
     stats,
-    leads: campaign.campaignLeads.map(cl => cl.contact),
-    // Add status calculation for frontend
+    leads,
     status: calculateCampaignStatus(campaign)
   };
 }
@@ -757,29 +777,35 @@ function calculateCampaignStatus(campaign) {
  * Helper function to get campaign statistics
  */
 async function getCampaignStats(campaignId, userId) {
-  // Get event counts for this campaign
-  const eventStats = await prisma.event.groupBy({
-    by: ['type'],
-    where: { campaignId, campaign: { userId } },
-    _count: { type: true }
-  });
+  // Get event counts for this campaign using raw SQL
+  const eventRows = await prisma.query(
+    `SELECT e.type, COUNT(*) as cnt
+     FROM events e
+     INNER JOIN campaigns c ON e.campaignId = c.id
+     WHERE e.campaignId = ? AND c.userId = ?
+     GROUP BY e.type`,
+    [campaignId, userId]
+  );
 
-  const eventCounts = eventStats.reduce((acc, stat) => {
-    acc[stat.type.toLowerCase()] = stat._count.type;
-    return acc;
-  }, {});
+  const eventCounts = {};
+  for (const row of eventRows) {
+    eventCounts[row.type.toLowerCase()] = parseInt(row.cnt);
+  }
 
-  // Get enrollment stats
-  const enrollmentStats = await prisma.enrollment.groupBy({
-    by: ['status'],
-    where: { campaignId, campaign: { userId } },
-    _count: { status: true }
-  });
+  // Get enrollment stats using raw SQL
+  const enrollRows = await prisma.query(
+    `SELECT en.status, COUNT(*) as cnt
+     FROM enrollments en
+     INNER JOIN campaigns c ON en.campaignId = c.id
+     WHERE en.campaignId = ? AND c.userId = ?
+     GROUP BY en.status`,
+    [campaignId, userId]
+  );
 
-  const enrollmentCounts = enrollmentStats.reduce((acc, stat) => {
-    acc[stat.status.toLowerCase()] = stat._count.status;
-    return acc;
-  }, {});
+  const enrollmentCounts = {};
+  for (const row of enrollRows) {
+    enrollmentCounts[row.status.toLowerCase()] = parseInt(row.cnt);
+  }
 
   // Calculate rates
   const totalSent = eventCounts.sent || 0;

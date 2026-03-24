@@ -324,7 +324,25 @@ const prismaProxy = {
           }
         }
         
-        return rows;
+        // Map snake_case DB columns to camelCase for frontend compatibility
+        const mappedRows = (rows || []).map(row => {
+          const mapped = { ...row };
+          if ('lead_list_name' in mapped) {
+            mapped.leadListName = mapped.lead_list_name;
+            delete mapped.lead_list_name;
+          }
+          if ('unsubscribe_reason' in mapped) {
+            mapped.unsubscribeReason = mapped.unsubscribe_reason;
+            delete mapped.unsubscribe_reason;
+          }
+          if ('unsubscribed_at' in mapped) {
+            mapped.unsubscribedAt = mapped.unsubscribed_at;
+            delete mapped.unsubscribed_at;
+          }
+          return mapped;
+        });
+        
+        return mappedRows;
       } catch (err) {
         console.error('❌ Contact.findMany error:', err.message);
         throw err;
@@ -543,7 +561,7 @@ const prismaProxy = {
         throw err;
       }
     },
-    findFirst: async ({ where }) => {
+    findFirst: async ({ where, include = {} }) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM sequences WHERE 1=1';
@@ -559,7 +577,29 @@ const prismaProxy = {
         }
         
         const [rows] = await pool.query(query + ' LIMIT 1', params);
-        return rows[0] || null;
+        const row = rows[0] || null;
+        
+        if (row && include.steps) {
+          let stepsQuery = 'SELECT * FROM sequence_steps WHERE sequenceId = ? ORDER BY stepOrder ASC';
+          const [steps] = await pool.query(stepsQuery, [row.id]);
+          
+          if (include.steps === true) {
+            row.steps = steps;
+          } else if (include.steps.include && include.steps.include.template) {
+            for (const step of steps) {
+              if (step.templateId || step.template_id) {
+                const tplId = step.templateId || step.template_id;
+                const [templates] = await pool.query('SELECT * FROM templates WHERE id = ?', [tplId]);
+                step.template = templates[0] || null;
+              }
+            }
+            row.steps = steps;
+          } else {
+            row.steps = steps;
+          }
+        }
+        
+        return row;
       } catch (err) {
         console.error('❌ Sequence.findFirst error:', err.message);
         throw err;
@@ -754,8 +794,8 @@ const prismaProxy = {
       try {
         const pool = await getPool();
         const existing = await pool.query(
-          'SELECT id FROM sequence_triggers WHERE sequence_id = ? AND trigger_type = ?',
-          [where.sequenceId, where.triggerType]
+          'SELECT id FROM sequence_triggers WHERE sequenceId = ?',
+          [where.sequenceId]
         );
         
         if (existing[0]?.length > 0) {
@@ -764,7 +804,7 @@ const prismaProxy = {
           const values = Object.values(update);
           values.push(where.sequenceId);
           await pool.query(
-            `UPDATE sequence_triggers SET ${updates} WHERE sequence_id = ?`,
+            `UPDATE sequence_triggers SET ${updates} WHERE sequenceId = ?`,
             values
           );
           return { ...update };
@@ -772,7 +812,7 @@ const prismaProxy = {
           // Create new
           const id = require('crypto').randomBytes(8).toString('hex').toUpperCase();
           const now = new Date();
-          const insertData = { id, ...create, sequence_id: where.sequenceId, createdAt: now, updatedAt: now };
+          const insertData = { id, ...create, sequenceId: where.sequenceId, createdAt: now, updatedAt: now };
           
           const keys = Object.keys(insertData);
           const vals = Object.values(insertData);
@@ -790,14 +830,25 @@ const prismaProxy = {
         throw err;
       }
     },
-    findUnique: async ({ where }) => {
+    findUnique: async ({ where, include = {} }) => {
       try {
         const pool = await getPool();
         const [rows] = await pool.query(
-          'SELECT * FROM sequence_triggers WHERE sequence_id = ?',
+          'SELECT * FROM sequence_triggers WHERE sequenceId = ?',
           [where.sequenceId]
         );
-        return rows[0] || null;
+        const trigger = rows[0] || null;
+        
+        // Handle include.triggerStep
+        if (trigger && include.triggerStep) {
+          const [steps] = await pool.query(
+            'SELECT * FROM sequence_steps WHERE id = ?',
+            [trigger.triggerStepId]
+          );
+          trigger.triggerStep = steps[0] || null;
+        }
+        
+        return trigger;
       } catch (err) {
         console.error('❌ SequenceTrigger.findUnique error:', err.message);
         throw err;
@@ -805,7 +856,7 @@ const prismaProxy = {
     },
   },
   enrollment: {
-    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {} }) => {
+    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {}, select } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT * FROM enrollments WHERE 1=1';
@@ -816,12 +867,57 @@ const prismaProxy = {
           params.push(where.sequenceId);
         }
         if (where.contactId) {
-          query += ' AND contactId = ?';
-          params.push(where.contactId);
+          if (typeof where.contactId === 'object' && where.contactId.in) {
+            const placeholders = where.contactId.in.map(() => '?').join(',');
+            query += ` AND contactId IN (${placeholders})`;
+            params.push(...where.contactId.in);
+          } else {
+            query += ' AND contactId = ?';
+            params.push(where.contactId);
+          }
+        }
+        if (where.id) {
+          if (typeof where.id === 'object' && where.id.in) {
+            const placeholders = where.id.in.map(() => '?').join(',');
+            query += ` AND id IN (${placeholders})`;
+            params.push(...where.id.in);
+          } else {
+            query += ' AND id = ?';
+            params.push(where.id);
+          }
+        }
+        if (where.campaignId) {
+          query += ' AND campaignId = ?';
+          params.push(where.campaignId);
         }
         if (where.status) {
           query += ' AND status = ?';
           params.push(where.status);
+        }
+        // Support nextSendAt date filters (critical for scheduler)
+        if (where.nextSendAt) {
+          if (typeof where.nextSendAt === 'object') {
+            if (where.nextSendAt.lte) {
+              query += ' AND nextSendAt <= ?';
+              params.push(where.nextSendAt.lte);
+            }
+            if (where.nextSendAt.gte) {
+              query += ' AND nextSendAt >= ?';
+              params.push(where.nextSendAt.gte);
+            }
+            if (where.nextSendAt.lt) {
+              query += ' AND nextSendAt < ?';
+              params.push(where.nextSendAt.lt);
+            }
+          }
+        }
+        
+        // Handle select (return only specific fields)
+        if (select) {
+          const fields = Object.keys(select).filter(k => select[k]);
+          if (fields.length > 0) {
+            query = query.replace('SELECT *', `SELECT ${fields.join(', ')}`);
+          }
         }
         
         const orderField = Object.keys(orderBy)[0] || 'createdAt';
@@ -838,6 +934,37 @@ const prismaProxy = {
               [row.sequenceId]
             );
             row.sequence = sequences[0] || null;
+            
+            // Handle nested include: sequence.include.steps
+            if (row.sequence && include.sequence !== true && include.sequence.include && include.sequence.include.steps) {
+              let stepsQuery = 'SELECT * FROM sequence_steps WHERE sequenceId = ?';
+              const stepsParams = [row.sequence.id];
+              
+              // Handle step ordering
+              const stepsInclude = include.sequence.include.steps;
+              if (stepsInclude.orderBy) {
+                const stepOrderField = Object.keys(stepsInclude.orderBy)[0] || 'stepOrder';
+                const stepOrderDir = stepsInclude.orderBy[stepOrderField] === 'asc' ? 'ASC' : 'DESC';
+                stepsQuery += ` ORDER BY ${stepOrderField} ${stepOrderDir}`;
+              } else {
+                stepsQuery += ' ORDER BY stepOrder ASC';
+              }
+              
+              const [steps] = await pool.query(stepsQuery, stepsParams);
+              
+              // Handle step.include.template
+              if (stepsInclude.include && stepsInclude.include.template) {
+                for (const step of steps) {
+                  const tplId = step.templateId || step.template_id;
+                  if (tplId) {
+                    const [templates] = await pool.query('SELECT * FROM templates WHERE id = ?', [tplId]);
+                    step.template = templates[0] || null;
+                  }
+                }
+              }
+              
+              row.sequence.steps = steps;
+            }
           }
         }
         
@@ -848,6 +975,25 @@ const prismaProxy = {
               [row.contactId]
             );
             row.contact = contacts[0] || null;
+          }
+        }
+        
+        // Handle events include (critical for scheduler's shouldSendNextEmail)
+        if (include.events) {
+          for (const row of rows) {
+            let eventsQuery = 'SELECT * FROM events WHERE enrollmentId = ?';
+            const eventsParams = [row.id];
+            
+            if (include.events !== true && include.events.orderBy) {
+              const eventOrderField = Object.keys(include.events.orderBy)[0] || 'timestamp';
+              const eventOrderDir = include.events.orderBy[eventOrderField] === 'asc' ? 'ASC' : 'DESC';
+              eventsQuery += ` ORDER BY ${eventOrderField} ${eventOrderDir}`;
+            } else {
+              eventsQuery += ' ORDER BY timestamp DESC';
+            }
+            
+            const [events] = await pool.query(eventsQuery, eventsParams);
+            row.events = events;
           }
         }
         
@@ -881,6 +1027,92 @@ const prismaProxy = {
       } catch (err) {
         console.error('❌ Enrollment.count error:', err.message);
         return 0;
+      }
+    },
+    findUnique: async ({ where, include = {} }) => {
+      try {
+        const pool = await getPool();
+        const [rows] = await pool.query('SELECT * FROM enrollments WHERE id = ?', [where.id]);
+        const enrollment = rows[0] || null;
+        if (!enrollment) return null;
+        
+        // Include contact
+        if (include.contact) {
+          const [contacts] = await pool.query('SELECT * FROM contacts WHERE id = ?', [enrollment.contactId]);
+          enrollment.contact = contacts[0] || null;
+        }
+        
+        // Include sequence with nested includes
+        if (include.sequence) {
+          const [sequences] = await pool.query('SELECT * FROM sequences WHERE id = ?', [enrollment.sequenceId]);
+          enrollment.sequence = sequences[0] || null;
+          
+          if (enrollment.sequence && include.sequence !== true && include.sequence.include) {
+            const seqInclude = include.sequence.include;
+            
+            // Include steps (with optional where filter and template include)
+            if (seqInclude.steps) {
+              let stepsQuery = 'SELECT * FROM sequence_steps WHERE sequenceId = ?';
+              const stepsParams = [enrollment.sequence.id];
+              
+              // Handle where filter on steps (e.g., { stepOrder: enrollment.currentStep })
+              if (seqInclude.steps.where) {
+                if (seqInclude.steps.where.stepOrder !== undefined) {
+                  stepsQuery += ' AND stepOrder = ?';
+                  stepsParams.push(seqInclude.steps.where.stepOrder);
+                }
+              }
+              
+              stepsQuery += ' ORDER BY stepOrder ASC';
+              const [steps] = await pool.query(stepsQuery, stepsParams);
+              
+              // Handle template include for each step
+              if (seqInclude.steps.include && seqInclude.steps.include.template) {
+                for (const step of steps) {
+                  const tplId = step.templateId || step.template_id;
+                  if (tplId) {
+                    const [templates] = await pool.query('SELECT * FROM templates WHERE id = ?', [tplId]);
+                    step.template = templates[0] || null;
+                  } else {
+                    step.template = null;
+                  }
+                }
+              }
+              
+              enrollment.sequence.steps = steps;
+            }
+            
+            // Include user (sequence owner) with select
+            if (seqInclude.user) {
+              const [users] = await pool.query('SELECT * FROM users WHERE id = ?', [enrollment.sequence.userId]);
+              const user = users[0] || null;
+              
+              if (user && seqInclude.user.select) {
+                // Filter to only selected fields
+                const selectedUser = {};
+                for (const field of Object.keys(seqInclude.user.select)) {
+                  if (seqInclude.user.select[field]) {
+                    if (field === 'emailConfig') {
+                      // Fetch emailConfig for this user
+                      const [configs] = await pool.query('SELECT * FROM email_configs WHERE userId = ? LIMIT 1', [user.id]);
+                      selectedUser.emailConfig = configs[0] || null;
+                    } else {
+                      selectedUser[field] = user[field] !== undefined ? user[field] : null;
+                    }
+                  }
+                }
+                enrollment.sequence.user = selectedUser;
+              } else {
+                enrollment.sequence.user = user;
+              }
+            }
+          }
+        }
+        
+        return enrollment;
+      } catch (err) {
+        console.error('❌ Enrollment.findUnique error:', err.message);
+        throw err;
       }
     },
     create: async ({ data }) => {
@@ -926,6 +1158,89 @@ const prismaProxy = {
         throw err;
       }
     },
+    updateMany: async ({ where = {}, data }) => {
+      try {
+        const pool = await getPool();
+        const updates = Object.keys(data).map(k => `${k} = ?`).join(', ');
+        const vals = [...Object.values(data)];
+        let query = `UPDATE enrollments SET ${updates} WHERE 1=1`;
+        
+        if (where.id) {
+          query += ' AND id = ?';
+          vals.push(where.id);
+        }
+        if (where.status) {
+          query += ' AND status = ?';
+          vals.push(where.status);
+        }
+        if (where.contactId) {
+          if (typeof where.contactId === 'object' && where.contactId.in) {
+            const ph = where.contactId.in.map(() => '?').join(',');
+            query += ` AND contactId IN (${ph})`;
+            vals.push(...where.contactId.in);
+          } else {
+            query += ' AND contactId = ?';
+            vals.push(where.contactId);
+          }
+        }
+        if (where.sequenceId) {
+          query += ' AND sequenceId = ?';
+          vals.push(where.sequenceId);
+        }
+        if (where.nextSendAt) {
+          if (typeof where.nextSendAt === 'object') {
+            if (where.nextSendAt.lte) {
+              query += ' AND nextSendAt <= ?';
+              vals.push(where.nextSendAt.lte);
+            }
+          }
+        }
+        
+        const [result] = await pool.query(query, vals);
+        return { count: result.affectedRows || 0 };
+      } catch (err) {
+        console.error('❌ Enrollment.updateMany error:', err.message);
+        throw err;
+      }
+    },
+    deleteMany: async ({ where = {} }) => {
+      try {
+        const pool = await getPool();
+        let query = 'DELETE FROM enrollments WHERE 1=1';
+        const params = [];
+        
+        if (where.contactId) {
+          if (typeof where.contactId === 'object' && where.contactId.in) {
+            const ph = where.contactId.in.map(() => '?').join(',');
+            query += ` AND contactId IN (${ph})`;
+            params.push(...where.contactId.in);
+          } else {
+            query += ' AND contactId = ?';
+            params.push(where.contactId);
+          }
+        }
+        if (where.sequenceId) {
+          query += ' AND sequenceId = ?';
+          params.push(where.sequenceId);
+        }
+        if (where.id) {
+          if (typeof where.id === 'object' && where.id.in) {
+            const ph = where.id.in.map(() => '?').join(',');
+            query += ` AND id IN (${ph})`;
+            params.push(...where.id.in);
+          } else {
+            query += ' AND id = ?';
+            params.push(where.id);
+          }
+        }
+        
+        const [result] = await pool.query(query, params);
+        return { count: result.affectedRows || 0 };
+      } catch (err) {
+        console.error('❌ Enrollment.deleteMany error:', err.message);
+        throw err;
+      }
+    },
   },
   emailConfig: {
     findMany: async ({ where = {} }) => {
@@ -935,7 +1250,7 @@ const prismaProxy = {
         const params = [];
         
         if (where.userId) {
-          query += ' AND user_id = ?';
+          query += ' AND userId = ?';
           params.push(where.userId);
         }
         
@@ -949,7 +1264,17 @@ const prismaProxy = {
     findUnique: async ({ where }) => {
       try {
         const pool = await getPool();
-        const [rows] = await pool.query('SELECT * FROM email_configs WHERE id = ? LIMIT 1', [where.id]);
+        let query, params;
+        if (where.userId) {
+          query = 'SELECT * FROM email_configs WHERE userId = ? LIMIT 1';
+          params = [where.userId];
+        } else if (where.id) {
+          query = 'SELECT * FROM email_configs WHERE id = ? LIMIT 1';
+          params = [where.id];
+        } else {
+          return null;
+        }
+        const [rows] = await pool.query(query, params);
         return rows[0] || null;
       } catch (err) {
         console.error('❌ EmailConfig.findUnique error:', err.message);
@@ -962,32 +1287,72 @@ const prismaProxy = {
         const id = require('crypto').randomBytes(8).toString('hex').toUpperCase();
         const now = new Date();
         
-        const insertData = {
-          id,
-          user_id: data.userId,
-          imap_host: data.imapHost || null,
-          imap_user: data.imapUser || null,
-          imap_password: data.imapPassword || null,
-          smtp_host: data.smtpHost || null,
-          smtp_port: data.smtpPort || null,
-          smtp_user: data.smtpUser || null,
-          smtp_password: data.smtpPassword || null,
-          createdAt: now,
-          updatedAt: now
-        };
-        
-        const keys = Object.keys(insertData);
-        const vals = Object.values(insertData);
-        const placeholders = keys.map(() => '?').join(', ');
-        
         await pool.query(
-          `INSERT INTO email_configs (${keys.join(', ')}) VALUES (${placeholders})`,
-          vals
+          `INSERT INTO email_configs (id, userId, smtpHost, smtpPort, smtpSecure, smtpUser, smtpPassword, fromEmail, fromName, imapHost, imapPort, imapTls, imapUser, imapPassword, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            data.userId,
+            data.smtpHost || null,
+            data.smtpPort || null,
+            data.smtpSecure ? 1 : 0,
+            data.smtpUser || null,
+            data.smtpPassword || null,
+            data.fromEmail || null,
+            data.fromName || null,
+            data.imapHost || null,
+            data.imapPort || null,
+            data.imapTls ? 1 : 0,
+            data.imapUser || null,
+            data.imapPassword || null,
+            now,
+            now
+          ]
         );
         
         return { id, ...data };
       } catch (err) {
         console.error('❌ EmailConfig.create error:', err.message);
+        throw err;
+      }
+    },
+    upsert: async ({ where, update, create }) => {
+      try {
+        const pool = await getPool();
+        // Check if record exists
+        const [existing] = await pool.query('SELECT id FROM email_configs WHERE userId = ? LIMIT 1', [where.userId]);
+        
+        if (existing && existing.length > 0) {
+          // Update
+          const setClauses = [];
+          const params = [];
+          for (const [key, val] of Object.entries(update)) {
+            if (key === 'smtpSecure' || key === 'imapTls') {
+              setClauses.push(`${key} = ?`);
+              params.push(val ? 1 : 0);
+            } else {
+              setClauses.push(`${key} = ?`);
+              params.push(val);
+            }
+          }
+          setClauses.push('updatedAt = NOW()');
+          params.push(existing[0].id);
+          await pool.query(`UPDATE email_configs SET ${setClauses.join(', ')} WHERE id = ?`, params);
+          return { id: existing[0].id, ...update };
+        } else {
+          // Create
+          const id = require('crypto').randomBytes(8).toString('hex').toUpperCase();
+          const now = new Date();
+          const d = create;
+          await pool.query(
+            `INSERT INTO email_configs (id, userId, smtpHost, smtpPort, smtpSecure, smtpUser, smtpPassword, fromEmail, fromName, imapHost, imapPort, imapTls, imapUser, imapPassword, createdAt, updatedAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, d.userId, d.smtpHost||null, d.smtpPort||null, d.smtpSecure?1:0, d.smtpUser||null, d.smtpPassword||null, d.fromEmail||null, d.fromName||null, d.imapHost||null, d.imapPort||null, d.imapTls?1:0, d.imapUser||null, d.imapPassword||null, now, now]
+          );
+          return { id, ...d };
+        }
+      } catch (err) {
+        console.error('❌ EmailConfig.upsert error:', err.message);
         throw err;
       }
     },
@@ -1621,4 +1986,5 @@ process.on('SIGTERM', async () => {
   }
 });
 
+prismaProxy.getPool = getPool;
 module.exports = prismaProxy;
