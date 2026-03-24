@@ -257,15 +257,6 @@ router.delete('/:id', async (req, res) => {
       where: {
         id,
         ...(isAdmin ? {} : { userId: req.user.id })
-      },
-      include: {
-        _count: {
-          select: {
-            enrollments: true,
-            events: true,
-            campaignLeads: true
-          }
-        }
       }
     });
 
@@ -276,90 +267,67 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
-    // Get detailed breakdown before deletion
-    const relatedData = {
-      enrollments: await prisma.enrollment.count({ where: { contactId: id } }),
-      events: await prisma.event.count({ where: { enrollmentId: { in: (await prisma.enrollment.findMany({ where: { contactId: id }, select: { id: true } })).map(e => e.id) } } }),
-      campaignLeads: await prisma.campaignLead.count({ where: { contactId: id } }),
-      directEvents: await prisma.event.count({ where: { contactId: id } })
-    };
-
-    console.log('📊 Lead deletion impact:', {
-      contactId: id,
-      email: existingContact.email,
-      name: `${existingContact.firstName || ''} ${existingContact.lastName || ''}`.trim(),
-      relatedData
-    });
-
-    // Delete contact with comprehensive transaction
-    const deletionResult = await prisma.$transaction(async (tx) => {
-      // Step 1: Get all enrollments for this contact to find related events
-      const enrollments = await tx.enrollment.findMany({
-        where: { contactId: id },
-        select: { id: true }
-      });
+    // Use raw SQL via prisma.query for cascade deletion
+    const pool = require('../db/prismaClient').getPool ? await require('../db/prismaClient').getPool() : null;
+    
+    if (pool) {
+      // Get enrollment IDs for this contact
+      const [enrollments] = await pool.query('SELECT id FROM enrollments WHERE contactId = ?', [id]);
       const enrollmentIds = enrollments.map(e => e.id);
 
-      // Step 2: Delete all events related to this contact's enrollments
-      const deletedEnrollmentEvents = await tx.event.deleteMany({
-        where: { enrollmentId: { in: enrollmentIds } }
-      });
+      let enrollmentEventsDeleted = 0;
+      let directEventsDeleted = 0;
+      let enrollmentsDeleted = 0;
+      let campaignLeadsDeleted = 0;
 
-      // Step 3: Delete any direct events for this contact
-      const deletedDirectEvents = await tx.event.deleteMany({
-        where: { contactId: id }
-      });
-
-      // Step 4: Delete all enrollments for this contact
-      const deletedEnrollments = await tx.enrollment.deleteMany({
-        where: { contactId: id }
-      });
-
-      // Step 5: Delete campaign lead relationships
-      const deletedCampaignLeads = await tx.campaignLead.deleteMany({
-        where: { contactId: id }
-      });
-
-      // Step 6: Delete the contact itself
-      const deletedContact = await tx.contact.delete({
-        where: { id }
-      });
-
-      return {
-        contact: deletedContact,
-        enrollmentEventsDeleted: deletedEnrollmentEvents.count,
-        directEventsDeleted: deletedDirectEvents.count,
-        enrollmentsDeleted: deletedEnrollments.count,
-        campaignLeadsDeleted: deletedCampaignLeads.count
-      };
-    });
-
-    console.log('✅ Lead deleted successfully:', {
-      contactId: id,
-      email: existingContact.email,
-      deletionStats: {
-        enrollmentEventsDeleted: deletionResult.enrollmentEventsDeleted,
-        directEventsDeleted: deletionResult.directEventsDeleted,
-        enrollmentsDeleted: deletionResult.enrollmentsDeleted,
-        campaignLeadsDeleted: deletionResult.campaignLeadsDeleted
+      // Delete events related to enrollments
+      if (enrollmentIds.length > 0) {
+        const placeholders = enrollmentIds.map(() => '?').join(',');
+        const [result] = await pool.query(`DELETE FROM events WHERE enrollmentId IN (${placeholders})`, enrollmentIds);
+        enrollmentEventsDeleted = result.affectedRows || 0;
       }
-    });
 
-    res.json({
-      success: true,
-      message: 'Lead deleted successfully',
-      deletedLead: {
-        id,
+      // Delete direct events for this contact
+      const [directResult] = await pool.query('DELETE FROM events WHERE contactId = ?', [id]);
+      directEventsDeleted = directResult.affectedRows || 0;
+
+      // Delete enrollments
+      const [enrollResult] = await pool.query('DELETE FROM enrollments WHERE contactId = ?', [id]);
+      enrollmentsDeleted = enrollResult.affectedRows || 0;
+
+      // Delete campaign lead relationships
+      const [clResult] = await pool.query('DELETE FROM campaign_leads WHERE contactId = ?', [id]);
+      campaignLeadsDeleted = clResult.affectedRows || 0;
+
+      // Delete the contact itself
+      await pool.query('DELETE FROM contacts WHERE id = ?', [id]);
+
+      console.log('✅ Lead deleted successfully:', {
+        contactId: id,
         email: existingContact.email,
-        name: `${existingContact.firstName || ''} ${existingContact.lastName || ''}`.trim() || 'Unknown',
-        company: existingContact.company,
-        deletionStats: {
-          totalEventsDeleted: deletionResult.enrollmentEventsDeleted + deletionResult.directEventsDeleted,
-          enrollmentsDeleted: deletionResult.enrollmentsDeleted,
-          campaignAssociationsRemoved: deletionResult.campaignLeadsDeleted
+        deletionStats: { enrollmentEventsDeleted, directEventsDeleted, enrollmentsDeleted, campaignLeadsDeleted }
+      });
+
+      res.json({
+        success: true,
+        message: 'Lead deleted successfully',
+        deletedLead: {
+          id,
+          email: existingContact.email,
+          name: `${existingContact.firstName || ''} ${existingContact.lastName || ''}`.trim() || 'Unknown',
+          company: existingContact.company,
+          deletionStats: {
+            totalEventsDeleted: enrollmentEventsDeleted + directEventsDeleted,
+            enrollmentsDeleted,
+            campaignAssociationsRemoved: campaignLeadsDeleted
+          }
         }
-      }
-    });
+      });
+    } else {
+      // Fallback: simple delete (may fail on foreign keys)
+      await prisma.contact.delete({ where: { id } });
+      res.json({ success: true, message: 'Lead deleted successfully' });
+    }
 
   } catch (error) {
     if (error.code === 'P2025') {
