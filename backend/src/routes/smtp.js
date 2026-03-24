@@ -120,6 +120,9 @@ router.post('/test', authenticateToken, async (req, res) => {
                 user: smtpUser,
                 pass: actualPass
             },
+            connectionTimeout: 30000,
+            greetingTimeout: 30000,
+            socketTimeout: 40000,
             tls: {
                 rejectUnauthorized: false
             }

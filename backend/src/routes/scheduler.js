@@ -235,14 +235,46 @@ router.post('/smtp-config', async (req, res) => {
       imapPassword: imapPassword || null,
     };
 
-    const config = await prisma.emailConfig.upsert({
-      where: { userId: req.user.id },
-      update: data,
-      create: {
-        userId: req.user.id,
-        ...data
-      }
-    });
+    const sql = `
+      INSERT INTO email_configs 
+      (id, userId, smtpHost, smtpPort, smtpSecure, smtpUser, smtpPassword, fromEmail, fromName, imapHost, imapPort, imapTls, imapUser, imapPassword, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+      smtpHost = VALUES(smtpHost),
+      smtpPort = VALUES(smtpPort),
+      smtpSecure = VALUES(smtpSecure),
+      smtpUser = VALUES(smtpUser),
+      smtpPassword = VALUES(smtpPassword),
+      fromEmail = VALUES(fromEmail),
+      fromName = VALUES(fromName),
+      imapHost = VALUES(imapHost),
+      imapPort = VALUES(imapPort),
+      imapTls = VALUES(imapTls),
+      imapUser = VALUES(imapUser),
+      imapPassword = VALUES(imapPassword),
+      updatedAt = NOW()
+    `;
+
+    const newId = require('crypto').randomBytes(8).toString('hex').toUpperCase();
+
+    await prisma.query(sql, [
+      newId,
+      req.user.id,
+      data.smtpHost,
+      data.smtpPort,
+      data.smtpSecure ? 1 : 0,
+      data.smtpUser,
+      data.smtpPassword,
+      data.fromEmail,
+      data.fromName,
+      data.imapHost,
+      data.imapPort,
+      data.imapTls ? 1 : 0,
+      data.imapUser,
+      data.imapPassword
+    ]);
+    
+    const config = { userId: req.user.id, ...data };
 
     res.json({ success: true, message: 'Email configuration saved successfully', config });
   } catch (error) {
