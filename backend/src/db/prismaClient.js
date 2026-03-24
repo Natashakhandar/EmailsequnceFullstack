@@ -1894,33 +1894,275 @@ const prismaProxy = {
     },
   },
   event: {
-    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {} }) => {
+    findMany: async ({ where = {}, skip = 0, take = 100, orderBy = {}, include = {}, select } = {}) => {
       try {
         const pool = await getPool();
-        let query = 'SELECT * FROM events WHERE 1=1';
+        let query = 'SELECT e.* FROM events e';
         const params = [];
+        const joins = [];
         
-        if (where.userId) {
-          query += ' AND user_id = ?';
-          params.push(where.userId);
+        // Handle contact-based filters (userId, search, leadListName)
+        if (where.contact) {
+          joins.push('JOIN contacts c ON e.contactId = c.id');
+          if (where.contact.userId) {
+            params.push(where.contact.userId);
+            joins.push(''); // placeholder
+          }
         }
+        
+        // Build WHERE clause after joins
+        query += (joins.length > 0 ? ' ' + joins.filter(j => j).join(' ') : '') + ' WHERE 1=1';
+        
+        // Reset and rebuild properly
+        query = 'SELECT e.* FROM events e';
+        const conditions = [];
+        const condParams = [];
+        
+        if (where.contact && where.contact.userId) {
+          query += ' JOIN contacts c ON e.contactId = c.id';
+          conditions.push('c.userId = ?');
+          condParams.push(where.contact.userId);
+        }
+        
+        query += ' WHERE 1=1';
+        
         if (where.type) {
-          query += ' AND type = ?';
-          params.push(where.type);
+          if (typeof where.type === 'object' && where.type.in) {
+            const ph = where.type.in.map(() => '?').join(',');
+            conditions.push(`e.type IN (${ph})`);
+            condParams.push(...where.type.in);
+          } else {
+            conditions.push('e.type = ?');
+            condParams.push(where.type);
+          }
+        }
+        if (where.enrollmentId) {
+          if (typeof where.enrollmentId === 'object' && where.enrollmentId.in) {
+            const ph = where.enrollmentId.in.map(() => '?').join(',');
+            conditions.push(`e.enrollmentId IN (${ph})`);
+            condParams.push(...where.enrollmentId.in);
+          } else {
+            conditions.push('e.enrollmentId = ?');
+            condParams.push(where.enrollmentId);
+          }
+        }
+        if (where.contactId) {
+          conditions.push('e.contactId = ?');
+          condParams.push(where.contactId);
+        }
+        if (where.campaignId) {
+          conditions.push('e.campaignId = ?');
+          condParams.push(where.campaignId);
+        }
+        if (where.timestamp) {
+          if (where.timestamp.gte) {
+            conditions.push('e.timestamp >= ?');
+            condParams.push(where.timestamp.gte);
+          }
+          if (where.timestamp.lte) {
+            conditions.push('e.timestamp <= ?');
+            condParams.push(where.timestamp.lte);
+          }
+          if (where.timestamp.lt) {
+            conditions.push('e.timestamp < ?');
+            condParams.push(where.timestamp.lt);
+          }
         }
         
-        const orderField = Object.keys(orderBy)[0] || 'createdAt';
-        const orderDir = orderBy[orderField] === 'asc' ? 'ASC' : 'DESC';
-        query += ` ORDER BY ${orderField} ${orderDir} LIMIT ${take} OFFSET ${skip}`;
+        if (conditions.length > 0) {
+          query += ' AND ' + conditions.join(' AND ');
+        }
         
-        const [rows] = await pool.query(query, params);
+        // Handle select
+        if (select) {
+          const fields = Object.keys(select).filter(k => select[k]).map(k => `e.${k}`);
+          if (fields.length > 0) {
+            query = query.replace('SELECT e.*', `SELECT ${fields.join(', ')}`);
+          }
+        }
+        
+        const orderField = Object.keys(orderBy)[0] || 'timestamp';
+        const orderDir = orderBy[orderField] === 'asc' ? 'ASC' : 'DESC';
+        query += ` ORDER BY e.${orderField} ${orderDir} LIMIT ${parseInt(take)} OFFSET ${parseInt(skip)}`;
+        
+        const [rows] = await pool.query(query, condParams);
+        
+        // Handle includes
+        if (include.contact) {
+          for (const row of rows) {
+            if (row.contactId) {
+              const [contacts] = await pool.query('SELECT * FROM contacts WHERE id = ?', [row.contactId]);
+              if (contacts[0]) {
+                const c = contacts[0];
+                if ('lead_list_name' in c) {
+                  c.leadListName = c.lead_list_name;
+                  delete c.lead_list_name;
+                }
+                row.contact = c;
+              } else {
+                row.contact = null;
+              }
+            } else {
+              row.contact = null;
+            }
+          }
+        }
+        
+        if (include.enrollment) {
+          for (const row of rows) {
+            if (row.enrollmentId) {
+              const [enrollments] = await pool.query('SELECT * FROM enrollments WHERE id = ?', [row.enrollmentId]);
+              row.enrollment = enrollments[0] || null;
+              
+              // Nested: enrollment.include.sequence
+              if (row.enrollment && include.enrollment !== true && include.enrollment.include && include.enrollment.include.sequence) {
+                const [sequences] = await pool.query('SELECT * FROM sequences WHERE id = ?', [row.enrollment.sequenceId]);
+                row.enrollment.sequence = sequences[0] || null;
+              }
+            } else {
+              row.enrollment = null;
+            }
+          }
+        }
+        
         return rows || [];
       } catch (err) {
         console.error('❌ Event.findMany error:', err.message);
         return [];
       }
     },
-    create: async ({ data }) => {
+    findFirst: async ({ where = {}, include = {} }) => {
+      try {
+        const pool = await getPool();
+        let query = 'SELECT * FROM events WHERE 1=1';
+        const params = [];
+        
+        if (where.id) {
+          query += ' AND id = ?';
+          params.push(where.id);
+        }
+        if (where.enrollmentId) {
+          query += ' AND enrollmentId = ?';
+          params.push(where.enrollmentId);
+        }
+        if (where.contactId) {
+          query += ' AND contactId = ?';
+          params.push(where.contactId);
+        }
+        if (where.type) {
+          query += ' AND type = ?';
+          params.push(where.type);
+        }
+        if (where.emailId) {
+          if (typeof where.emailId === 'object' && where.emailId.in) {
+            const ph = where.emailId.in.map(() => '?').join(',');
+            query += ` AND emailId IN (${ph})`;
+            params.push(...where.emailId.in);
+          } else {
+            query += ' AND emailId = ?';
+            params.push(where.emailId);
+          }
+        }
+        
+        query += ' LIMIT 1';
+        const [rows] = await pool.query(query, params);
+        const event = rows[0] || null;
+        
+        if (event && include.contact) {
+          const [contacts] = await pool.query('SELECT * FROM contacts WHERE id = ?', [event.contactId]);
+          if (contacts[0]) {
+            const c = contacts[0];
+            if ('lead_list_name' in c) {
+              c.leadListName = c.lead_list_name;
+              delete c.lead_list_name;
+            }
+            event.contact = c;
+          } else {
+            event.contact = null;
+          }
+        }
+        if (event && include.enrollment) {
+          const [enrollments] = await pool.query('SELECT * FROM enrollments WHERE id = ?', [event.enrollmentId]);
+          event.enrollment = enrollments[0] || null;
+        }
+        
+        return event;
+      } catch (err) {
+        console.error('❌ Event.findFirst error:', err.message);
+        return null;
+      }
+    },
+    count: async ({ where = {} } = {}) => {
+      try {
+        const pool = await getPool();
+        let query = 'SELECT COUNT(*) as count FROM events e';
+        const params = [];
+        const conditions = [];
+        
+        // Handle contact-based where (userId filter)
+        if (where.contact && where.contact.userId) {
+          query += ' JOIN contacts c ON e.contactId = c.id';
+          conditions.push('c.userId = ?');
+          params.push(where.contact.userId);
+        }
+        
+        query += ' WHERE 1=1';
+        
+        if (where.type) {
+          if (typeof where.type === 'object' && where.type.in) {
+            const ph = where.type.in.map(() => '?').join(',');
+            conditions.push(`e.type IN (${ph})`);
+            params.push(...where.type.in);
+          } else {
+            conditions.push('e.type = ?');
+            params.push(where.type);
+          }
+        }
+        if (where.enrollmentId) {
+          if (typeof where.enrollmentId === 'object' && where.enrollmentId.in) {
+            const ph = where.enrollmentId.in.map(() => '?').join(',');
+            conditions.push(`e.enrollmentId IN (${ph})`);
+            params.push(...where.enrollmentId.in);
+          } else {
+            conditions.push('e.enrollmentId = ?');
+            params.push(where.enrollmentId);
+          }
+        }
+        if (where.contactId) {
+          conditions.push('e.contactId = ?');
+          params.push(where.contactId);
+        }
+        if (where.campaignId) {
+          conditions.push('e.campaignId = ?');
+          params.push(where.campaignId);
+        }
+        if (where.timestamp) {
+          if (where.timestamp.gte) {
+            conditions.push('e.timestamp >= ?');
+            params.push(where.timestamp.gte);
+          }
+          if (where.timestamp.lte) {
+            conditions.push('e.timestamp <= ?');
+            params.push(where.timestamp.lte);
+          }
+          if (where.timestamp.lt) {
+            conditions.push('e.timestamp < ?');
+            params.push(where.timestamp.lt);
+          }
+        }
+        
+        if (conditions.length > 0) {
+          query += ' AND ' + conditions.join(' AND ');
+        }
+        
+        const [rows] = await pool.query(query, params);
+        return rows[0]?.count || 0;
+      } catch (err) {
+        console.error('❌ Event.count error:', err.message);
+        return 0;
+      }
+    },
+    create: async ({ data, include = {} }) => {
       try {
         const pool = await getPool();
         const id = require('crypto').randomBytes(8).toString('hex').toUpperCase();
@@ -1928,11 +2170,13 @@ const prismaProxy = {
         
         const insertData = {
           id,
-          user_id: data.userId,
+          enrollmentId: data.enrollmentId || null,
+          contactId: data.contactId || null,
+          campaignId: data.campaignId || null,
           type: data.type,
-          data: data.data ? JSON.stringify(data.data) : null,
-          createdAt: now,
-          updatedAt: now
+          details: data.details || null,
+          timestamp: data.timestamp || now,
+          emailId: data.emailId || null
         };
         
         const keys = Object.keys(insertData);
@@ -1944,12 +2188,165 @@ const prismaProxy = {
           vals
         );
         
-        return { id, ...data };
+        const result = { id, ...insertData };
+        
+        // Handle includes on the created event
+        if (include.contact && result.contactId) {
+          const [contacts] = await pool.query('SELECT * FROM contacts WHERE id = ?', [result.contactId]);
+          if (contacts[0]) {
+            const c = contacts[0];
+            if ('lead_list_name' in c) {
+              c.leadListName = c.lead_list_name;
+              delete c.lead_list_name;
+            }
+            result.contact = c;
+          } else {
+            result.contact = null;
+          }
+        }
+        if (include.enrollment && result.enrollmentId) {
+          const [enrollments] = await pool.query('SELECT * FROM enrollments WHERE id = ?', [result.enrollmentId]);
+          result.enrollment = enrollments[0] || null;
+          if (result.enrollment && include.enrollment.include && include.enrollment.include.sequence) {
+            const [sequences] = await pool.query('SELECT * FROM sequences WHERE id = ?', [result.enrollment.sequenceId]);
+            result.enrollment.sequence = sequences[0] || null;
+          }
+        }
+        
+        return result;
       } catch (err) {
         console.error('❌ Event.create error:', err.message);
         throw err;
       }
     },
+    deleteMany: async ({ where = {} }) => {
+      try {
+        const pool = await getPool();
+        let query = 'DELETE FROM events WHERE 1=1';
+        const params = [];
+        
+        if (where.enrollmentId) {
+          if (typeof where.enrollmentId === 'object' && where.enrollmentId.in) {
+            const ph = where.enrollmentId.in.map(() => '?').join(',');
+            query += ` AND enrollmentId IN (${ph})`;
+            params.push(...where.enrollmentId.in);
+          } else {
+            query += ' AND enrollmentId = ?';
+            params.push(where.enrollmentId);
+          }
+        }
+        if (where.contactId) {
+          query += ' AND contactId = ?';
+          params.push(where.contactId);
+        }
+        if (where.timestamp) {
+          if (where.timestamp.lt) {
+            query += ' AND timestamp < ?';
+            params.push(where.timestamp.lt);
+          }
+        }
+        if (where.type) {
+          if (typeof where.type === 'object' && where.type.in) {
+            const ph = where.type.in.map(() => '?').join(',');
+            query += ` AND type IN (${ph})`;
+            params.push(...where.type.in);
+          }
+        }
+        if (where.campaignId) {
+          if (typeof where.campaignId === 'object' && where.campaignId.in) {
+            const ph = where.campaignId.in.map(() => '?').join(',');
+            query += ` AND campaignId IN (${ph})`;
+            params.push(...where.campaignId.in);
+          } else {
+            query += ' AND campaignId = ?';
+            params.push(where.campaignId);
+          }
+        }
+        
+        // Failsafe: Prevent table wipe if conditions parsed successfully but were ignored
+        if (Object.keys(where).length > 0 && params.length === 0) {
+          console.error('❌ Event.deleteMany prevented table wipe due to unmapped where clause:', where);
+          throw new Error('Event.deleteMany called with unsupported where clauses. Table wipe prevented.');
+        }
+
+        const [result] = await pool.query(query, params);
+        return { count: result.affectedRows || 0 };
+      } catch (err) {
+        console.error('❌ Event.deleteMany error:', err.message);
+        throw err;
+      }
+    },
+    delete: async ({ where = {} }) => {
+      try {
+        const pool = await getPool();
+        if (where.id) {
+          const [rows] = await pool.query('SELECT * FROM events WHERE id = ?', [where.id]);
+          await pool.query('DELETE FROM events WHERE id = ?', [where.id]);
+          return rows[0] || null;
+        }
+        return null;
+      } catch (err) {
+        console.error('❌ Event.delete error:', err.message);
+        throw err;
+      }
+    },
+    groupBy: async ({ by = [], where = {}, _count = {} }) => {
+      try {
+        const pool = await getPool();
+        const groupFields = by.join(', ');
+        let query = `SELECT ${groupFields}, COUNT(*) as count FROM events e`;
+        const params = [];
+        const conditions = [];
+        
+        if (where.contact && where.contact.userId) {
+          query += ' JOIN contacts c ON e.contactId = c.id';
+          conditions.push('c.userId = ?');
+          params.push(where.contact.userId);
+        }
+        
+        query += ' WHERE 1=1';
+        
+        if (where.timestamp) {
+          if (where.timestamp.gte) {
+            conditions.push('e.timestamp >= ?');
+            params.push(where.timestamp.gte);
+          }
+          if (where.timestamp.lte) {
+            conditions.push('e.timestamp <= ?');
+            params.push(where.timestamp.lte);
+          }
+        }
+        if (where.campaignId) {
+          conditions.push('e.campaignId = ?');
+          params.push(where.campaignId);
+        }
+        
+        if (conditions.length > 0) {
+          query += ' AND ' + conditions.join(' AND ');
+        }
+        
+        query += ` GROUP BY ${groupFields}`;
+        
+        const [rows] = await pool.query(query, params);
+        return rows.map(row => ({
+          ...row,
+          _count: { [Object.keys(_count)[0] || 'type']: row.count }
+        }));
+      } catch (err) {
+        console.error('❌ Event.groupBy error:', err.message);
+        return [];
+      }
+    },
+  },
+  $transaction: async (queries) => {
+    // If it's an array of promises, await them all
+    if (Array.isArray(queries)) {
+      return Promise.all(queries);
+    }
+    // If it's a callback, pass prismaProxy
+    if (typeof queries === 'function') {
+      return queries(prismaProxy);
+    }
   },
   $disconnect: async () => {
     try {
