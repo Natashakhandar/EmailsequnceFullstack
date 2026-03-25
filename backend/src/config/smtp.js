@@ -24,14 +24,11 @@ const resolvedAppUrl = (() => {
     return envUrl.replace(/\/$/, '');
   }
   
-  // If in production, force use of production domain
-  if (process.env.NODE_ENV === 'production' && !envUrl?.includes('localhost')) {
-    return 'https://email.boostnow.in';
-  }
-  
-  // Otherwise fallback based on environment
+  // In production, use the BACKEND domain (NOT the frontend domain!)
+  // Frontend = email.boostnow.in (static site, can't handle API requests)
+  // Backend  = silver-tapir-929419.hostingersite.com (handles /api/* routes)
   if (process.env.NODE_ENV === 'production') {
-    return 'https://email.boostnow.in';
+    return 'https://silver-tapir-929419.hostingersite.com';
   }
   
   return 'http://localhost:3001';
