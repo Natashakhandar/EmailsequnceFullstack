@@ -375,7 +375,7 @@ async function sendEmail({
 
     console.log(`📧 Unsubscribe footer included in email (length: ${unsubscribeBlock.length} chars)`);
 
-    const topUnsubscribeLine = `<div style="margin: 0 0 14px 0; padding: 8px 10px; border: 1px solid #d8d8d8; background: #fafafa; font-family: Arial, sans-serif; font-size: 13px; color: #111;"><strong>Manage preferences:</strong> <a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color: #0b57d0; text-decoration: underline; font-weight: 600;">Unsubscribe</a></div>`;
+    const topUnsubscribeLine = '';
     const signatureBlock = formattedSignature ? `<div style="margin-top: 20px;">${formattedSignature}</div>` : '';
     const appendBlock = `${signatureBlock}${unsubscribeBlock}`;
 
@@ -420,7 +420,7 @@ async function sendEmail({
     // Final fallback: removed as per user request to clean up footer redundant options
     // processedHtmlBody = `${processedHtmlBody}${rawUnsubscribeTail}`;
 
-    processedTextBody = `${processedTextBody}\n\nUnsubscribe: ${unsubscribeUrl}`;
+    // processedTextBody = `${processedTextBody}\n\nUnsubscribe: ${unsubscribeUrl}`;
 
     // Generate unique Message-ID for tracking
     const fromName = userConfig?.fromName || emailConfig.from.name || 'Sales';
@@ -583,6 +583,7 @@ async function sendEmail({
           details: JSON.stringify({
             to,
             subject: processedSubject,
+            body: processedHtmlBody,
             messageId: info.messageId,
             response: info.response,
             replyTo: mailOptions.replyTo,
@@ -854,6 +855,7 @@ async function sendSequenceEmail(enrollment) {
           details: JSON.stringify({
             to: contact.email,
             subject: emailSubject?.substring(0, 200) || '', // Limit subject length for JSON safety
+            body: emailBody || '', 
             messageId: result.messageId,
             response: result.response,
             stepOrder: enrollment.currentStep,

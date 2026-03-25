@@ -106,6 +106,7 @@ export interface Event {
   campaignId?: string;
   contact?: Contact;
   enrollment?: Enrollment;
+  campaign?: Campaign;
 }
 
 export interface User {

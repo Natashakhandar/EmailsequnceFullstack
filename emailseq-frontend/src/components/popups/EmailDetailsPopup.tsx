@@ -64,8 +64,20 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
   const cleanReplyText = (text: string) => {
     if (!text) return '';
     
+    // First strip HTML tags but preserve line breaks
+    let cleaned = text.replace(/<br\s*\/?>/gi, '\n')
+                      .replace(/<\/p>/gi, '\n\n')
+                      .replace(/<\/div>/gi, '\n')
+                      .replace(/<[^>]*>?/gm, '')
+                      .replace(/&nbsp;/g, ' ')
+                      .replace(/&amp;/g, '&')
+                      .replace(/&lt;/g, '<')
+                      .replace(/&gt;/g, '>')
+                      .replace(/&quot;/g, '"')
+                      .replace(/&#39;/g, "'");
+
     // Convert literal \n strings to actual newlines
-    let cleaned = text.replace(/\\n/g, '\n');
+    cleaned = cleaned.replace(/\\n/g, '\n');
     
     // Remove email quote markers (>) at the start of lines
     cleaned = cleaned.split('\n').map(line => line.replace(/^>\s*/, '')).join('\n');
@@ -243,7 +255,7 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
                         </h3>
                         <div className="bg-gray-50 rounded-lg p-4">
                           <div className="font-medium text-gray-900">
-                            {event.enrollment?.sequence?.name || 'Unknown Sequence'}
+                            {event.enrollment?.sequence?.name || event.campaign?.sequence?.name || 'Unknown Sequence'}
                           </div>
                           <div className="text-sm text-gray-600">
                             Step {event.enrollment?.currentStep || 1} of{' '}

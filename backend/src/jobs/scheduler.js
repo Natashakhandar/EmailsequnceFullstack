@@ -342,6 +342,13 @@ async function processDueEmails() {
         errorCount++;
         console.error(`❌ Error processing enrollment ${enrollment.id}:`, error.message);
 
+        // Refund the warmup slot since the email was not actually sent
+        try {
+          await warmupManager.refundWarmupSlot(enrollment.sequence.userId);
+        } catch (refundError) {
+          console.error('Failed to refund warmup slot:', refundError);
+        }
+
         // Mark enrollment as stopped on critical errors
         try {
           await prisma.enrollment.update({
