@@ -25,12 +25,14 @@ const resolvedAppUrl = (() => {
   }
   
   // In production, use the BACKEND domain (NOT the frontend domain!)
-  // Frontend = email.boostnow.in (static site, can't handle API requests)
-  // Backend  = silver-tapir-929419.hostingersite.com (handles /api/* routes)
-  if (process.env.NODE_ENV === 'production') {
+  // If we are on Hostinger, forced production URL is best for tracking
+  const isHostinger = process.env.USER === 'u321303254' || process.env.HOME?.includes('hostingersite.com');
+  
+  if (process.env.NODE_ENV === 'production' || isHostinger) {
     return 'https://silver-tapir-929419.hostingersite.com';
   }
   
+  // Fallback for development
   return 'http://localhost:3001';
 })();
 
