@@ -371,11 +371,7 @@ async function sendEmail({
     const unsubscribeMailto = `mailto:${fromAddressForUnsub}?subject=unsubscribe`;
 
     // Old-style footer: small unsubscribe link only at the very bottom.
-    const unsubscribeBlock = `
-    <div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #d9d9d9;">
-      <a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:600;">Unsubscribe</a>
-    </div>
-    `;
+    const unsubscribeBlock = '';
 
     console.log(`📧 Unsubscribe footer included in email (length: ${unsubscribeBlock.length} chars)`);
 
@@ -421,8 +417,8 @@ async function sendEmail({
 
     // Final fallback: always append a raw unsubscribe line at absolute end.
     // This protects against template/body parsing quirks in some mail clients.
-    const rawUnsubscribeTail = `<div style="margin-top:10px;font-size:11px;color:#777;"><a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color:#5d7ea5;text-decoration:underline;">Unsubscribe</a></div>`;
-    processedHtmlBody = `${processedHtmlBody}${rawUnsubscribeTail}`;
+    // Final fallback: removed as per user request to clean up footer redundant options
+    // processedHtmlBody = `${processedHtmlBody}${rawUnsubscribeTail}`;
 
     processedTextBody = `${processedTextBody}\n\nUnsubscribe: ${unsubscribeUrl}`;
 
