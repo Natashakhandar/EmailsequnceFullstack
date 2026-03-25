@@ -75,6 +75,15 @@ const mapContact = (row) => {
   return mapped;
 };
 
+const mapUnsubscribeToken = (row) => {
+  if (!row) return null;
+  const mapped = { ...row };
+  // DB columns are already camelCase for this table, but ensure Dates are correct
+  if (mapped.createdAt && typeof mapped.createdAt === 'string') mapped.createdAt = new Date(mapped.createdAt);
+  if (mapped.usedAt && typeof mapped.usedAt === 'string') mapped.usedAt = new Date(mapped.usedAt);
+  return mapped;
+};
+
 // For backward compatibility - return object with common Prisma methods
 const prismaProxy = {
   query: async (sql, params) => {
@@ -269,11 +278,21 @@ const prismaProxy = {
     findUnique: async ({ where, include }) => {
       try {
         const pool = await getPool();
-        const [rows] = await pool.query(
-          'SELECT * FROM unsubscribe_tokens WHERE token = ?',
-          [where.token]
-        );
-        const token = rows[0];
+        let query = 'SELECT * FROM unsubscribe_tokens WHERE ';
+        let params = [];
+        
+        if (where.token) {
+          query += 'token = ?';
+          params.push(where.token);
+        } else if (where.id) {
+          query += 'id = ?';
+          params.push(where.id);
+        } else {
+          return null;
+        }
+
+        const [rows] = await pool.query(query, params);
+        const token = mapUnsubscribeToken(rows[0]);
         if (!token || !include) return token;
         
         // Fetch contact if requested
@@ -282,7 +301,7 @@ const prismaProxy = {
             'SELECT id, email, status FROM contacts WHERE id = ?',
             [token.contactId]
           );
-          token.contact = contactRows[0] || null;
+          token.contact = mapContact(contactRows[0]) || null;
         }
         return token;
       } catch (err) {
@@ -318,9 +337,20 @@ const prismaProxy = {
         const pool = await getPool();
         const updates = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const values = Object.values(data);
-        values.push(where.token);
-        await pool.query(`UPDATE unsubscribe_tokens SET ${updates} WHERE token = ?`, values);
-        return { ...data, token: where.token };
+        
+        let whereClause = '';
+        if (where.id) {
+          whereClause = 'id = ?';
+          values.push(where.id);
+        } else if (where.token) {
+          whereClause = 'token = ?';
+          values.push(where.token);
+        } else {
+          throw new Error('UnsubscribeToken.update requires id or token in where clause');
+        }
+
+        await pool.query(`UPDATE unsubscribe_tokens SET ${updates} WHERE ${whereClause}`, values);
+        return { ...data, ...where };
       } catch (err) {
         console.error('❌ UnsubscribeToken.update error:', err.message);
         throw err;
