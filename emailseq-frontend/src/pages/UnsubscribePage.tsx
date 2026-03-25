@@ -153,7 +153,7 @@ const UnsubscribePage = () => {
     <div
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        background: "linear-gradient(135deg, #f0f9ff 0%, #3b82f6 100%)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -206,7 +206,7 @@ const UnsubscribePage = () => {
                 width: "48px",
                 height: "48px",
                 border: "3px solid #f0f0f0",
-                borderTop: "3px solid #667eea",
+                borderTop: "3px solid #3b82f6",
                 borderRadius: "50%",
                 margin: "0 auto 24px",
                 animation: "spin 0.8s linear infinite",
@@ -240,25 +240,25 @@ const UnsubscribePage = () => {
                   padding: "12px 28px",
                   fontSize: "15px",
                   fontWeight: "600",
-                  border: "2px solid #667eea",
+                  border: "2px solid #3b82f6",
                   borderRadius: "8px",
                   cursor: isResubscribing ? "not-allowed" : "pointer",
                   transition: "all 0.3s ease",
                   background: isResubscribing ? "#f5f5f5" : "#fff",
-                  color: isResubscribing ? "#999" : "#667eea",
+                  color: isResubscribing ? "#999" : "#3b82f6",
                   opacity: isResubscribing ? 0.6 : 1,
                 }}
                 onMouseEnter={(e) => {
                   if (!isResubscribing) {
-                    e.currentTarget.style.background = "#667eea";
+                    e.currentTarget.style.background = "#3b82f6";
                     e.currentTarget.style.color = "#fff";
-                    e.currentTarget.style.boxShadow = "0 4px 15px rgba(102, 126, 234, 0.3)";
+                    e.currentTarget.style.boxShadow = "0 4px 15px rgba(59, 130, 246, 0.3)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isResubscribing) {
                     e.currentTarget.style.background = "#fff";
-                    e.currentTarget.style.color = "#667eea";
+                    e.currentTarget.style.color = "#3b82f6";
                     e.currentTarget.style.boxShadow = "none";
                   }
                 }}
@@ -329,25 +329,25 @@ const UnsubscribePage = () => {
                   padding: "12px 28px",
                   fontSize: "15px",
                   fontWeight: "600",
-                  border: "2px solid #667eea",
+                  border: "2px solid #3b82f6",
                   borderRadius: "8px",
                   cursor: isResubscribing ? "not-allowed" : "pointer",
                   transition: "all 0.3s ease",
                   background: isResubscribing ? "#f5f5f5" : "#fff",
-                  color: isResubscribing ? "#999" : "#667eea",
+                  color: isResubscribing ? "#999" : "#3b82f6",
                   opacity: isResubscribing ? 0.6 : 1,
                 }}
                 onMouseEnter={(e) => {
                   if (!isResubscribing) {
-                    e.currentTarget.style.background = "#667eea";
+                    e.currentTarget.style.background = "#3b82f6";
                     e.currentTarget.style.color = "#fff";
-                    e.currentTarget.style.boxShadow = "0 4px 15px rgba(102, 126, 234, 0.3)";
+                    e.currentTarget.style.boxShadow = "0 4px 15px rgba(59, 130, 246, 0.3)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isResubscribing) {
                     e.currentTarget.style.background = "#fff";
-                    e.currentTarget.style.color = "#667eea";
+                    e.currentTarget.style.color = "#3b82f6";
                     e.currentTarget.style.boxShadow = "none";
                   }
                 }}
@@ -392,14 +392,14 @@ const UnsubscribePage = () => {
           <>
             <div
               style={{
-                background: "linear-gradient(135deg, #667eea15 0%, #764ba215 100%)",
+                background: "linear-gradient(135deg, #3b82f615 0%, #2563eb15 100%)",
                 padding: "16px",
                 borderRadius: "12px",
                 marginBottom: "28px",
-                border: "1px solid #667eea30",
+                border: "1px solid #3b82f630",
               }}
             >
-              <p style={{ color: "#667eea", fontWeight: "600", fontSize: "16px", margin: "0" }}>
+              <p style={{ color: "#3b82f6", fontWeight: "600", fontSize: "16px", margin: "0" }}>
                 {email}
               </p>
               <p style={{ color: "#888", fontSize: "14px", margin: "4px 0 0 0" }}>
@@ -437,8 +437,8 @@ const UnsubscribePage = () => {
                   outline: "none",
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "#667eea";
-                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(102, 126, 234, 0.1)";
+                  e.currentTarget.style.borderColor = "#3b82f6";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(59, 130, 246, 0.1)";
                 }}
                 onBlur={(e) => {
                   e.currentTarget.style.borderColor = "#e0e0e0";
@@ -461,7 +461,7 @@ const UnsubscribePage = () => {
                   top: "50%",
                   transform: "translateY(-50%)",
                   pointerEvents: "none",
-                  color: "#667eea",
+                  color: "#3b82f6",
                   fontSize: "14px",
                   fontWeight: "600",
                 }}
@@ -485,24 +485,24 @@ const UnsubscribePage = () => {
                 background:
                   !reason || status === "submitting"
                     ? "#ccc"
-                    : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
                 color: "#fff",
                 boxShadow:
                   !reason || status === "submitting"
                     ? "none"
-                    : "0 4px 15px rgba(102, 126, 234, 0.4)",
+                    : "0 4px 15px rgba(59, 130, 246, 0.4)",
                 textShadow: !reason || status === "submitting" ? "none" : "0 1px 2px rgba(0,0,0,0.1)",
               }}
               onMouseEnter={(e) => {
                 if (reason && status !== "submitting") {
                   e.currentTarget.style.transform = "translateY(-2px)";
-                  e.currentTarget.style.boxShadow = "0 6px 20px rgba(102, 126, 234, 0.5)";
+                  e.currentTarget.style.boxShadow = "0 6px 20px rgba(59, 130, 246, 0.5)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (reason && status !== "submitting") {
                   e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 4px 15px rgba(102, 126, 234, 0.4)";
+                  e.currentTarget.style.boxShadow = "0 4px 15px rgba(59, 130, 246, 0.4)";
                 }
               }}
             >
