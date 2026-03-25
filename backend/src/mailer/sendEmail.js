@@ -435,10 +435,15 @@ async function sendEmail({
     const messageId = `<${uuidv4()}@${fromDomain}>`;
 
     // Add tracking pixel to HTML body if enrollmentId is provided
-    // MOVED to bottom to avoid early detection by tab filters
+    // MOVED inside </body> if exists to avoid being stripped by email clients
     if (enrollmentId && processedHtmlBody) {
       const trackingPixel = `<img src="${emailConfig.appUrl}/api/track/open?emailId=${encodeURIComponent(messageId)}" width="1" height="1" style="display:none !important;" alt="" />`;
-      processedHtmlBody = processedHtmlBody + trackingPixel;
+      
+      if (processedHtmlBody.toLowerCase().includes('</body>')) {
+        processedHtmlBody = processedHtmlBody.replace(/<\/body>/i, `${trackingPixel}</body>`);
+      } else {
+        processedHtmlBody = processedHtmlBody + trackingPixel;
+      }
     }
 
     // Prepare email options

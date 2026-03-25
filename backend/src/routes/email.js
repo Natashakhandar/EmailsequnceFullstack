@@ -14,37 +14,7 @@ const transparentPixel = Buffer.from([
   0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
 ]);
 
-function safeDecodeURIComponent(value) {
-  try {
-    return decodeURIComponent(value);
-  } catch (error) {
-    return value;
-  }
-}
-
-function buildEmailIdCandidates(rawEmailId) {
-  const raw = String(rawEmailId || '').trim();
-  if (!raw) return [];
-
-  const decodedOnce = safeDecodeURIComponent(raw);
-  const decodedTwice = safeDecodeURIComponent(decodedOnce);
-
-  const variants = [raw, decodedOnce, decodedTwice]
-    .map((id) => id.trim().replace(/^"+|"+$/g, ''))
-    .filter(Boolean);
-
-  const expanded = new Set();
-  variants.forEach((id) => {
-    const noBrackets = id.replace(/[<>]/g, '');
-    expanded.add(id);
-    expanded.add(noBrackets);
-    if (noBrackets) {
-      expanded.add(`<${noBrackets}>`);
-    }
-  });
-
-  return Array.from(expanded).filter(Boolean);
-}
+const { buildEmailIdCandidates } = require('../utils/emailIdUtils');
 
 router.get('/track/open', async (req, res) => {
   try {
@@ -73,9 +43,7 @@ router.get('/track/open', async (req, res) => {
 
     // FUZZY MATCHING: Handle encoded IDs from mail proxies + bracket/no-bracket variants
     const emailIdCandidates = buildEmailIdCandidates(emailId);
-    if (emailIdCandidates.length === 0) {
-      return sendPixel();
-    }
+    console.log(`📩 [TRACKER] Candidate IDs for lookup: ${JSON.stringify(emailIdCandidates)}`);
 
     // Search for the original SENT event
     const sentEvent = await prisma.event.findFirst({
@@ -89,7 +57,7 @@ router.get('/track/open', async (req, res) => {
     });
 
     if (!sentEvent) {
-      console.log(`⚠️ [TRACKER] No 'SENT' event found matching ID: "${emailId}"`);
+      console.log(`⚠️ [TRACKER] No 'SENT' event found in DB for any candidate ID. Original ID: "${emailId}"`);
       return sendPixel();
     }
 
@@ -122,20 +90,24 @@ router.get('/track/open', async (req, res) => {
           }
         });
 
-        console.log(`✅ [TRACKER] FIRST OPEN LOGGED: Contact ${sentEvent.contact.email} opened email ${sentEvent.emailId}`);
+        console.log(`✅ [TRACKER] SUCCESS: Contact ${sentEvent.contact?.email} opened email ${sentEvent.emailId}`);
 
         // Broadcast via socket for real-time UI updates
-        broadcastRealTimeEvent({
-          id: newEvent.id,
-          type: 'OPENED',
-          campaignId: sentEvent.campaignId,
-          contactId: sentEvent.contactId,
-          enrollmentId: sentEvent.enrollmentId,
-          to: sentEvent.contact.email,
-          timestamp: newEvent.timestamp || new Date().toISOString()
-        });
+        try {
+          broadcastRealTimeEvent({
+            id: newEvent.id,
+            type: 'OPENED',
+            campaignId: sentEvent.campaignId,
+            contactId: sentEvent.contactId,
+            enrollmentId: sentEvent.enrollmentId,
+            to: sentEvent.contact?.email,
+            timestamp: newEvent.timestamp || new Date().toISOString()
+          });
+        } catch (socketErr) {
+          console.error('⚠️ [TRACKER] Socket broadcast failed:', socketErr.message);
+        }
       } else {
-        console.log(`ℹ️ [TRACKER] Repeat open for ID: ${emailId} (Contact: ${sentEvent.contact.email}). skipping log.`);
+        console.log(`ℹ️ [TRACKER] Repeat open ignored for: ${sentEvent.contact?.email}`);
       }
     });
 
@@ -342,6 +314,16 @@ router.get('/track/stats/:emailId', authenticateToken, async (req, res) => {
     console.error('❌ Stats tracking error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// Debug route to verify server config (remove in production later)
+router.get('/debug/config', (req, res) => {
+  res.json({
+    nodeEnv: process.env.NODE_ENV,
+    appUrl: require('../config/smtp').appUrl,
+    time: new Date().toISOString(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  });
 });
 
 module.exports = router;
