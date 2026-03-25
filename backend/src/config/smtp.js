@@ -19,17 +19,16 @@ const resolvedAppUrl = (() => {
                  process.env.BACKEND_URL || 
                  process.env.API_URL;
   
-  // If APP_URL is set and not localhost, use it
-  if (envUrl && !envUrl.includes('localhost')) {
-    return envUrl.replace(/\/$/, '');
-  }
-  
-  // In production, use the BACKEND domain (NOT the frontend domain!)
-  // If we are on Hostinger, forced production URL is best for tracking
+  // In production, priority is the BACKEND domain (NOT the frontend domain!)
   const isHostinger = process.env.USER === 'u321303254' || process.env.HOME?.includes('hostingersite.com');
   
   if (process.env.NODE_ENV === 'production' || isHostinger) {
     return 'https://silver-tapir-929419.hostingersite.com';
+  }
+
+  // If APP_URL is set and not localhost, use it (only if not forced production)
+  if (envUrl && !envUrl.includes('localhost')) {
+    return envUrl.replace(/\/$/, '');
   }
   
   // Fallback for development

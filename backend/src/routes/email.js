@@ -318,11 +318,16 @@ router.get('/track/stats/:emailId', authenticateToken, async (req, res) => {
 
 // Debug route to verify server config (remove in production later)
 router.get('/debug/config', (req, res) => {
+  const smtp = require('../config/smtp');
   res.json({
     nodeEnv: process.env.NODE_ENV,
-    appUrl: require('../config/smtp').appUrl,
-    time: new Date().toISOString(),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    user: process.env.USER,
+    home: process.env.HOME,
+    appUrl: smtp.emailConfig?.appUrl,
+    hasAppUrlEnv: !!process.env.APP_URL,
+    hasBackendUrlEnv: !!process.env.BACKEND_URL,
+    hasApiUrlEnv: !!process.env.API_URL,
+    time: new Date().toISOString()
   });
 });
 
