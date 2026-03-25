@@ -341,7 +341,7 @@ const EmailActivity = () => {
   };
 
   const getSequenceName = (event: Event) => {
-    return event.enrollment?.sequence?.name || 'Unknown Sequence';
+    return event.enrollment?.sequence?.name || event.campaign?.sequence?.name || 'Unknown Sequence';
   };
 
   const getEmailSubject = (event: Event) => {

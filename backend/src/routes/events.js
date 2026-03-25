@@ -71,6 +71,11 @@ router.get('/', async (req, res) => {
             include: {
               sequence: true
             }
+          },
+          campaign: {
+            include: {
+              sequence: true
+            }
           }
         }
       }),
