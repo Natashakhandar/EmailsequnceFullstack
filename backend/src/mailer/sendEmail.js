@@ -370,12 +370,18 @@ async function sendEmail({
     const fromAddressForUnsub = userConfig?.fromEmail || emailConfig.from.address || 'sales@boostnow.in';
     const unsubscribeMailto = `mailto:${fromAddressForUnsub}?subject=unsubscribe`;
 
-    // Old-style footer: small unsubscribe link only at the very bottom.
+    // Professional banner: blue box at the TOP with unsubscribe link
+    const topUnsubscribeLine = `
+      <div style="margin-bottom: 25px; padding: 12px 15px; background-color: #f8faff; border: 1px solid #e2e8f0; border-radius: 4px; font-family: sans-serif; display: block; width: 100%; box-sizing: border-box;">
+        <p style="margin: 0; color: #475569; font-size: 13px; font-weight: bold;">
+          Manage preferences: <a href="${unsubscribeUrl}" style="color: #2563eb; text-decoration: underline;">Unsubscribe</a>
+        </p>
+      </div>
+    `;
+
+    console.log(`📧 Unsubscribe banner included at top of email`);
+
     const unsubscribeBlock = '';
-
-    console.log(`📧 Unsubscribe footer included in email (length: ${unsubscribeBlock.length} chars)`);
-
-    const topUnsubscribeLine = '';
     const signatureBlock = formattedSignature ? `<div style="margin-top: 20px;">${formattedSignature}</div>` : '';
     const appendBlock = `${signatureBlock}${unsubscribeBlock}`;
 
