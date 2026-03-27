@@ -82,6 +82,10 @@ const EmailDetailsPopup = ({ event, isOpen, onClose }: EmailDetailsPopupProps) =
     // Remove email quote markers (>) at the start of lines
     cleaned = cleaned.split('\n').map(line => line.replace(/^>\s*/, '')).join('\n');
     
+    // Remove any unsubscribe link blocks/footers
+    cleaned = cleaned.replace(/Manage preferences:\s*Unsubscribe/gi, '');
+    cleaned = cleaned.replace(/Manage preferences:/gi, '');
+    
     // Remove excessive newlines
     cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
     
