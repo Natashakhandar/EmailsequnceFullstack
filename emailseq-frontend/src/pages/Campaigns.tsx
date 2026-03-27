@@ -87,7 +87,7 @@ const Campaigns = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [leadsSearchTerm, setLeadsSearchTerm] = useState("");
-  const [warmupStatus, setWarmupStatus] = useState({ isEnabled: false, reached: false });
+  const [warmupStatus, setWarmupStatus] = useState({ isEnabled: false, reached: false, remaining: Infinity });
   const [activeTab, setActiveTab] = useState("groups");
   const [isGroupPopoverOpen, setIsGroupPopoverOpen] = useState(false);
 
@@ -126,7 +126,8 @@ const Campaigns = () => {
       if (status) {
         setWarmupStatus({
           isEnabled: status.isEnabled,
-          reached: status.isEnabled && (Number(status.dailySentCount) >= Number(status.currentBatchSize))
+          reached: status.isEnabled && (Number(status.dailySentCount) >= Number(status.currentBatchSize)),
+          remaining: status.isEnabled ? Math.max(0, Number(status.currentBatchSize) - Number(status.dailySentCount)) : Infinity
         });
       }
     } catch (error) {
@@ -433,9 +434,11 @@ toast.success(`Campaign "${selectedCampaign.campaignName}" deleted successfully`
     }
 
     // CHECK WARMUP LIMIT
-    if (warmupStatus.reached) {
-      const proceed = window.confirm("⚠️ Daily sending limit reached!\n\nAny emails from this campaign will be automatically scheduled for tomorrow. Do you want to proceed?");
-      if (!proceed) return;
+    if (warmupStatus.isEnabled) {
+      if (warmupStatus.reached || formData.leadIds.length > warmupStatus.remaining) {
+        toast.error(`Daily sending limit exceeded! You can only send ${warmupStatus.remaining} more emails today.`);
+        return;
+      }
     }
 
     try {

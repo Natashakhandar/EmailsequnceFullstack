@@ -321,8 +321,6 @@ async function processDueEmails() {
             });
           }
           
-          // Refund the warmup slot since we aren't sending an email
-          await warmupManager.refundWarmupSlot(enrollment.sequence.userId);
           continue;
         }
 
@@ -334,20 +332,12 @@ async function processDueEmails() {
         } else {
           errorCount++;
           console.log(`❌ Failed to send email for enrollment ${enrollment.id}: ${result.error || result.reason}`);
-          // Refund the warmup slot on failure
-          await warmupManager.refundWarmupSlot(enrollment.sequence.userId);
+          // We don't refund here to ensure the daily limit is strictly respected even on soft failures
         }
 
       } catch (error) {
         errorCount++;
         console.error(`❌ Error processing enrollment ${enrollment.id}:`, error.message);
-
-        // Refund the warmup slot since the email was not actually sent
-        try {
-          await warmupManager.refundWarmupSlot(enrollment.sequence.userId);
-        } catch (refundError) {
-          console.error('Failed to refund warmup slot:', refundError);
-        }
 
         // Mark enrollment as stopped on critical errors
         try {

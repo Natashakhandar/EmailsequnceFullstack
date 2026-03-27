@@ -55,6 +55,7 @@ class WarmupManager {
     const lastDate = new Date(settings.lastSentDate);
     const today = new Date();
     
+    // Check if new day based on UTC boundaries for consistency
     const isNewDay = lastDate.getUTCDate() !== today.getUTCDate() || 
                      lastDate.getUTCMonth() !== today.getUTCMonth() ||
                      lastDate.getUTCFullYear() !== today.getUTCFullYear();
@@ -65,21 +66,33 @@ class WarmupManager {
         newBatchSize = Math.min(settings.maxLimit, settings.currentBatchSize + settings.dailyIncrement);
       }
       
+      // Use exact today date string for reliable concurrency check, avoiding DATETIME precision bugs
+      const todayDateString = today.toISOString().split('T')[0];
+      
       const result = await prisma.query(
         `UPDATE warmup_settings SET currentBatchSize = ?, dailySentCount = 1, lastSentDate = ? 
-         WHERE userId = ? AND lastSentDate = ?`,
-        [newBatchSize, today, userId, settings.lastSentDate]
+         WHERE userId = ? AND DATE(lastSentDate) != ?`,
+        [newBatchSize, today, userId, todayDateString]
       );
+      
       if (result && result.affectedRows > 0) return true;
+      // Another process transitioned the day before us, so retry
       return await this.claimWarmupSlot(userId); 
     }
 
+    // On same day, atomicity is guaranteed by ensuring the fetched dailySentCount matches
     const updateResult = await prisma.query(
       `UPDATE warmup_settings SET dailySentCount = dailySentCount + 1, lastSentDate = ? 
-       WHERE userId = ? AND dailySentCount < currentBatchSize AND lastSentDate >= ?`,
-      [today, userId, new Date(new Date().setHours(0,0,0,0))]
+       WHERE userId = ? AND dailySentCount < currentBatchSize AND dailySentCount = ?`,
+      [today, userId, settings.dailySentCount]
     );
-    return (updateResult && updateResult.affectedRows > 0);
+
+    if (updateResult && updateResult.affectedRows > 0) return true;
+
+    const currentSettings = await this.getSettings(userId);
+    if (currentSettings.dailySentCount >= currentSettings.currentBatchSize) return false;
+    // Lost the race but limit not reached, gracefully retry
+    return await this.claimWarmupSlot(userId);
   }
 
   async refundWarmupSlot(userId) {
