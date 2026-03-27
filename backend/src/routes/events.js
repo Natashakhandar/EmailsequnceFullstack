@@ -26,22 +26,50 @@ router.get('/', async (req, res) => {
     const where = {};
     const contactWhere = {};
 
-    if (!isAdmin) contactWhere.userId = req.user.id;
+    if (!isAdmin) {
+      contactWhere.userId = req.user.id;
+      where.contact = { userId: req.user.id };
+    }
 
     if (type) where.type = type;
     if (enrollmentId) where.enrollmentId = enrollmentId;
     if (contactId) where.contactId = contactId;
 
-    // Handle search - search across multiple contact fields
+    // Handle search - search across multiple fields
     if (search) {
-      where.contact = {
-        OR: [
-          { email: { contains: search, mode: 'insensitive' } },
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-          { leadListName: { contains: search, mode: 'insensitive' } }
-        ]
-      };
+      where.OR = [
+        {
+          contact: {
+            ...contactWhere,
+            OR: [
+              { email: { contains: search, mode: 'insensitive' } },
+              { firstName: { contains: search, mode: 'insensitive' } },
+              { lastName: { contains: search, mode: 'insensitive' } },
+              { leadListName: { contains: search, mode: 'insensitive' } }
+            ]
+          }
+        },
+        {
+          enrollment: {
+            sequence: {
+              name: { contains: search, mode: 'insensitive' }
+            }
+          }
+        },
+        {
+          campaign: {
+            sequence: {
+              name: { contains: search, mode: 'insensitive' }
+            }
+          }
+        },
+        {
+          details: { contains: search, mode: 'insensitive' }
+        },
+        {
+          timestamp: { contains: search }
+        }
+      ];
     } else if (leadListName !== undefined && leadListName !== 'all') {
       // Handle leadListName filter (when no search)
       if (!leadListName || leadListName === 'null' || leadListName === 'Uncategorized') {

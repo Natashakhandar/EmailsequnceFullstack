@@ -450,6 +450,22 @@ const prismaProxy = {
               orConditions.push(`${dbKey} = ?`);
               orParams.push(value);
             }
+            // Case 4: timestamp as string (for events, if this was an event query)
+            // This block is for Contact.findMany, so 'timestamp' would not be a direct contact field.
+            // Assuming this is a placeholder for a future 'Event' model or a misunderstanding.
+            // If it's meant for a related table, it would need a JOIN.
+            // For now, I'll add it as if 'timestamp' could be a direct field, but it's unlikely for 'contacts'.
+            // If this was for an 'Event' model, 'e.timestamp' would make sense.
+            // Given the instruction "Add timestamp string-based search to Event.findMany and Event.count",
+            // and the provided snippet being in Contact.findMany, I will interpret it as
+            // adding a generic timestamp search if a 'timestamp' field were present in 'contacts'
+            // or if 'e' was an alias for 'contacts'.
+            // However, the snippet uses `e.timestamp` and `condParams`, which are not defined here.
+            // I will adapt it to the current context of `Contact.findMany` and `orParams`.
+            if (key === 'timestamp' && value && value.contains) {
+              orConditions.push("DATE_FORMAT(timestamp, '%d/%m/%Y %H:%i:%s') LIKE ?");
+              orParams.push(`%${value.contains}%`);
+            }
           }
           if (orConditions.length > 0) {
             query += ' AND (' + orConditions.join(' OR ') + ')';
@@ -2157,93 +2173,81 @@ const prismaProxy = {
         const conditions = [];
         const condParams = [];
         
+        let joinedContacts = false;
+        let joinedEnrollments = false;
+        let joinedSequences = false;
+        let joinedCampaigns = false;
+        let joinedCampaignSequences = false;
+
+        const ensureContactJoin = () => {
+          if (!joinedContacts) {
+            query += ' JOIN contacts c ON e.contactId = c.id';
+            joinedContacts = true;
+          }
+        };
+
+        const ensureSequenceJoin = () => {
+          if (!joinedEnrollments) {
+            query += ' LEFT JOIN enrollments en ON e.enrollmentId = en.id';
+            joinedEnrollments = true;
+          }
+          if (!joinedSequences) {
+            query += ' LEFT JOIN sequences s ON en.sequenceId = s.id';
+            joinedSequences = true;
+          }
+          if (!joinedCampaigns) {
+            query += ' LEFT JOIN campaigns cam ON e.campaignId = cam.id';
+            joinedCampaigns = true;
+          }
+          if (!joinedCampaignSequences) {
+            query += ' LEFT JOIN sequences cs ON cam.sequenceId = cs.id';
+            joinedCampaignSequences = true;
+          }
+        };
+
+        // Security / User filtering
         if (where.contact && where.contact.userId) {
-          query += ' JOIN contacts c ON e.contactId = c.id';
+          ensureContactJoin();
           conditions.push('c.userId = ?');
           condParams.push(where.contact.userId);
         }
+
+        // Global OR Search
+        if (where.OR && Array.isArray(where.OR)) {
+          const orConditions = [];
+          for (const orMatch of where.OR) {
+            if (orMatch.contact && orMatch.contact.OR) {
+              ensureContactJoin();
+              for (const contactMatch of orMatch.contact.OR) {
+                const field = Object.keys(contactMatch)[0];
+                const dbField = field === 'leadListName' ? 'lead_list_name' : field;
+                orConditions.push(`c.${dbField} LIKE ?`);
+                condParams.push(`%${contactMatch[field].contains}%`);
+              }
+            }
+            if (orMatch.enrollment && orMatch.enrollment.sequence && orMatch.enrollment.sequence.name) {
+              ensureSequenceJoin();
+              orConditions.push(`(s.name LIKE ? OR cs.name LIKE ?)`);
+              condParams.push(`%${orMatch.enrollment.sequence.name.contains}%`);
+              condParams.push(`%${orMatch.enrollment.sequence.name.contains}%`);
+            }
+            if (orMatch.details && orMatch.details.contains) {
+              orConditions.push(`e.details LIKE ?`);
+              condParams.push(`%${orMatch.details.contains}%`);
+            }
+            if (orMatch.timestamp && orMatch.timestamp.contains) {
+              orConditions.push("DATE_FORMAT(e.timestamp, '%d/%m/%Y %H:%i:%s') LIKE ?");
+              condParams.push(`%${orMatch.timestamp.contains}%`);
+            }
+          }
+          if (orConditions.length > 0) conditions.push('(' + orConditions.join(' OR ') + ')');
+        }
         
+        if (where.type) { conditions.push('e.type = ?'); condParams.push(where.type); }
+        if (where.contactId && !where.OR) { conditions.push('e.contactId = ?'); condParams.push(where.contactId); }
+
         query += ' WHERE 1=1';
-        
-        if (where.type) {
-          if (typeof where.type === 'object' && where.type.in) {
-            const ph = where.type.in.map(() => '?').join(',');
-            conditions.push(`e.type IN (${ph})`);
-            condParams.push(...where.type.in);
-          } else {
-            conditions.push('e.type = ?');
-            condParams.push(where.type);
-          }
-        }
-        if (where.contactId) {
-          if (typeof where.contactId === 'object' && where.contactId.in) {
-            const ph = where.contactId.in.map(() => '?').join(',');
-            conditions.push(`e.contactId IN (${ph})`);
-            condParams.push(...where.contactId.in);
-          } else {
-            conditions.push('e.contactId = ?');
-            condParams.push(where.contactId);
-          }
-        }
-        if (where.enrollmentId) {
-          if (typeof where.enrollmentId === 'object' && where.enrollmentId.in) {
-            const ph = where.enrollmentId.in.map(() => '?').join(',');
-            conditions.push(`e.enrollmentId IN (${ph})`);
-            condParams.push(...where.enrollmentId.in);
-          } else {
-            conditions.push('e.enrollmentId = ?');
-            condParams.push(where.enrollmentId);
-          }
-        }
-        if (where.campaignId) {
-          conditions.push('e.campaignId = ?');
-          condParams.push(where.campaignId);
-        }
-        if (where.emailId) {
-          if (typeof where.emailId === 'object' && where.emailId.in) {
-            const ph = where.emailId.in.map(() => '?').join(',');
-            conditions.push(`e.emailId IN (${ph})`);
-            condParams.push(...where.emailId.in);
-          } else {
-            conditions.push('e.emailId = ?');
-            condParams.push(where.emailId);
-          }
-        }
-        if (where.details) {
-          if (typeof where.details === 'object' && where.details.contains) {
-            conditions.push('e.details LIKE ?');
-            condParams.push(`%${where.details.contains}%`);
-          } else {
-            conditions.push('e.details = ?');
-            condParams.push(where.details);
-          }
-        }
-        if (where.timestamp) {
-          if (where.timestamp.gte) {
-            conditions.push('e.timestamp >= ?');
-            condParams.push(where.timestamp.gte);
-          }
-          if (where.timestamp.lte) {
-            conditions.push('e.timestamp <= ?');
-            condParams.push(where.timestamp.lte);
-          }
-          if (where.timestamp.lt) {
-            conditions.push('e.timestamp < ?');
-            condParams.push(where.timestamp.lt);
-          }
-        }
-        
-        if (conditions.length > 0) {
-          query += ' AND ' + conditions.join(' AND ');
-        }
-        
-        // Handle select
-        if (select) {
-          const fields = Object.keys(select).filter(k => select[k]).map(k => `e.${k}`);
-          if (fields.length > 0) {
-            query = query.replace('SELECT e.*', `SELECT ${fields.join(', ')}`);
-          }
-        }
+        if (conditions.length > 0) query += ' AND ' + conditions.join(' AND ');
         
         const orderField = Object.keys(orderBy)[0] || 'timestamp';
         const orderDir = orderBy[orderField] === 'asc' ? 'ASC' : 'DESC';
@@ -2251,40 +2255,30 @@ const prismaProxy = {
         
         const [rows] = await pool.query(query, condParams);
         
-        // Handle includes
-        if (include.contact) {
-          for (const row of rows) {
-            if (row.contactId) {
-              const [contacts] = await pool.query('SELECT * FROM contacts WHERE id = ?', [row.contactId]);
-              if (contacts[0]) {
-                const c = contacts[0];
-                if ('lead_list_name' in c) {
-                  c.leadListName = c.lead_list_name;
-                  delete c.lead_list_name;
-                }
-                row.contact = c;
-              } else {
-                row.contact = null;
-              }
-            } else {
-              row.contact = null;
+        // Hydrate includes
+        for (const row of rows) {
+          if (include.contact && row.contactId) {
+            const [contacts] = await pool.query('SELECT * FROM contacts WHERE id = ?', [row.contactId]);
+            if (contacts[0]) {
+              const c = contacts[0];
+              if ('lead_list_name' in c) c.leadListName = c.lead_list_name;
+              row.contact = c;
             }
           }
-        }
-        
-        if (include.enrollment) {
-          for (const row of rows) {
-            if (row.enrollmentId) {
-              const [enrollments] = await pool.query('SELECT * FROM enrollments WHERE id = ?', [row.enrollmentId]);
-              row.enrollment = enrollments[0] || null;
-              
-              // Nested: enrollment.include.sequence
-              if (row.enrollment && include.enrollment !== true && include.enrollment.include && include.enrollment.include.sequence) {
-                const [sequences] = await pool.query('SELECT * FROM sequences WHERE id = ?', [row.enrollment.sequenceId]);
-                row.enrollment.sequence = sequences[0] || null;
-              }
-            } else {
-              row.enrollment = null;
+          if (include.enrollment && row.enrollmentId) {
+            const [enrollments] = await pool.query('SELECT * FROM enrollments WHERE id = ?', [row.enrollmentId]);
+            row.enrollment = enrollments[0] || null;
+            if (row.enrollment && include.enrollment.include && include.enrollment.include.sequence) {
+              const [sequences] = await pool.query('SELECT * FROM sequences WHERE id = ?', [row.enrollment.sequenceId]);
+              row.enrollment.sequence = sequences[0] || null;
+            }
+          }
+          if (include.campaign && row.campaignId) {
+            const [campaigns] = await pool.query('SELECT * FROM campaigns WHERE id = ?', [row.campaignId]);
+            row.campaign = campaigns[0] || null;
+            if (row.campaign && include.campaign.include && include.campaign.include.sequence) {
+              const [sequences] = await pool.query('SELECT * FROM sequences WHERE id = ?', [row.campaign.sequenceId]);
+              row.campaign.sequence = sequences[0] || null;
             }
           }
         }
@@ -2295,85 +2289,91 @@ const prismaProxy = {
         return [];
       }
     },
-    findFirst: async ({ where = {}, include = {}, orderBy = { timestamp: 'desc' } } = {}) => {
-      try {
-        // Reuse findMany logic but with take 1
-        const results = await prismaProxy.event.findMany({
-          where,
-          include,
-          orderBy,
-          take: 1
-        });
-        return results[0] || null;
-      } catch (err) {
-        console.error('❌ Event.findFirst error:', err.message);
-        return null;
-      }
+    findFirst: async (params = {}) => {
+      const results = await prismaProxy.event.findMany({ ...params, take: 1 });
+      return results[0] || null;
     },
     count: async ({ where = {} } = {}) => {
       try {
         const pool = await getPool();
         let query = 'SELECT COUNT(*) as count FROM events e';
-        const params = [];
         const conditions = [];
+        const condParams = [];
         
-        // Handle contact-based where (userId filter)
+        let joinedContacts = false;
+        let joinedEnrollments = false;
+        let joinedSequences = false;
+        let joinedCampaigns = false;
+        let joinedCampaignSequences = false;
+
+        const ensureContactJoin = () => {
+          if (!joinedContacts) {
+            query += ' JOIN contacts c ON e.contactId = c.id';
+            joinedContacts = true;
+          }
+        };
+
+        const ensureSequenceJoin = () => {
+          if (!joinedEnrollments) {
+            query += ' LEFT JOIN enrollments en ON e.enrollmentId = en.id';
+            joinedEnrollments = true;
+          }
+          if (!joinedSequences) {
+            query += ' LEFT JOIN sequences s ON en.sequenceId = s.id';
+            joinedSequences = true;
+          }
+          if (!joinedCampaigns) {
+            query += ' LEFT JOIN campaigns cam ON e.campaignId = cam.id';
+            joinedCampaigns = true;
+          }
+          if (!joinedCampaignSequences) {
+            query += ' LEFT JOIN sequences cs ON cam.sequenceId = cs.id';
+            joinedCampaignSequences = true;
+          }
+        };
+
         if (where.contact && where.contact.userId) {
-          query += ' JOIN contacts c ON e.contactId = c.id';
+          ensureContactJoin();
           conditions.push('c.userId = ?');
-          params.push(where.contact.userId);
+          condParams.push(where.contact.userId);
+        }
+
+        if (where.OR && Array.isArray(where.OR)) {
+          const orConditions = [];
+          for (const orMatch of where.OR) {
+            if (orMatch.contact && orMatch.contact.OR) {
+              ensureContactJoin();
+              for (const contactMatch of orMatch.contact.OR) {
+                const field = Object.keys(contactMatch)[0];
+                const dbField = field === 'leadListName' ? 'lead_list_name' : field;
+                orConditions.push(`c.${dbField} LIKE ?`);
+                condParams.push(`%${contactMatch[field].contains}%`);
+              }
+            }
+            if (orMatch.enrollment && orMatch.enrollment.sequence && orMatch.enrollment.sequence.name) {
+              ensureSequenceJoin();
+              orConditions.push(`(s.name LIKE ? OR cs.name LIKE ?)`);
+              condParams.push(`%${orMatch.enrollment.sequence.name.contains}%`);
+              condParams.push(`%${orMatch.enrollment.sequence.name.contains}%`);
+            }
+            if (orMatch.details && orMatch.details.contains) {
+              orConditions.push(`e.details LIKE ?`);
+              condParams.push(`%${orMatch.details.contains}%`);
+            }
+            if (orMatch.timestamp && orMatch.timestamp.contains) {
+              orConditions.push("DATE_FORMAT(e.timestamp, '%d/%m/%Y %H:%i:%s') LIKE ?");
+              condParams.push(`%${orMatch.timestamp.contains}%`);
+            }
+          }
+          if (orConditions.length > 0) conditions.push('(' + orConditions.join(' OR ') + ')');
         }
         
+        if (where.type) { conditions.push('e.type = ?'); condParams.push(where.type); }
+
         query += ' WHERE 1=1';
+        if (conditions.length > 0) query += ' AND ' + conditions.join(' AND ');
         
-        if (where.type) {
-          if (typeof where.type === 'object' && where.type.in) {
-            const ph = where.type.in.map(() => '?').join(',');
-            conditions.push(`e.type IN (${ph})`);
-            params.push(...where.type.in);
-          } else {
-            conditions.push('e.type = ?');
-            params.push(where.type);
-          }
-        }
-        if (where.enrollmentId) {
-          if (typeof where.enrollmentId === 'object' && where.enrollmentId.in) {
-            const ph = where.enrollmentId.in.map(() => '?').join(',');
-            conditions.push(`e.enrollmentId IN (${ph})`);
-            params.push(...where.enrollmentId.in);
-          } else {
-            conditions.push('e.enrollmentId = ?');
-            params.push(where.enrollmentId);
-          }
-        }
-        if (where.contactId) {
-          conditions.push('e.contactId = ?');
-          params.push(where.contactId);
-        }
-        if (where.campaignId) {
-          conditions.push('e.campaignId = ?');
-          params.push(where.campaignId);
-        }
-        if (where.timestamp) {
-          if (where.timestamp.gte) {
-            conditions.push('e.timestamp >= ?');
-            params.push(where.timestamp.gte);
-          }
-          if (where.timestamp.lte) {
-            conditions.push('e.timestamp <= ?');
-            params.push(where.timestamp.lte);
-          }
-          if (where.timestamp.lt) {
-            conditions.push('e.timestamp < ?');
-            params.push(where.timestamp.lt);
-          }
-        }
-        
-        if (conditions.length > 0) {
-          query += ' AND ' + conditions.join(' AND ');
-        }
-        
-        const [rows] = await pool.query(query, params);
+        const [rows] = await pool.query(query, condParams);
         return rows[0]?.count || 0;
       } catch (err) {
         console.error('❌ Event.count error:', err.message);

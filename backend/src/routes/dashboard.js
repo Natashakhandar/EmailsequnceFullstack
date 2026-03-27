@@ -12,9 +12,10 @@ router.use(authenticateToken);
 router.get('/stats', async (req, res) => {
   try {
     const userId = req.user.id;
+    const { startDate, endDate, sequenceId } = req.query;
     const pool = await prisma.getPool();
 
-    // 1. Get base counts
+    // 1. Get base counts (these are usually independent of date range but let's see)
     const [[{ totalSequences }]] = await pool.query('SELECT COUNT(*) as totalSequences FROM sequences WHERE userId = ?', [userId]);
     const [[{ totalContacts }]] = await pool.query('SELECT COUNT(*) as totalContacts FROM contacts WHERE userId = ?', [userId]);
 
@@ -26,14 +27,32 @@ router.get('/stats', async (req, res) => {
       WHERE s.userId = ? AND e.status = 'ACTIVE'
     `, [userId]);
 
+    // Build event filtering WHERE clause
+    let eventWhere = 'WHERE c.userId = ?';
+    let eventValues = [userId];
+
+    if (startDate) {
+      eventWhere += ' AND e.timestamp >= ?';
+      eventValues.push(new Date(startDate));
+    }
+    if (endDate) {
+      eventWhere += ' AND e.timestamp <= ?';
+      eventValues.push(new Date(endDate));
+    }
+    if (sequenceId && sequenceId !== 'all') {
+      eventWhere += ' AND en.sequenceId = ?';
+      eventValues.push(sequenceId);
+    }
+
     // 3. Get event breakdown
     const [eventCounts] = await pool.query(`
       SELECT e.type, COUNT(*) as count 
       FROM events e 
       JOIN contacts c ON e.contactId = c.id 
-      WHERE c.userId = ?
+      LEFT JOIN enrollments en ON e.enrollmentId = en.id
+      ${eventWhere}
       GROUP BY e.type
-    `, [userId]);
+    `, eventValues);
 
     const eventBreakdown = {
       sent: 0, delivered: 0, opened: 0, clicked: 0, 
@@ -48,38 +67,49 @@ router.get('/stats', async (req, res) => {
     });
 
     // 4. Calculate daily activity (current week, Sunday to Saturday)
+    // We use standard activity logic but filter by sequence if needed
+    let dailyWhere = 'WHERE c.userId = ? AND e.type = "SENT" AND e.timestamp >= DATE_SUB(CURDATE(), INTERVAL DAYOFWEEK(CURDATE())-1 DAY)';
+    let dailyValues = [userId];
+    if (sequenceId && sequenceId !== 'all') {
+      dailyWhere += ' AND en.sequenceId = ?';
+      dailyValues.push(sequenceId);
+    }
+
     const [dailyQuery] = await pool.query(`
       SELECT CAST(DAYOFWEEK(e.timestamp) AS UNSIGNED) as dayOfWeek, COUNT(*) as count 
       FROM events e 
       JOIN contacts c ON e.contactId = c.id 
-      WHERE c.userId = ? 
-        AND e.type = 'SENT'
-        AND e.timestamp >= DATE_SUB(CURDATE(), INTERVAL DAYOFWEEK(CURDATE())-1 DAY)
+      LEFT JOIN enrollments en ON e.enrollmentId = en.id
+      ${dailyWhere}
       GROUP BY DAYOFWEEK(e.timestamp)
-    `, [userId]);
+    `, dailyValues);
 
     const dailyActivity = [0, 0, 0, 0, 0, 0, 0];
     dailyQuery.forEach(row => {
-      // DAYOFWEEK returns 1 for Sunday, 2 for Monday
       if (row.dayOfWeek >= 1 && row.dayOfWeek <= 7) {
         dailyActivity[row.dayOfWeek - 1] = Number(row.count);
       }
     });
 
     // 5. Calculate weekly performance (current month, weeks 1 to 4)
+    let weeklyWhere = 'WHERE c.userId = ? AND e.type = "SENT" AND YEAR(e.timestamp) = YEAR(CURDATE()) AND MONTH(e.timestamp) = MONTH(CURDATE())';
+    let weeklyValues = [userId];
+    if (sequenceId && sequenceId !== 'all') {
+      weeklyWhere += ' AND en.sequenceId = ?';
+      weeklyValues.push(sequenceId);
+    }
+
     const [weeklyQuery] = await pool.query(`
       SELECT CAST(CEIL(DAY(e.timestamp)/7) AS UNSIGNED) as weekOfMonth, COUNT(*) as count 
       FROM events e 
       JOIN contacts c ON e.contactId = c.id 
-      WHERE c.userId = ? 
-        AND e.type = 'SENT'
-        AND YEAR(e.timestamp) = YEAR(CURDATE()) AND MONTH(e.timestamp) = MONTH(CURDATE())
+      LEFT JOIN enrollments en ON e.enrollmentId = en.id
+      ${weeklyWhere}
       GROUP BY CEIL(DAY(e.timestamp)/7)
-    `, [userId]);
+    `, weeklyValues);
 
     const weeklyPerformance = [0, 0, 0, 0];
     weeklyQuery.forEach(row => {
-      // Map week 1-5 to array index 0-3 (cap 5th week into 4th)
       const index = Math.min(row.weekOfMonth - 1, 3);
       if (index >= 0) {
         weeklyPerformance[index] += Number(row.count);
@@ -116,13 +146,13 @@ router.get('/stats', async (req, res) => {
       },
       eventBreakdown,
       dateRange: {
-        startDate: 'All time',
-        endDate: 'All time',
-        sequenceId: 'All sequences'
+        startDate: startDate || 'All time',
+        endDate: endDate || 'All time',
+        sequenceId: sequenceId || 'All sequences'
       }
     };
 
-    console.log('✅ Dashboard statistics successfully generated for user:', userId);
+    console.log('✅ Dashboard statistics successfully generated for user:', userId, 'range:', startDate, 'to', endDate);
     res.json(response);
 
   } catch (error) {

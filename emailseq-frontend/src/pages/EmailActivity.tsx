@@ -37,7 +37,8 @@ const EmailActivity = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [checkingReplies, setCheckingReplies] = useState(false);
   const [filters, setFilters] = useState<EmailActivityFilters>({});
-  const [searchInput, setSearchInput] = useState(''); // Local input state for immediate feedback
+  const [searchInput, setSearchInput] = useState(''); 
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -55,21 +56,33 @@ const EmailActivity = () => {
     bounced: 0
   });
 
-  // Update filters immediately on search input change
-  const handleSearchChange = (value: string) => {
-    setSearchInput(value);
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Update filters when debounced search changes
+  useEffect(() => {
     setFilters(prev => ({
       ...prev,
-      search: value || undefined
+      search: debouncedSearch || undefined
     }));
     setPagination(prev => ({ ...prev, page: 1 }));
+  }, [debouncedSearch]);
+
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
   };
 
   // Auto-refresh every 30 seconds as fallback
   useEffect(() => {
     const interval = setInterval(() => {
       if (!loading && !refreshing && pagination.page === 1 && Object.keys(filters).length === 0) {
-        loadEvents(false);
+        loadEvents(false); // Don't show refresh loader for background refresh
       }
     }, 30000);
 
@@ -151,10 +164,6 @@ const EmailActivity = () => {
     };
   }, []);
 
-  useEffect(() => {
-    loadEvents();
-  }, [filters, pagination.page]);
-
   const loadInitialData = async () => {
     try {
       setLoading(true);
@@ -200,24 +209,17 @@ const EmailActivity = () => {
         pages: response.pagination.pages
       }));
 
-      // Update local stats from meta if possible
-      if (response.stats) {
-        setStats(response.stats); // If the backend is updated to return this
-      } else if (pagination.page === 1) {
-        // Fallback: Use the data available in the first 50 events to estimate
-        // In reality, we should hit /api/dashboard/stats for the whole sum 
-        // to ensure we don't miss anything on older pages.
-        api.getDashboardStats().then(dashStats => {
-           setStats({
-             sent: dashStats.totalEmailsSent,
-             opened: dashStats.openRate.count,
-             replied: dashStats.replyRate.count,
-             bounced: dashStats.bounceRate.count
-           });
-        }).catch(err => {
-           console.log("Could not fetch dashboard stats for summary:", err);
+      // Update local stats from dash stats
+      api.getDashboardStats().then(dashStats => {
+        setStats({
+          sent: dashStats.totalEmailsSent,
+          opened: dashStats.openRate.count,
+          replied: dashStats.replyRate.count,
+          bounced: dashStats.bounceRate.count
         });
-      }
+      }).catch(err => {
+        console.log("Could not fetch dashboard stats for summary:", err);
+      });
 
       if (isRefresh) {
         toast.success("Email activity refreshed");
@@ -231,6 +233,10 @@ const EmailActivity = () => {
     }
   };
 
+  useEffect(() => {
+    loadEvents();
+  }, [filters, pagination.page]);
+
   const handleFilterChange = (key: keyof EmailActivityFilters, value: string) => {
     setFilters(prev => ({
       ...prev,
@@ -241,6 +247,7 @@ const EmailActivity = () => {
 
   const clearFilters = () => {
     setFilters({});
+    setSearchInput('');
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
@@ -249,12 +256,9 @@ const EmailActivity = () => {
     
     try {
       setCheckingReplies(true);
-      
       const response = await api.checkForReplies();
-      
       if (response.success) {
         toast.success(`Found ${response.processedCount} new replies!`);
-        // Refresh the events to show new replies
         await loadEvents(true);
       } else {
         toast.error('Failed to check for replies');
@@ -268,22 +272,12 @@ const EmailActivity = () => {
   };
 
   const handleDeleteActivity = async (eventId: string) => {
-    if (deletingIds.has(eventId)) return; // Prevent double-clicking
-    
+    if (deletingIds.has(eventId)) return;
     try {
       setDeletingIds(prev => new Set(prev).add(eventId));
-      
       await api.deleteEmailActivity(eventId);
-      
-      // Remove the event from the frontend list
       setEvents(prev => prev.filter(event => event.id !== eventId));
-      
-      // Update pagination total
-      setPagination(prev => ({
-        ...prev,
-        total: prev.total - 1
-      }));
-      
+      setPagination(prev => ({ ...prev, total: prev.total - 1 }));
       toast.success("Email activity deleted.");
     } catch (error) {
       console.error("Error deleting email activity:", error);
@@ -295,13 +289,6 @@ const EmailActivity = () => {
         return newSet;
       });
     }
-  };
-
-  const hasReplyContent = (event: Event) => {
-    if (event.type !== 'REPLIED' || !event.details) return false;
-    
-    const details = safeJsonParse<any>(event.details, {});
-    return !!(details.replyBody || details.replyContent || details.content);
   };
 
   const getStatusBadge = (event: Event) => {
@@ -318,10 +305,7 @@ const EmailActivity = () => {
     };
 
     const config = statusConfig[type.toUpperCase() as keyof typeof statusConfig] || statusConfig.SENT;
-    
-    // Custom label for Bounces
     let label = type.toUpperCase();
-    if (type === 'BOUNCED') label = "BOUNCED";
     if (type === 'REPLIED') label = "REPLY RECEIVED";
 
     return (
@@ -345,45 +329,23 @@ const EmailActivity = () => {
   };
 
   const getEmailSubject = (event: Event) => {
-    // Try to get subject from event details or enrollment sequence steps
     if (event.details) {
       const details = safeJsonParse<{ subject?: string }>(event.details, {});
       if (details.subject) return details.subject;
     }
-    
-    // Fallback to sequence step template subject
     const sequence = event.enrollment?.sequence;
     if (sequence?.steps && sequence.steps.length > 0) {
-      const currentStep = sequence.steps.find(step => 
-        step.stepOrder === event.enrollment?.currentStep
-      );
+      const currentStep = sequence.steps.find(step => step.stepOrder === event.enrollment?.currentStep);
       return currentStep?.template?.subject || 'Email Subject';
     }
-    
     return 'Email Subject';
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <main className="container mx-auto px-6 pt-24 pb-12">
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">Loading email activity...</span>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       <Navbar />
       <main className="container mx-auto px-6 pt-24 pb-12">
-        {/* Email Activity Header */}
         <div className="mb-8">
-          {/* Title and Buttons Row */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2 flex items-center gap-3">
@@ -395,217 +357,96 @@ const EmailActivity = () => {
               </p>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:ml-auto">
-              <Button
-                onClick={() => setShowFilters(!showFilters)}
-                variant="outline"
-                className="border-gray-300 h-10 flex-1 sm:flex-none"
-              >
+              <Button onClick={() => setShowFilters(!showFilters)} variant="outline" className="border-gray-300 h-10 flex-1 sm:flex-none">
                 <Filter className="w-4 h-4 mr-2" />
                 Filters
               </Button>
               
-              <Button
-                onClick={handleCheckReplies}
-                disabled={checkingReplies}
-                variant="outline"
-                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 h-10 flex-1 sm:flex-none"
-              >
-                {checkingReplies ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Inbox className="w-4 h-4 mr-2" />
-                )}
+              <Button onClick={handleCheckReplies} disabled={checkingReplies} variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 h-10 flex-1 sm:flex-none">
+                {checkingReplies ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Inbox className="w-4 h-4 mr-2" />}
                 <span className="hidden xs:inline">Check Replies</span>
-                <span className="xs:hidden">Replies</span>
               </Button>
               
-              <Button
-                onClick={() => loadEvents(true)}
-                disabled={refreshing}
-                variant="outline"
-                className="border-gray-300 h-10 flex-1 sm:flex-none"
-              >
-                {refreshing ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                )}
+              <Button onClick={() => loadEvents(true)} disabled={refreshing} variant="outline" className="border-gray-300 h-10 flex-1 sm:flex-none">
+                {refreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                 Refresh
               </Button>
             </div>
           </div>
 
-          {/* Search Bar */}
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             <Input
               type="text"
-              placeholder="Search by email, contact..."
+              placeholder="Search by email, name, sequence, or date..."
               value={searchInput}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-10 pr-8 w-full h-9 rounded border border-gray-300 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="pl-10 pr-8 w-full h-11 rounded-lg border border-gray-300 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 transition-all"
               autoComplete="off"
             />
             {searchInput && (
-                <button
-                  onClick={() => handleSearchChange('')}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                  type="button"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
+              <button onClick={() => handleSearchChange('')} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1" type="button">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          
+          {(loading || refreshing) && (
+            <div className="flex items-center justify-center mt-2 py-1 text-xs text-blue-600 animate-pulse">
+              <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+              Updating activity log...
             </div>
-
-          {/* Filters */}
-          {showFilters && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-white rounded-lg border border-gray-200 p-6 mb-6"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <Label htmlFor="contactFilter" className="text-sm font-medium text-gray-700">
-                    Contact
-                  </Label>
-                  <Select
-                    value={filters.contactId || ""}
-                    onValueChange={(value) => handleFilterChange('contactId', value)}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="All contacts" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All contacts</SelectItem>
-                      {contacts.map((contact) => {
-                        if (!contact.id) {
-                          console.warn('Skipping contact with missing ID:', contact);
-                          return null;
-                        }
-                        return (
-                          <SelectItem key={contact.id} value={String(contact.id)}>
-                            {getContactName(contact.id)} ({contact.email})
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="sequenceFilter" className="text-sm font-medium text-gray-700">
-                    Sequence
-                  </Label>
-                  <Select
-                    value={filters.sequenceId || ""}
-                    onValueChange={(value) => handleFilterChange('sequenceId', value)}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="All sequences" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All sequences</SelectItem>
-                      {sequences.map((sequence) => {
-                        if (!sequence.id) {
-                          console.warn('Skipping sequence with missing ID:', sequence);
-                          return null;
-                        }
-                        return (
-                          <SelectItem key={sequence.id} value={String(sequence.id)}>
-                            {sequence.name}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="statusFilter" className="text-sm font-medium text-gray-700">
-                    Status
-                  </Label>
-                  <Select
-                    value={filters.type || ""}
-                    onValueChange={(value) => handleFilterChange('type', value)}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="All statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All statuses</SelectItem>
-                      <SelectItem value="SENT">Sent</SelectItem>
-                      <SelectItem value="DELIVERED">Delivered</SelectItem>
-                      <SelectItem value="OPENED">Opened</SelectItem>
-                      <SelectItem value="CLICKED">Clicked</SelectItem>
-                      <SelectItem value="REPLIED">Replied</SelectItem>
-                      <SelectItem value="BOUNCED">Bounced</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="dateFilter" className="text-sm font-medium text-gray-700">
-                    Date Range
-                  </Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input
-                      type="date"
-                      value={filters.startDate || ""}
-                      onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                      className="text-sm"
-                    />
-                    <Input
-                      type="date"
-                      value={filters.endDate || ""}
-                      onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                      className="text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="groupFilter" className="text-sm font-medium text-gray-700">
-                    Lead Group
-                  </Label>
-                  <Select
-                    value={filters.leadListName || ""}
-                    onValueChange={(value) => handleFilterChange('leadListName', value)}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="All groups" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All groups</SelectItem>
-                      <SelectItem value="Uncategorized">Uncategorized</SelectItem>
-                      {groups.filter(g => g.name !== 'Uncategorized').map((group) => (
-                        <SelectItem key={group.name} value={group.name}>
-                          {group.name} ({group.count})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="flex justify-end mt-4">
-                <Button
-                  onClick={clearFilters}
-                  variant="outline"
-                  size="sm"
-                  className="border-gray-300"
-                >
-                  Clear Filters
-                </Button>
-              </div>
-            </motion.div>
           )}
         </div>
 
-        {/* Email Activity Table */}
+        {showFilters && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Contact</Label>
+                <Select value={filters.contactId || ""} onValueChange={(v) => handleFilterChange('contactId', v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="All contacts" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All contacts</SelectItem>
+                    {contacts.map(c => <SelectItem key={c.id} value={String(c.id)}>{getContactName(c.id)} ({c.email})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Sequence</Label>
+                <Select value={filters.sequenceId || ""} onValueChange={(v) => handleFilterChange('sequenceId', v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="All sequences" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All sequences</SelectItem>
+                    {sequences.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Status</Label>
+                <Select value={filters.type || ""} onValueChange={(v) => handleFilterChange('type', v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="All statuses" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    {['SENT', 'DELIVERED', 'OPENED', 'CLICKED', 'REPLIED', 'BOUNCED'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Date Range</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input type="date" value={filters.startDate || ""} onChange={(e) => handleFilterChange('startDate', e.target.value)} className="text-sm" />
+                  <Input type="date" value={filters.endDate || ""} onChange={(e) => handleFilterChange('endDate', e.target.value)} className="text-sm" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end mt-4">
+              <Button onClick={clearFilters} variant="outline" size="sm" className="border-gray-300">Clear Filters</Button>
+            </div>
+          </motion.div>
+        )}
+
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 mb-2">
@@ -614,7 +455,6 @@ const EmailActivity = () => {
             </CardTitle>
             <CardDescription>
               {pagination.total} total email activities
-              {refreshing && " • Refreshing..."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -622,12 +462,7 @@ const EmailActivity = () => {
               <div className="text-center py-12">
                 <Mail className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No email activity found</h3>
-                <p className="text-gray-600">
-                  {Object.keys(filters).length > 0 
-                    ? "Try adjusting your filters to see more results."
-                    : "Email activities will appear here once sequences start sending emails."
-                  }
-                </p>
+                <p className="text-gray-600">Try adjusting your filters or wait for sequences to send emails.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -648,80 +483,33 @@ const EmailActivity = () => {
                       <TableRow key={event.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <div className="bg-primary/5 p-2 rounded-lg">
-                              <Users className="w-4 h-4 text-primary" />
-                            </div>
+                            <div className="bg-primary/5 p-2 rounded-lg"><Users className="w-4 h-4 text-primary" /></div>
                             <div className="flex flex-col">
-                              <span className="font-bold text-gray-900 leading-tight">
-                                {event.contact?.leadListName || "Uncategorized"}
-                              </span>
-                              <span className="text-[11px] text-gray-500 mt-0.5">
-                                {event.contact ? (
-                                  `${(event.contact.firstName || '')} ${(event.contact.lastName || '')}`.trim() || 'No Name'
-                                ) : (
-                                  getContactName(event.contactId)
-                                )}
-                              </span>
+                              <span className="font-bold text-gray-900 leading-tight">{event.contact?.leadListName || "Uncategorized"}</span>
+                              <span className="text-[11px] text-gray-500 mt-0.5">{getContactName(event.contactId)}</span>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
-                            <span className="text-sm text-gray-900 font-medium">
-                              {event.contact?.email || 'Unknown'}
-                            </span>
-                            {event.contact?.company && (
-                              <span className="text-[10px] text-gray-400">
-                                {event.contact.company}
-                              </span>
-                            )}
+                            <span className="text-sm text-gray-900 font-medium">{event.contact?.email || 'Unknown'}</span>
+                            {event.contact?.company && <span className="text-[10px] text-gray-400">{event.contact.company}</span>}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="font-medium text-gray-900">
-                            {getSequenceName(event)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="max-w-xs truncate">
-                            {getEmailSubject(event)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(event)}
-                        </TableCell>
+                        <TableCell><div className="font-medium text-gray-900">{getSequenceName(event)}</div></TableCell>
+                        <TableCell><div className="max-w-xs truncate">{getEmailSubject(event)}</div></TableCell>
+                        <TableCell>{getStatusBadge(event)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm text-gray-600">
-                              {formatDate(event.timestamp)}
-                            </span>
+                            <span className="text-sm text-gray-600">{formatDate(event.timestamp)}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <Button
-                              onClick={() => setSelectedEvent(event)}
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              onClick={() => handleDeleteActivity(event.id)}
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              disabled={deletingIds.has(event.id)}
-                              title="Delete Activity"
-                            >
-                              {deletingIds.has(event.id) ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
+                            <Button onClick={() => setSelectedEvent(event)} variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Details"><Eye className="w-4 h-4" /></Button>
+                            <Button onClick={() => handleDeleteActivity(event.id)} variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" disabled={deletingIds.has(event.id)} title="Delete Activity">
+                              {deletingIds.has(event.id) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                             </Button>
                           </div>
                         </TableCell>
@@ -732,47 +520,21 @@ const EmailActivity = () => {
               </div>
             )}
 
-            {/* Pagination */}
             {pagination.pages > 1 && (
               <div className="flex items-center justify-between mt-6">
-                <div className="text-sm text-gray-600">
-                  Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-                  {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                  {pagination.total} results
-                </div>
+                <div className="text-sm text-gray-600">Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} results</div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                    disabled={pagination.page === 1}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-sm text-gray-600">
-                    Page {pagination.page} of {pagination.pages}
-                  </span>
-                  <Button
-                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                    disabled={pagination.page === pagination.pages}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Next
-                  </Button>
+                  <Button onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))} disabled={pagination.page === 1} variant="outline" size="sm">Previous</Button>
+                  <span className="text-sm text-gray-600">Page {pagination.page} of {pagination.pages}</span>
+                  <Button onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))} disabled={pagination.page === pagination.pages} variant="outline" size="sm">Next</Button>
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Email Details Popup */}
         {selectedEvent && (
-          <EmailDetailsPopup
-            event={selectedEvent}
-            isOpen={!!selectedEvent}
-            onClose={() => setSelectedEvent(null)}
-          />
+          <EmailDetailsPopup event={selectedEvent} isOpen={!!selectedEvent} onClose={() => setSelectedEvent(null)} />
         )}
       </main>
     </div>
