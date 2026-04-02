@@ -294,6 +294,13 @@ class ApiClient {
     });
   }
 
+  async changeMyPassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>('/auth/me/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
   async getWarmupSettings(): Promise<any> {
     return this.request<any>('/warmup/settings');
   }

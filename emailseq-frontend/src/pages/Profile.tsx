@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { Edit, Save, Mail, User as UserIcon, Briefcase, Shield, Crown, AlertCircle, FileText } from "lucide-react";
+import { Edit, Save, Mail, User as UserIcon, Briefcase, Shield, Crown, AlertCircle, FileText, Lock, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { api, User } from "@/lib/api";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,6 +39,20 @@ const Profile = () => {
   const [signatureDisplay, setSignatureDisplay] = useState(""); // For editing display
   const [isEditingSignature, setIsEditingSignature] = useState(false);
   const [signatureLoading, setSignatureLoading] = useState(false);
+
+  // Password change state
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false
+  });
 
   // Fetch current user data and signature
   useEffect(() => {
@@ -115,6 +129,31 @@ const Profile = () => {
     setIsEditingSignature(true);
     // Convert HTML back to plain text for editing
     setSignatureDisplay(signature.replace(/<br\s*\/?>/gi, '\n'));
+  };
+
+  const handleSavePassword = async () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+    if (passwordData.newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters long");
+      return;
+    }
+    
+    try {
+      setPasswordLoading(true);
+      await api.changeMyPassword(passwordData.currentPassword, passwordData.newPassword);
+      toast.success("Password updated successfully");
+      setIsChangingPassword(false);
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setShowPasswords({ current: false, new: false, confirm: false });
+    } catch (error) {
+      console.error('Failed to change password:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to change password');
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   // const progressPercentage = (targets.emailsSentToday / targets.dailyTarget) * 100;
@@ -356,6 +395,136 @@ const Profile = () => {
             ... (content commented out)
           </motion.div>
           */}
+
+          {/* Change Password Section */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 }}
+            className="glass rounded-2xl p-8 shadow-card hover-lift"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-semibold text-foreground">Security</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setIsChangingPassword(!isChangingPassword);
+                  if (isChangingPassword) {
+                    setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+                  }
+                }}
+                className="rounded-xl"
+              >
+                <Edit className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {!isChangingPassword ? (
+                <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    <Lock className="w-5 h-5 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">Password</p>
+                      <p className="text-sm text-muted-foreground">Change your account password</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsChangingPassword(true)}
+                    className="rounded-xl"
+                  >
+                    Change
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4 p-4 rounded-xl border border-border bg-muted/20">
+                  <div className="space-y-2">
+                    <Label htmlFor="currentPassword">Current Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="currentPassword"
+                        type={showPasswords.current ? "text" : "password"}
+                        value={passwordData.currentPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                        className="rounded-xl pr-10"
+                        placeholder="Enter current password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                      >
+                        {showPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="newPassword"
+                        type={showPasswords.new ? "text" : "password"}
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                        className="rounded-xl pr-10"
+                        placeholder="Enter new password (min 6 characters)"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                      >
+                        {showPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showPasswords.confirm ? "text" : "password"}
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                        className="rounded-xl pr-10"
+                        placeholder="Confirm new password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                      >
+                        {showPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      onClick={handleSavePassword}
+                      disabled={passwordLoading}
+                      className="flex-1 gradient-primary text-white rounded-xl"
+                    >
+                      {passwordLoading ? "Saving..." : "Update Password"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsChangingPassword(false);
+                        setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+                        setShowPasswords({ current: false, new: false, confirm: false });
+                      }}
+                      disabled={passwordLoading}
+                      className="rounded-xl"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
         </div>
 
         {/* Email Signature Section */}
