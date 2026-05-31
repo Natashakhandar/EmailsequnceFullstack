@@ -3,6 +3,17 @@
 Comprehensive email sequencing system featuring a Node.js/Express backend, React + Vite frontend, Prisma ORM, job scheduler, and role-based administration.
 
 ---
+<img width="869" height="542" alt="image" src="https://github.com/user-attachments/assets/306e4314-e44d-4072-ba77-ed5de805f00f" />
+
+DevSecOps CI/CD Pipeline for Email Sequencing
+
+<img width="870" height="438" alt="image" src="https://github.com/user-attachments/assets/af138f14-078d-49da-8a2b-8e8dac8b5af7" />
+
+ Jenkins CI/CD Pipeline Dashboard for Email Sequencing Project
+
+ <img width="870" height="432" alt="image" src="https://github.com/user-attachments/assets/77e2661a-5fc2-42ee-aeea-7a8dcf52b036" />
+
+ https://email.boostnow.in/login
 
 The implementation included:
 •	GitHub repository integration
