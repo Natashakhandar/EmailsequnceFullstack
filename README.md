@@ -4,6 +4,59 @@ Comprehensive email sequencing system featuring a Node.js/Express backend, React
 
 ---
 
+The implementation included:
+•	GitHub repository integration
+•	Jenkins CI/CD pipeline automation
+•	SonarQube static code analysis
+•	OWASP Dependency vulnerability scanning
+•	Trivy filesystem security scanning
+•	Docker container deployment
+•	Docker Compose production deployment
+•	AWS EC2 hosting configuration
+
+
+
+
+
+The deployment workflow included:
+•	Source code push to GitHub
+•	Jenkins pipeline trigger
+•	SonarQube code quality analysis
+•	OWASP Dependency vulnerability scanning
+•	Trivy security scanning
+•	Docker image build process
+•	Docker Compose deployment on AWS EC2
+•	Production deployment monitoring
+
+After successful deployment, the AWS EC2 public IP was mapped using Hostinger DNS configuration for domain accessibility.
+The implementation ensured:
+•	Secure production deployment
+•	Automated deployment workflows
+•	Continuous vulnerability assessment
+•	Infrastructure scalability
+•	Containerized deployment consistency
+•	Reliable production hosting
+
+ 
+
+Fig. 2.1.3. DevSecOps CI/CD Pipeline for Email Sequencing
+
+
+
+
+Stage	Activity
+1	Code Push to GitHub
+2	Jenkins Pipeline Trigge
+3	SonarQube Analysis
+4	OWASP Dependency Scan
+5	Trivy Security Scan
+6	Docker Image Build
+7	Deployment to AWS
+8	Production Monitoring
+
+Table 2 CI/CD Pipeline Workflow
+
+
 ## Table of Contents
 
 - **[Architecture Overview](#architecture-overview)**
